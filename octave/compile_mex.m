@@ -12,9 +12,9 @@ try
     CXXFLAGSorig = CXXFLAGS;
     LDFLAGSorig = LDFLAGS;
     % -D_GLIBCXX_PARALLEL is only useful for libstdc++ users
-    CXXFLAGS = sprintf('%s %s', CXXFLAGS, ...
-        '-Wextra -Wpedantic -std=c++11 -fopenmp -D_GLIBCXX_PARALLEL');
-    LDFLAGS = sprintf('%s,%s', LDFLAGS, '-fopenmp');
+    CXXFLAGS = [CXXFLAGS ' -Wextra -Wpedantic -std=c++11 -fopenmp -g0 ' ...
+        '-D_GLIBCXX_PARALLEL'];
+    LDFLAGS = [LDFLAGS ',-fopenmp'];
     setenv('CXXFLAGS', CXXFLAGS);
     setenv('LDFLAGS', LDFLAGS);
 

@@ -103,11 +103,10 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
-        is balanced; WARNING: this might trades off speed against optimality
+        is balanced
     compute_Obj   - compute the objective functional along iterations 
     compute_Time  - monitor elapsing time along iterations
     compute_Dif   - compute relative evolution along iterations 
-
 
     OUTPUTS: 
 

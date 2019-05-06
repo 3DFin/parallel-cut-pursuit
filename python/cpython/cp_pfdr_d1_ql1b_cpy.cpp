@@ -22,15 +22,12 @@ using namespace std;
  * comp_t must be able to represent the number of constant connected components
  * in the reduced graph */
 typedef uint32_t index_t;
-# define VERTEX_CLASS NPY_UINT32 
-# define VERTEX_ID "uint32"
+#define VERTEX_CLASS NPY_UINT32 
 typedef uint16_t comp_t;
-# define COMP_CLASS NPY_UINT16 
-# define COMP_ID "uint16"
+#define COMP_CLASS NPY_UINT16 
 /* uncomment the following if more than 65535 components are expected */
 // typedef uint32_t comp_t;
-// # define COMP_CLASS NPY_UINT32 
-// # define COMP_ID "uint32"
+// #define COMP_CLASS NPY_UINT32 
 
 /* template for handling both single and double precisions */
 template<typename real_t, NPY_TYPES pyREAL_CLASS>

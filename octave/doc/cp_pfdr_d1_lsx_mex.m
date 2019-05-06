@@ -103,7 +103,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 % max_num_threads - if greater than zero, set the maximum number of threads
 %     used for parallelization with OpenMP
 % balance_parallel_split - if true, the parallel workload of the split step 
-%     is balanced; WARNING: this might trades off speed against optimality
+%     is balanced; WARNING: this might trade off speed against optimality
 % verbose - if nonzero, display information on the progress, every 'verbose'
 %     PFDR iterations
 %

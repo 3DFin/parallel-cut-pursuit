@@ -100,7 +100,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 % max_num_threads - if greater than zero, set the maximum number of threads
 %     used for parallelization with OpenMP
 % balance_parallel_split - if true, the parallel workload of the split step 
-%     is balanced; WARNING: this might trades off speed against optimality
+%     is balanced; WARNING: this might trade off speed against optimality
 % AtA_if_square - if A is square, set this to false for direct matricial case
 %
 % OUTPUTS: indices are C-style (start at 0)

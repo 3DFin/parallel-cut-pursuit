@@ -115,7 +115,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
-        is balanced; WARNING: this might trades off speed against optimality
+        is balanced; WARNING: this might trade off speed against optimality
     AtA_if_square - if A is square, set this to false for direct matricial case
     compute_Obj  - compute the objective functional along iterations 
     compute_Time - monitor elapsing time along iterations
