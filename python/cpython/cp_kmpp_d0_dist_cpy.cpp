@@ -2,12 +2,12 @@
  * Comp, rX, it, Obj, Time, Dif = cp_kmpp_d0_dist(
  *          loss, Y, first_edge, adj_vertices, edge_weights, vert_weights, 
  *          coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
- *          kmpp_init_num, kmpp_iter_num, verbose)
+ *          kmpp_init_num, kmpp_iter_num, verbose, max_num_threads,
+ *          balance_parallel_split)
  * 
  *  Baudoin Camille 2019
  *===========================================================================*/
 #include <cstdint>
-#include <sstream>
 #define PY_SSIZE_T_CLEAN
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <Python.h>
@@ -31,12 +31,6 @@ typedef uint16_t comp_t;
 // # define COMP_CLASS NPY_UINT32
 // # define COMP_ID "uint32"
 
-/* arrays with arguments type */
-static const int args_real_t[] = {1, 4, 5, 6};
-static const int n_real_t = 4;
-static const int args_index_t[] = {2, 3};
-static const int n_index_t = 2;
-
 /* template for handling both single and double precisions */
 template<typename real_t, NPY_TYPES pyREAL_CLASS>
 static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
@@ -44,7 +38,8 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_edge_weights, PyArrayObject* py_vert_weights,
     PyArrayObject* py_coor_weights, real_t cp_dif_tol, int cp_it_max,
     int K, int split_iter_num, int kmpp_init_num, int kmpp_iter_num,
-    int verbose, int compute_Obj, int compute_Time, int compute_Dif)
+    int verbose, int max_num_threads, int balance_parallel_split, 
+    int compute_Obj, int compute_Time, int compute_Dif)
 {
     /**  get inputs  **/
 
@@ -63,13 +58,6 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     index_t E = PyArray_SIZE(py_adj_vertices);
     const index_t *first_edge = (index_t*) PyArray_DATA(py_first_edge);
     const index_t *adj_vertices = (index_t*) PyArray_DATA(py_adj_vertices);
-    if (PyArray_SIZE(py_first_edge) != (V + 1)){
-        std::stringstream py_err_msg;
-        py_err_msg << "Cut-pursuit d0 distance: argument 3 'first_edge' should"
-            " contain |V| + 1 = "<< V + 1 << " elements, but "
-            << PyArray_SIZE(py_first_edge) << " are given.";
-        PyErr_SetString(PyExc_ValueError, py_err_msg.str().c_str());
-    }
 
     /* penalizations */
     const real_t *edge_weights = (PyArray_SIZE(py_edge_weights) > 1) ?
@@ -77,6 +65,9 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     real_t* ptr_edge_weights = (real_t*) PyArray_DATA(py_edge_weights);
     real_t homo_edge_weight = (PyArray_SIZE(py_edge_weights) == 1) ?
         ptr_edge_weights[0] : 1;
+    if (max_num_threads<=0){
+        max_num_threads = omp_get_max_threads();
+    }
 
     /**  prepare output; rX is created later  **/
 
@@ -93,7 +84,7 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     real_t* Obj = nullptr;
     PyArrayObject* py_Obj = (PyArrayObject*) Py_None;
     if (compute_Obj){
-        npy_intp size_py_Obj[] = {cp_it_max+1};
+        npy_intp size_py_Obj[] = {cp_it_max + 1};
         py_Obj = (PyArrayObject*) PyArray_Zeros(1, size_py_Obj,
             PyArray_DescrFromType(pyREAL_CLASS), 1);
         Obj = (real_t*) PyArray_DATA(py_Obj);
@@ -102,9 +93,9 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     double* Time = nullptr;
     PyArrayObject* py_Time = (PyArrayObject*) Py_None;
     if (compute_Time){
-        npy_intp size_py_Time[] = {cp_it_max+1};
+        npy_intp size_py_Time[] = {cp_it_max + 1};
         py_Time = (PyArrayObject*) PyArray_Zeros(1, size_py_Time,
-            PyArray_DescrFromType(pyREAL_CLASS), 1);
+            PyArray_DescrFromType(NPY_FLOAT64), 1);
         Time = (double*) PyArray_DATA(py_Time);
     }
 
@@ -130,6 +121,7 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
     cp->set_split_param(K, split_iter_num);
     cp->set_kmpp_param(kmpp_init_num, kmpp_iter_num);
+    cp->set_parallel_param(max_num_threads, balance_parallel_split);
 
     *it = cp->cut_pursuit();
 
@@ -149,25 +141,27 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
 }
 
 /* My python wrapper */
-static PyObject* cp_kmpp_d0_dist_ext(PyObject* self, PyObject* args)
+static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
 { 
     /* My INPUT */
     PyArrayObject *py_Y, *py_first_edge, *py_adj_vertices, *py_edge_weights,
         *py_vert_weights, *py_coor_weights;
     double loss, cp_dif_tol;  
-    int cp_it_max, K, split_iter_num, kmpp_init_num, kmpp_iter_num,verbose, 
-        real_t_double, compute_Obj, compute_Time, compute_Dif;
+    int cp_it_max, K, split_iter_num, kmpp_init_num, kmpp_iter_num, verbose, 
+        max_num_threads, balance_parallel_split, real_t_double, compute_Obj, 
+        compute_Time, compute_Dif;
 
     /* parse the input, from Python Object to C PyArray, double, or int type */
 #if PY_MAJOR_VERSION >= 3
-    if(!PyArg_ParseTuple(args, "dOOOOOOdiiiiiipppp", &loss, &py_Y,
+    if(!PyArg_ParseTuple(args, "dOOOOOOdiiiiiipipppp", &loss, &py_Y,
 #else // python 2 does not accept the 'p' format specifier
-    if(!PyArg_ParseTuple(args, "dOOOOOOdiiiiiiiiii", &loss, &py_Y,
+    if(!PyArg_ParseTuple(args, "dOOOOOOdiiiiiiiiiiii", &loss, &py_Y,
 #endif
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_vert_weights,
         &py_coor_weights, &cp_dif_tol, &cp_it_max, &K, &split_iter_num, 
-        &kmpp_init_num, &kmpp_iter_num, &verbose, &real_t_double, &compute_Obj,
-        &compute_Time, &compute_Dif)){
+        &kmpp_init_num, &kmpp_iter_num, &verbose, &max_num_threads, 
+        &balance_parallel_split, &real_t_double, &compute_Obj, &compute_Time, 
+        &compute_Dif)){
         return NULL;
     }
 
@@ -175,21 +169,21 @@ static PyObject* cp_kmpp_d0_dist_ext(PyObject* self, PyObject* args)
         PyObject* PyReturn = cp_kmpp_d0_dist<double, NPY_FLOAT64>(loss, py_Y,
             py_first_edge, py_adj_vertices, py_edge_weights, py_vert_weights,
             py_coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
-            kmpp_init_num, kmpp_iter_num, verbose, compute_Obj, compute_Time,
-            compute_Dif);
+            kmpp_init_num, kmpp_iter_num, verbose, max_num_threads, 
+            balance_parallel_split, compute_Obj, compute_Time, compute_Dif);
         return PyReturn;
     }else{ /* real_t type is float */
         PyObject* PyReturn = cp_kmpp_d0_dist<float, NPY_FLOAT32>(loss, py_Y,
             py_first_edge, py_adj_vertices, py_edge_weights, py_vert_weights,
             py_coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
-            kmpp_init_num, kmpp_iter_num, verbose, compute_Obj, compute_Time,
-            compute_Dif);
+            kmpp_init_num, kmpp_iter_num, verbose, max_num_threads, 
+            balance_parallel_split, compute_Obj, compute_Time, compute_Dif);
         return PyReturn;
     }
 }
 
 static PyMethodDef cp_kmpp_d0_dist_methods[] = {
-    {"cp_kmpp_d0_dist_ext", cp_kmpp_d0_dist_ext, METH_VARARGS,
+    {"cp_kmpp_d0_dist_cpy", cp_kmpp_d0_dist_cpy, METH_VARARGS,
         "wrapper for parallel cut-pursuit d0 distance"},
     {NULL, NULL, 0, NULL}
 }; 
@@ -199,7 +193,7 @@ static PyMethodDef cp_kmpp_d0_dist_methods[] = {
 /* Python version 3 */
 static struct PyModuleDef cp_kmpp_d0_dist_module = {
     PyModuleDef_HEAD_INIT,
-    "cp_kmpp_d0_dist_ext", /* name of module */
+    "cp_kmpp_d0_dist_cpy", /* name of module */
     NULL, /* module documentation, may be null */
     -1,   /* size of per-interpreter state of the module,
              or -1 if the module keeps state in global variables. */
@@ -211,7 +205,7 @@ static struct PyModuleDef cp_kmpp_d0_dist_module = {
 };
 
 PyMODINIT_FUNC
-PyInit_cp_kmpp_d0_dist_ext(void)
+PyInit_cp_kmpp_d0_dist_cpy(void)
 {
     import_array() /* IMPORTANT: this must be called to use numpy array */
     return PyModule_Create(&cp_kmpp_d0_dist_module);
@@ -222,9 +216,9 @@ PyInit_cp_kmpp_d0_dist_ext(void)
 /* module initialization */
 /* Python version 2 */
 PyMODINIT_FUNC
-initcp_kmpp_d0_dist_ext(void)
+initcp_kmpp_d0_dist_cpy(void)
 {
-    (void) Py_InitModule("cp_kmpp_d0_dist_ext", cp_kmpp_d0_dist_methods);
+    (void) Py_InitModule("cp_kmpp_d0_dist_cpy", cp_kmpp_d0_dist_methods);
     import_array() /* IMPORTANT: this must be called to use numpy array */
 }
 
