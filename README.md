@@ -183,7 +183,7 @@ An example with the smoothed Kullback–Leibler is provided with [GNU Octave or 
 
 ### C++ documentation
 Requires `C++11`.  
-Be sure to have OpenMP enabled with you compiler to enjoy parallelism.  
+Be sure to have OpenMP enabled with your compiler to enjoy parallelism.  
 The C++ classes are documented within the corresponding headers in `include/`.  
 
 ### GNU Octave or Matlab

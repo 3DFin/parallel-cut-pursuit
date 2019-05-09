@@ -1,13 +1,18 @@
 /*=============================================================================
  * [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, first_edge,
- *      adj_vertices, edge_weights = 1.0, vert_weights = [], coor_weights = [],
- *      cp_dif_tol = 1e-3, cp_it_max = 10, K = 2, split_iter_num = 2,
- *      kmpp_init_num = 3, kmpp_iter_num = 3, verbose = 1,
- *      max_num_threads = 0, balance_parallel_split = true)
+ *      adj_vertices, options)
+ *
+ * options is a struct with any of the following fields [with default values]:
+ *
+ *      edge_weights [1.0], vert_weights [none], coor_weights [none],
+ *      cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
+ *      kmpp_init_num [3], kmpp_iter_num [3], verbose [true],
+ *      max_num_threads [none], balance_parallel_split [true]
  * 
- *  Hugo 2019
+ *  Hugo Raguet 2019
  *===========================================================================*/
 #include <cstdint>
+#include <cstring>
 #include "mex.h"
 #include "../../include/cp_kmpp_d0_dist.hpp"
 
@@ -18,42 +23,63 @@ using namespace std;
  * comp_t must be able to represent the number of constant connected components
  * in the reduced graph, as well as the dimension D */
 typedef uint32_t index_t;
-# define VERTEX_CLASS mxUINT32_CLASS
-# define VERTEX_ID "uint32"
+# define mxINDEX_CLASS mxUINT32_CLASS
+# define INDEX_CLASS_NAME "uint32"
 typedef uint16_t comp_t;
-# define COMP_CLASS mxUINT16_CLASS
-# define COMP_ID "uint16"
+# define mxCOMP_CLASS mxUINT16_CLASS
 /* uncomment the following if more than 65535 components are expected */
 // typedef uint32_t comp_t;
-// # define COMP_CLASS mxUINT32_CLASS
-// # define COMP_ID "uint32"
+// #define mxCOMP_CLASS mxUINT32_CLASS
 
-/* arrays with arguments type */
-static const int args_real_t[] = {1, 4, 5, 6};
-static const int n_real_t = 4;
-static const int args_index_t[] = {2, 3};
-static const int n_index_t = 2;
-
-/* function for checking arguments type */
-static void check_args(int nrhs, const mxArray *prhs[], const int* args,
-    int n, mxClassID id, const char* id_name)
+/* function for checking optional parameters */
+static void check_opts(const mxArray* options)
 {
-    for (int i = 0; i < n; i++){
-        if (nrhs > args[i] && mxGetClassID(prhs[args[i]]) != id
-            && mxGetNumberOfElements(prhs[args[i]]) > 1){
-            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
-                "argument %d is of class %s, but class %s is expected.",
-                args[i] + 1, mxGetClassName(prhs[args[i]]), id_name);
+    if (!options){
+        return;
+    }else if (!mxIsStruct(options)){
+        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
+            "fifth parameter 'options' should be a structure, (%s given).",
+            mxGetClassName(options));
+    }
+
+    const int num_allow_opts = 12;
+    const char* opts_names[] = {"edge_weights", "vert_weights", "coor_weights",
+        "cp_dif_tol", "cp_it_max", "K", "split_iter_num", "kmpp_init_num",
+        "kmpp_iter_num", "verbose", "max_num_threads",
+        "balance_parallel_split"};
+
+    const int num_given_opts = mxGetNumberOfFields(options);
+
+    for (int given_opt = 0; given_opt < num_given_opts; given_opt++){
+        const char* opt_name = mxGetFieldNameByNumber(options, given_opt);
+        int allow_opt;
+        for (allow_opt = 0; allow_opt < num_allow_opts; allow_opt++){
+            if (strcmp(opt_name, opts_names[allow_opt]) == 0){ break; }
         }
+        if (allow_opt == num_allow_opts){
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
+                "option '%s' unknown.", opt_name);
+        }
+    }
+}
+
+/* function for checking parameter type */
+static void check_arg_class(const mxArray* arg, const char* arg_name,
+    mxClassID class_id, const char* class_name)
+{
+    if (mxGetNumberOfElements(arg) > 1 && mxGetClassID(arg) != class_id){
+        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distane: "
+            "parameter '%s' should be of class %s (%s given).",
+            arg_name, class_name, mxGetClassName(arg), class_name);
     }
 }
 
 /* resize memory buffer allocated by mxMalloc and create a row vector */
 template <typename type_t>
 static mxArray* resize_and_create_mxRow(type_t* buffer, size_t size,
-    mxClassID id)
+    mxClassID class_id)
 {
-    mxArray* row = mxCreateNumericMatrix(0, 0, id, mxREAL);
+    mxArray* row = mxCreateNumericMatrix(0, 0, class_id, mxREAL);
     if (size){
         mxSetM(row, 1);
         mxSetN(row, size);
@@ -66,13 +92,17 @@ static mxArray* resize_and_create_mxRow(type_t* buffer, size_t size,
 }
 
 /* template for handling both single and double precisions */
-template<typename real_t>
-static void cp_kmpp_d0_dist_mex(int nlhs, mxArray **plhs, int nrhs, \
-    const mxArray **prhs)
+template <typename real_t, mxClassID mxREAL_CLASS>
+static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
+    const mxArray *prhs[])
 {
-    /**  get inputs  **/
+    /***  get inputs  ***/
 
-    /* sizes and loss */
+    const char* real_class_name = mxREAL_CLASS == mxDOUBLE_CLASS ?
+        "double" : "single";
+
+    /**  sizes and loss  **/
+
     real_t loss = mxGetScalar(prhs[0]);
     size_t D = mxGetM(prhs[1]);
     index_t V = mxGetN(prhs[1]);
@@ -80,48 +110,63 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray **plhs, int nrhs, \
         V = D;
         D = 1;
     }
-    const real_t *Y = (real_t*) mxGetData(prhs[1]);
-    const real_t *vert_weights = (nrhs > 5 && !mxIsEmpty(prhs[5])) ?
-        (real_t*) mxGetData(prhs[5]) : nullptr;
-    const real_t *coor_weights = (nrhs > 6 && !mxIsEmpty(prhs[6])) ?
-        (real_t*) mxGetData(prhs[6]) : nullptr;
+    const real_t* Y = (real_t*) mxGetData(prhs[1]);
 
-    /* graph structure */
+    /**  graph structure  **/
+
+    check_arg_class(prhs[2], "first_edge", mxINDEX_CLASS, INDEX_CLASS_NAME);
+    check_arg_class(prhs[3], "adj_vertices", mxINDEX_CLASS, INDEX_CLASS_NAME);
     index_t E = mxGetNumberOfElements(prhs[3]);
-    check_args(nrhs, prhs, args_index_t, n_index_t, VERTEX_CLASS, VERTEX_ID);
     const index_t *first_edge = (index_t*) mxGetData(prhs[2]);
     const index_t *adj_vertices = (index_t*) mxGetData(prhs[3]);
     if (mxGetNumberOfElements(prhs[2]) != (V + 1)){
         mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
-            "argument 3 'first_edge' should contain |V| + 1 = %d elements, "
-            "but %d are given.", (V + 1), mxGetNumberOfElements(prhs[2]));
+            "third parameter 'first_edge' should contain |V| + 1 = %d "
+            "elements (%d given).", (V + 1), mxGetNumberOfElements(prhs[2]));
     }
 
-    /* penalizations */
-    const real_t* edge_weights =
-        (nrhs > 4 && mxGetNumberOfElements(prhs[4]) > 1) ?
-        (real_t*) mxGetData(prhs[4]) : nullptr;
-    real_t homo_edge_weight =
-        (nrhs > 4 && mxGetNumberOfElements(prhs[4]) == 1) ?
-        mxGetScalar(prhs[4]) : 1.0;
+    /**  optional parameters  **/
 
-    real_t cp_dif_tol = (nrhs > 7) ? mxGetScalar(prhs[7]) : 1e-3;
-    int cp_it_max = (nrhs > 8) ? mxGetScalar(prhs[8]) : 10;
-    int K = (nrhs > 9) ? mxGetScalar(prhs[9]) : 2;
-    int split_iter_num = (nrhs > 10) ? mxGetScalar(prhs[10]) : 2;
-    int kmpp_init_num = (nrhs > 11) ? mxGetScalar(prhs[11]) : 3;
-    int kmpp_iter_num = (nrhs > 12) ? mxGetScalar(prhs[12]) : 3;
-    int verbose = (nrhs > 13) ? mxGetScalar(prhs[13]) : 1;
-    int max_num_threads = (nrhs > 14 && mxGetScalar(prhs[14]) > 0) ?
-        mxGetScalar(prhs[14]) : omp_get_max_threads();
-    bool balance_parallel_split = (nrhs > 15) ?
-        mxIsLogicalScalarTrue(prhs[15]) : true;
+    const mxArray* options = nrhs > 4 ? prhs[4] : nullptr;
+    check_opts(options);
+    const mxArray* opt;
 
-    /**  prepare output; rX (plhs[1]) is created later  **/
+    /* loss and penalizations */
+    #define GET_REAL_OPT(NAME) \
+        const real_t* NAME = nullptr; \
+        if (opt = mxGetField(options, 0, #NAME)){ \
+            check_arg_class(opt, #NAME, mxREAL_CLASS, real_class_name); \
+            NAME = (real_t*) mxGetData(opt); \
+        }
 
-    plhs[0] = mxCreateNumericMatrix(1, V, COMP_CLASS, mxREAL);
+    GET_REAL_OPT(vert_weights)
+    GET_REAL_OPT(coor_weights)
+    GET_REAL_OPT(edge_weights)
+    real_t homo_edge_weight = 1.0;
+    if (opt && mxGetNumberOfElements(opt) == 1){
+        edge_weights = nullptr;
+        homo_edge_weight = mxGetScalar(opt);
+    }
+
+    /* algorithmic parameters */
+    #define GET_SCAL_OPT(NAME, DFLT) \
+        NAME = (opt = mxGetField(options, 0, #NAME)) ? mxGetScalar(opt) : DFLT;
+
+    real_t GET_SCAL_OPT(cp_dif_tol, 1e-3);
+    int GET_SCAL_OPT(cp_it_max, 10);
+    int GET_SCAL_OPT(K, 2);
+    int GET_SCAL_OPT(split_iter_num, 2);
+    int GET_SCAL_OPT(kmpp_init_num, 3);
+    int GET_SCAL_OPT(kmpp_iter_num, 3);
+    bool GET_SCAL_OPT(verbose, true);
+    int GET_SCAL_OPT(max_num_threads, 0);
+    bool GET_SCAL_OPT(balance_parallel_split, true);
+
+    /***  prepare output; rX (plhs[1]) is created later  ***/
+
+    plhs[0] = mxCreateNumericMatrix(1, V, mxCOMP_CLASS, mxREAL);
     comp_t* Comp = (comp_t*) mxGetData(plhs[0]);
-    plhs[2] = mxCreateNumericMatrix(1, 1, VERTEX_CLASS, mxREAL);
+    plhs[2] = mxCreateNumericMatrix(1, 1, mxINT32_CLASS, mxREAL);
     int* it = (int*) mxGetData(plhs[2]);
 
     real_t* Obj = nlhs > 3 ?
@@ -131,7 +176,7 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray **plhs, int nrhs, \
     real_t* Dif = nlhs > 5 ?
         (real_t*) mxMalloc(sizeof(double)*cp_it_max) : nullptr;
 
-    /**  cut-pursuit with preconditioned forward-Douglas-Rachford  **/
+    /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
 
     Cp_d0_dist<real_t, index_t, comp_t> *cp =
         new Cp_d0_dist<real_t, index_t, comp_t>
@@ -151,8 +196,8 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray **plhs, int nrhs, \
 
     /* copy reduced values */
     comp_t rV = cp->get_components();
-    real_t *cp_rX = cp->get_reduced_values();
-    plhs[1] = mxCreateNumericMatrix(D, rV, mxGetClassID(prhs[1]), mxREAL);
+    real_t* cp_rX = cp->get_reduced_values();
+    plhs[1] = mxCreateNumericMatrix(D, rV, mxREAL_CLASS, mxREAL);
     real_t* rX = (real_t*) mxGetData(plhs[1]);
     for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
     
@@ -161,13 +206,13 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray **plhs, int nrhs, \
 
     /**  resize monitoring arrays and assign to outputs  **/
     if (nlhs > 3){
-        plhs[3] = resize_and_create_mxRow(Obj, *it + 1, mxGetClassID(prhs[1]));
+        plhs[3] = resize_and_create_mxRow(Obj, *it + 1, mxREAL_CLASS);
     }
     if (nlhs > 4){
         plhs[4] = resize_and_create_mxRow(Time, *it + 1, mxDOUBLE_CLASS);
     }
     if (nlhs > 5){
-        plhs[5] = resize_and_create_mxRow(Dif, *it, mxGetClassID(prhs[1]));
+        plhs[5] = resize_and_create_mxRow(Dif, *it, mxREAL_CLASS);
     }
 
 }
@@ -176,12 +221,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 { 
     /* real type is determined by second parameter Y */
     if (mxIsDouble(prhs[1])){
-        check_args(nrhs, prhs, args_real_t, n_real_t, mxDOUBLE_CLASS,
-            "double");
-        cp_kmpp_d0_dist_mex<double>(nlhs, plhs, nrhs, prhs);
+        cp_kmpp_d0_dist_mex<double, mxDOUBLE_CLASS>(nlhs, plhs, nrhs, prhs);
     }else{
-        check_args(nrhs, prhs, args_real_t, n_real_t, mxSINGLE_CLASS,
-            "single");
-        cp_kmpp_d0_dist_mex<float>(nlhs, plhs, nrhs, prhs);
+        cp_kmpp_d0_dist_mex<float, mxSINGLE_CLASS>(nlhs, plhs, nrhs, prhs);
     }
 }

@@ -1,15 +1,8 @@
 function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
-    first_edge, adj_vertices, edge_weights, Yl1, l1_weights, low_bnd, ...
-    upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, ...
-    pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads, ...
-    balance_parallel_split, AtA_if_square)
+    first_edge, adj_vertices, options)
 %
 %       [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y | AtY,
-%    A | AtA, first_edge, adj_vertices, edge_weights = 1.0, Yl1 = [],
-%   l1_weights = 0.0, low_bnd = -Inf, upp_bnd = Inf, cp_dif_tol = 1e-5,
-%   cp_it_max = 10, pfdr_rho = 1., pfdr_cond_min = 1e-2, pfdr_dif_rcd = 0.,
-%   pfdr_dif_tol = 1e-3*cp_dif_tol, pfdr_it_max = 1e4, verbose = 1e3,
-%   max_num_threads = 0, balance_parallel_split = true, AtA_if_square = true)
+%    A | AtA, first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d1 (total variation) penalization, with a 
 % quadratic functional, l1 penalization and box constraints:
@@ -66,14 +59,18 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %         the last value is always the total number of edges;
 %     for each edge, 'adj_vertices' indicates its ending vertex, array of 
 %         length E (uint32)
-% edge_weights - array of length E or scalar for homogeneous weights (real)
-% Yl1 - offset for l1 penalty, (real) array of length V, or empty matrix (for
-%     all zeros)
-% l1_weights - array of length V or scalar for homogeneous weights (real);
-%     set to zero for no l1 penalization 
-% low_bnd - array of length V or scalar (real);
+% options - structure with any of the following fields [with default values]:
+%     edge_weights [1.0], Yl1 [none], l1_weights [0.0], low_bnd [-Inf],
+%     upp_bnd [Inf], cp_dif_tol [1e-5], cp_it_max [10], pfdr_rho [1.0],
+%     pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-3*cp_dif_tol],
+%     pfdr_it_max [1e4], verbose [1e3], max_num_threads [none],
+%     balance_parallel_split [true], AtA_if_square [true]
+% edge_weights - (real) array of length E, or scalar for homogeneous weights
+% Yl1 - offset for l1 penalty, (real) array of length V
+% l1_weights - (real) array of length V, or scalar for homogeneous weights
+% low_bnd - (real) array of length V or scalar;
 %     set to negative infinity for no lower bound
-% upp_bnd - array of length V or scalar (real);
+% upp_bnd -  (real) array of length V or scalar;
 %     set to positive infinity for no upper bound
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (in Euclidean norm) is less than dif_tol;
@@ -100,7 +97,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 % max_num_threads - if greater than zero, set the maximum number of threads
 %     used for parallelization with OpenMP
 % balance_parallel_split - if true, the parallel workload of the split step 
-%     is balanced; WARNING: this might trades off speed against optimality
+%     is balanced; WARNING: this might trade off speed against optimality
 % AtA_if_square - if A is square, set this to false for direct matricial case
 %
 % OUTPUTS: indices are C-style (start at 0)
