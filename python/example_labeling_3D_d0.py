@@ -28,14 +28,16 @@ classNames = ["road", "vegetation", "facade", "hardscape",
         "scanning artifacts", "cars"]
 classId = np.arange(1, 7, dtype="uint8")
 
-###  parameters; see octave/doc/cp_pfdr_d1_lsx_mex.m  ###
-cp_dif_tol = 1e-3
-cp_it_max = 10
-K = 2
-split_iter_num = 2
-kmpp_init_num = 3
-kmpp_iter_num = 3
-verbose = 1
+###  parameters; see documentations of cp_kmpp_d0_dist  ###
+# cp_dif_tol = 1e-3
+# cp_it_max = 10
+# K = 2
+# split_iter_num = 2
+# kmpp_init_num = 3
+# kmpp_iter_num = 3
+# verbose = True
+# max_num_threads = 8
+# balance_parallel_split = True
 
 ###  initialize data  ###
 # For details on the data and parameters, see H. Raguet, A Note on the
@@ -48,39 +50,36 @@ homo_d1_weight = mat["homo_d1_weight"]
 ground_truth = mat["ground_truth"]
 first_edge = mat["first_edge"]
 adj_vertices = mat["adj_vertices"]
-
-homo_d0_weight = 3*homo_d1_weight; # adjusted for d1 norm by trial-and-error
+homo_d0_weight = 3*homo_d1_weight; # adjusted for d0 norm by trial-and-error
 
 # compute prediction performance of random forest
-ML = np.argmax(y, axis=0)+1
+ML = np.argmax(y, axis=0) + 1
 F1 = np.zeros(len(classNames),)
-for k in range(1,len(classNames)+1):
+for k in range(1,len(classNames) + 1):
     predk = np.array(ML == classId[k-1], dtype="int")
     truek = np.array(ground_truth == classId[k-1], dtype="int")
-    F1[k-1] = 2*np.array((predk+truek)==2, dtype = "int").sum()/(predk.sum() + truek.sum())
+    F1[k-1] = 2*np.array((predk + truek) == 2, dtype = "int").sum()
+              /(predk.sum() + truek.sum())
 print("\naverage F1 of random forest prediction: {:.2f}\n\n".format(F1.mean()))
 del predk, truek
 
 ###  solve the optimization problem  ###
-vert_weights = np.array([], dtype="float32")
-coor_weights = np.array([], dtype="float32")
 it1 = time.time()
-Comp, rX, it = cp_kmpp_d0_dist(
-        loss, y, first_edge, adj_vertices, homo_d0_weight, vert_weights, 
-        coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num, kmpp_init_num,
-        kmpp_iter_num, verbose)
+Comp, rX, it = cp_kmpp_d0_dist(loss, y, first_edge, adj_vertices,
+                               edge_weights=homo_d0_weight)
 it2 = time.time()
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX
-print("Total python wrapper execution time {:.0f} s\n\n".format(it2-it1))
+print("Total python wrapper execution time {:.0f} s\n\n".format(it2 - it1))
 
 # compute prediction performance of spatially regularized prediction
-ML = np.argmax(x, axis=0)+1
+ML = np.argmax(x, axis=0) + 1
 F1 = np.zeros(len(classNames),)
-for k in range(1,len(classNames)+1):
+for k in range(1,len(classNames) + 1):
     predk = np.array(ML == classId[k-1], dtype="int")
     truek = np.array(ground_truth == classId[k-1], dtype="int")
-    F1[k-1] = 2*np.array((predk+truek)==2).sum()/(predk.sum() + truek.sum())
+    F1[k-1] = 2*np.array((predk + truek) == 2).sum()
+              /(predk.sum() + truek.sum())
 print(("\naverage F1 of spatially regularized prediction: "
        "{:.2f}\n\n").format(F1.mean()))
 del predk, truek

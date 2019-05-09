@@ -10,18 +10,18 @@ cd(fileparts(which('example_tomography.m')));
 addpath('bin/');
 
 %%%  general parameters  %%%
-plotResults = true;
-printResults = false; % requires color encapsulated postscript driver on your
+plot_results = true;
+print_results = false; % requires color encapsulated postscript driver on your
                       % system
 
 %%%  parameters; see octave/doc/cp_pfdr_d1_ql1b_mex.m %%%
 options = struct; % reinitialize
-% options.cp_dif_tol = 1e-3;
+options.cp_dif_tol = 1e-3;
 % options.cp_it_max = 10;
 options.pfdr_rho = 1.5;
 % options.pfdr_cond_min = 1e-3;
 % options.pfdr_dif_rcd = 0;
-% options.pfdr_dif_tol = 1e-1*cp_dif_tol;
+options.pfdr_dif_tol = 1e-1*options.cp_dif_tol;
 % options.pfdr_it_max = 1e4;
 % options.pfdr_verbose = 1e3;
 % options.max_num_threads = 8;
@@ -45,11 +45,11 @@ x = rX(Comp + 1); % rX is components values, Comp is components assignment
 clear Comp rX;
 fprintf('Total MEX execution time %.1f s\n\n', time);
 
-if plotResults %%% plot and print results  %%%
+if plot_results %%% plot and print results  %%%
     figure(1), clf, colormap('gray');
     imagesc(x0); axis image; set(gca, 'Xtick', [], 'Ytick', []);
     title('ground truth');
-    if printResults
+    if print_results
         fprintf('print ground truth... ');
         print(gcf, '-depsc', 'tomography_ground_truth');
         fprintf('done.\n');
@@ -59,7 +59,7 @@ if plotResults %%% plot and print results  %%%
     imagesc(reshape(x, size(x0))); axis image; set(gca, 'Xtick', [], ...
         'Ytick', []);
     title('reconstruction');
-    if printResults
+    if print_results
         fprintf('print reconstruction... ');
         print(gcf, '-depsc', 'tomography_reconstruction');
         fprintf('done.\n');

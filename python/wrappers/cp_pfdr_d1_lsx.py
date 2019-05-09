@@ -68,7 +68,7 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     INPUTS: real numeric type is either float32 or float64, not both;
             indices numeric type is uint32.
 
-    NOTA: by default, components are identified using uint16_t identifiers; 
+    NOTA: by default, components are identified using uint16 identifiers; 
     this can be easily changed in the wrapper source if more than 65535
     components are expected (recompilation is necessary)
 
@@ -104,9 +104,8 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
         1e-2 is typical; a smaller value might enhance preconditioning
     pfdr_dif_rcd - reconditioning criterion on iterate evolution;
         a reconditioning is performed if relative changes of the iterate drops
-        below dif_rcd;
-        warning: reconditioning might temporarily draw minimizer away from
-        solution, and give bad subproblem solutions
+        below dif_rcd; WARNING: reconditioning might temporarily draw minimizer
+        away from the solution set and give bad subproblem solutions
     pfdr_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (in Euclidean norm) is less than dif_tol
         1e-3*cp_dif_tol is a conservative value
@@ -122,7 +121,8 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     compute_Time - monitor elapsing time along iterations
     compute_Dif  - compute relative evolution along iterations 
 
-    OUTPUTS:
+    OUTPUTS: Obj, Time, Dif are optional, set parameters compute_Obj,
+        compute_Time, compute_Dif to True to request them
 
     Comp - assignement of each vertex to a component, array of length V
         (uint16)

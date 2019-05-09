@@ -9,7 +9,7 @@ from cp_pfdr_d1_ql1b_cpy import cp_pfdr_d1_ql1b_cpy
 
 def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None, 
                     Yl1=None, l1_weights=None, low_bnd=None, upp_bnd=None, 
-                    cp_dif_tol=1e-5, cp_it_max=10, pfdr_rho=1., 
+                    cp_dif_tol=1e-4, cp_it_max=10, pfdr_rho=1., 
                     pfdr_cond_min=1e-2, pfdr_dif_rcd=0., pfdr_dif_tol=None, 
                     pfdr_it_max=int(1e4), verbose=int(1e3), 
                     max_num_threads=0, balance_parallel_split=True,
@@ -54,7 +54,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     INPUTS: real numeric type is either float32 or float64, not both;
             indices numeric type is uint32.
 
-    NOTA: by default, components are identified using uint16_t identifiers; 
+    NOTA: by default, components are identified using uint16 identifiers; 
     this can be easily changed in the wrapper source if more than 65535
     components are expected (recompilation is necessary)
 
@@ -80,49 +80,43 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         for each edge, 'adj_vertices' indicates its ending vertex, array of 
             length E (uint32)
     edge_weights - array of length E or a scalar for homogeneous weights (real)
-    Yl1        - offset for l1 penalty, (real) array of length V,
-                 or empty matrix (for all zeros)
+    Yl1 - offset for l1 penalty, (real) array of length V
     l1_weights - array of length V or scalar for homogeneous weights (real)
-                 set to zero for no l1 penalization 
-    low_bnd    - array of length V or scalar (real)
-                 set to negative infinity for no lower bound
-    upp_bnd    - array of length V or scalar (real)
-                 set to positive infinity for no upper bound
+    low_bnd - array of length V or scalar (real)
+    upp_bnd - array of length V or scalar (real)
     cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
-                 relative changes (in Euclidean norm) is less than dif_tol;
-                 1e-4 is a typical value; a lower one can give better precision
-                 but with longer computational time and more final components
-    cp_it_max  - maximum number of iterations (graph cut and subproblem)
-                 10 cuts solve accurately most problems
-    pfdr_rho   - relaxation parameter, 0 < rho < 2
-                 1 is a conservative value; 1.5 often speeds up convergence
+        relative changes (in Euclidean norm) is less than dif_tol;
+        1e-4 is a typical value; a lower one can give better precision
+        but with longer computational time and more final components
+    cp_it_max - maximum number of iterations (graph cut and subproblem)
+        10 cuts solve accurately most problems
+    pfdr_rho - relaxation parameter, 0 < rho < 2
+        1 is a conservative value; 1.5 often speeds up convergence
     pfdr_cond_min - stability of preconditioning; 0 < cond_min < 1;
-                    corresponds roughly the minimum ratio to the maximum 
-                    descent metric; 1e-2 is typical; a smaller value might 
-                    enhance preconditioning
+        corresponds roughly the minimum ratio to the maximum descent metric;
+        1e-2 is typical; a smaller value might enhance preconditioning
     pfdr_dif_rcd - reconditioning criterion on iterate evolution;
-                   a reconditioning is performed if relative changes of the
-                   iterate drops below dif_rcd
-                   warning: reconditioning might temporarily draw minimizer 
-                   away from solution, and give bad subproblem solutions
+        a reconditioning is performed if relative changes of the iterate drops
+        below dif_rcd; WARNING: reconditioning might temporarily draw minimizer
+        away from the solution set and give bad subproblem solutions
     pfdr_dif_tol - stopping criterion on iterate evolution; algorithm stops if
-                   relative changes (in Euclidean norm) is less than dif_tol
-                   1e-3*cp_dif_tol is a conservative value
-    pfdr_it_max  - maximum number of iterations 1e4 iterations provides enough
-                   precision for most subproblems
-    verbose      - if nonzero, display information on the progress, every
-                   'verbose' PFDR iterations
+        relative changes (in Euclidean norm) is less than dif_tol
+        1e-3*cp_dif_tol is a conservative value
+    pfdr_it_max - maximum number of iterations 1e4 iterations provides enough
+        precision for most subproblems
+    verbose - if nonzero, display information on the progress, every 'verbose'
+        PFDR iterations
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
     AtA_if_square - if A is square, set this to false for direct matricial case
-    compute_Obj  - compute the objective functional along iterations 
+    compute_Obj - compute the objective functional along iterations 
     compute_Time - monitor elapsing time along iterations
-    compute_Dif  - compute relative evolution along iterations 
+    compute_Dif - compute relative evolution along iterations 
 
-    OUTPUTS: Obj, Time, Dif are optional outputs, set optional input
-        compute_Obj, compute_Time, compute_Dif to True to get them 
+    OUTPUTS: Obj, Time, Dif are optional, set parameters compute_Obj,
+        compute_Time, compute_Dif to True to request them
 
     Comp - assignement of each vertex to a component, array of length V
         (uint16)

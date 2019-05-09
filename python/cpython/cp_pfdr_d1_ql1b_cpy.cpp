@@ -3,7 +3,7 @@
  *          Y, A, first_edge, adj_vertices, edge_weights, Yl1, l1_weights,
  *          low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
  *          pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
- *          balance_parallel_split, AtA_if_square, real_t_double, compute_Obj,
+ *          balance_parallel_split, AtA_if_square, real_is_double, compute_Obj,
  *          compute_Time, compute_Dif)
  * 
  *  Baudoin Camille 2019
@@ -22,12 +22,11 @@ using namespace std;
  * comp_t must be able to represent the number of constant connected components
  * in the reduced graph */
 typedef uint32_t index_t;
-#define VERTEX_CLASS NPY_UINT32 
 typedef uint16_t comp_t;
-#define COMP_CLASS NPY_UINT16 
+#define NPY_COMP_CLASS NPY_UINT16 
 /* uncomment the following if more than 65535 components are expected */
 // typedef uint32_t comp_t;
-// #define COMP_CLASS NPY_UINT32 
+// #define NPY_COMP_CLASS NPY_UINT32 
 
 /* template for handling both single and double precisions */
 template<typename real_t, NPY_TYPES pyREAL_CLASS>
@@ -112,7 +111,7 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
 
     npy_intp size_py_comp_t[] = {V};
     PyArrayObject* py_comp_t = (PyArrayObject*) PyArray_Zeros(1,
-        size_py_comp_t, PyArray_DescrFromType(COMP_CLASS), 1);
+        size_py_comp_t, PyArray_DescrFromType(NPY_COMP_CLASS), 1);
     comp_t *Comp = (comp_t*) PyArray_DATA(py_comp_t); 
 
     npy_intp size_py_it[] = {1};
@@ -180,15 +179,15 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
         py_Dif); 
 }
 
-/* My python wrapper */
+/* actual interface */
 static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
 { 
-    /* My INPUT */ 
+    /* INPUT */ 
     PyArrayObject *py_Y, *py_A, *py_first_edge, *py_adj_vertices,
         *py_edge_weights, *py_Yl1, *py_l1_weights, *py_low_bnd, *py_upp_bnd; 
     double cp_dif_tol, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol;
     int cp_it_max, pfdr_it_max, verbose, max_num_threads, 
-        balance_parallel_split, AtA_if_square, real_t_double, compute_Obj, 
+        balance_parallel_split, AtA_if_square, real_is_double, compute_Obj, 
         compute_Time, compute_Dif; 
     
     /* parse the input, from Python Object to C PyArray, double, or int type */
@@ -201,11 +200,11 @@ static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
         &py_l1_weights, &py_low_bnd, &py_upp_bnd, &cp_dif_tol, &cp_it_max,
         &pfdr_rho, &pfdr_cond_min, &pfdr_dif_rcd, &pfdr_dif_tol, &pfdr_it_max,
         &verbose, &max_num_threads, &balance_parallel_split, &AtA_if_square, 
-        &real_t_double, &compute_Obj, &compute_Time, &compute_Dif)) {
+        &real_is_double, &compute_Obj, &compute_Time, &compute_Dif)) {
         return NULL;
     }
 
-    if (real_t_double){ /* real_t type is double */
+    if (real_is_double){ /* real_t type is double */
         PyObject* PyReturn = cp_pfdr_d1_ql1b<double, NPY_FLOAT64>(py_Y,
             py_A, py_first_edge, py_adj_vertices, py_edge_weights, py_Yl1,
             py_l1_weights, py_low_bnd, py_upp_bnd, cp_dif_tol, cp_it_max,

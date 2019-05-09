@@ -61,7 +61,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %         length E (uint32)
 % options - structure with any of the following fields [with default values]:
 %     edge_weights [1.0], Yl1 [none], l1_weights [0.0], low_bnd [-Inf],
-%     upp_bnd [Inf], cp_dif_tol [1e-5], cp_it_max [10], pfdr_rho [1.0],
+%     upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
 %     pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-3*cp_dif_tol],
 %     pfdr_it_max [1e4], verbose [1e3], max_num_threads [none],
 %     balance_parallel_split [true], AtA_if_square [true]

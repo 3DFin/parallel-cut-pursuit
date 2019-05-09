@@ -20,6 +20,10 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 
 from cp_pfdr_d1_ql1b import cp_pfdr_d1_ql1b 
 
+###  general parameters  ###
+plot_results = True
+print_results = True
+
 ###  parameters; see documentation of cp_pfdr_d1_ql1b  ###
 # cp_dif_tol = 1e-4
 cp_it_max = 15
@@ -29,6 +33,8 @@ pfdr_rho = 1.5
 # pfdr_dif_tol = 1e-3*cp_dif_tol
 # pfdr_it_max = 1e4
 # pfdr_verbose = 1e3
+# max_num_threads = 8
+balance_parallel_split = False
 
 # dataset courtesy of Ahmad Karfoul and Isabelle Merlet, LTSI, INSERM U1099
 # Penalization parameters computed with SURE methods, heuristics adapted from
@@ -41,40 +47,18 @@ first_edge = mat["first_edge"]
 adj_vertices = mat["adj_vertices"]
 d1_weights = mat["d1_weights"]
 l1_weights = mat["l1_weights"]
+low_bnd = 0.0 
 
 # ground truth support 
 x0 = mat["x0"]
 supp0 = np.array(x0 != 0, dtype="int")
-x0min = x0.min()
-x0max = x0.max()
-vertices = mat["mesh"].item()[0]
-faces = mat["mesh"].item()[1].astype("int")-1
-numberOfColors = 256
-
-# print the ground truth activity
-# map the color index
-xcol = np.floor((x0 - x0min)/(x0max - x0min)*numberOfColors) + 2
-xcol[supp0 == 0] = 1
-# plot figure
-fig = plt.figure(1)
-ax = fig.gca(projection="3d")
-ax.view_init(30, 90)
-cmap = plt.get_cmap("hot")
-collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
-        triangles=faces, cmap=cmap)
-collec.set_array(xcol)
-plt.axis("off")
-ax.set_title("Ground truth activity")
-fig.show()
 
 ###  solve the optimization problem  ###
-low_bnd = 0.0 
-upp_bnd = np.inf
 it1 = time.time()
-Comp, rX, it = cp_pfdr_d1_ql1b(
-        y, Phi, first_edge, adj_vertices,
-        d1_weights=d1_weights, l1_weights=l1_weights,
-        low_bnd=low_bnd, upp_bnd=upp_bnd, pfdr_rho=pfdr_rho)
+Comp, rX, it = cp_pfdr_d1_ql1b(y, Phi, first_edge, adj_vertices,
+                               edge_weights=d1_weights, l1_weights=l1_weights,
+                               low_bnd=low_bnd, pfdr_rho=pfdr_rho,
+                               balance_parallel_split=balance_parallel_split)
 it2 = time.time()
 x = rX[Comp] # rX is components values, Comp is components assignment
 del rX, Comp
@@ -82,7 +66,7 @@ print("Total python wrapper execution time: {:.1f} s\n\n".format(it2-it1))
 
 ###  compute Dice scores and print results  ###
 supp = np.array(x != 0, dtype="int")
-DS = 2*np.array((supp0+supp) == 2).sum()/(supp0.sum() + supp.sum());
+DS = 2*np.array((supp0 + supp) == 2).sum()/(supp0.sum() + supp.sum());
 # support retrieved by discarding nonsignificant values with 2-means clustering
 abss = np.abs(x)
 sabs = np.sort(abss)
@@ -103,32 +87,66 @@ DSa = 2*np.array((supp0+suppa) == 2).sum()/(supp0.sum() + suppa.sum());
 print(("Dice score: raw {0:.2f}; approx (discard less significant with "
     "2-means) {1:.2f}\n\n").format(DS, DSa))
 
-# print retrieved activity
-# map the color index
-xcol = np.floor((x - x0min)/(x0max - x0min)*numberOfColors) + 2
-xcol[supp == 0] = 1
-# plot figure
-fig = plt.figure(2)
-ax = fig.gca(projection="3d")
-ax.view_init(30, 90)
-cmap = plt.get_cmap("hot")
-collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
-        triangles=faces, cmap=cmap)
-collec.set_array(xcol)
-plt.axis("off")
-ax.set_title("Retrieved brain activity")
-fig.show()
+if plot_results:
+    x0min = x0.min()
+    x0max = x0.max()
+    vertices = mat["mesh"].item()[0]
+    faces = mat["mesh"].item()[1].astype("int")-1
+    numberOfColors = 256
+    ## ground truth activity
+    # map the color index
+    xcol = np.floor((x0 - x0min)/(x0max - x0min)*numberOfColors) + 2
+    xcol[supp0 == 0] = 1
+    # plot figure
+    fig = plt.figure(1)
+    ax = fig.gca(projection="3d")
+    ax.view_init(30, 90)
+    cmap = plt.get_cmap("hot")
+    collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
+            triangles=faces, cmap=cmap)
+    collec.set_array(xcol)
+    plt.axis("off")
+    ax.set_title("Ground truth activity")
+    fig.show()
+    if print_results:
+        print("print ground truth... ", end="", flush=True)
+        fig.savefig("EEG_ground_truth.pdf")
+        print("done.\n")
 
-# print retrieved support
-# map the color index
-xcol = 1 + suppa*numberOfColors;
-fig = plt.figure(3)
-ax = fig.gca(projection="3d")
-ax.view_init(30, 90)
-cmap = plt.get_cmap("hot")
-collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
-        triangles=faces, cmap=cmap)
-collec.set_array(xcol)
-plt.axis("off")
-ax.set_title("Retrieved brain sources")
-fig.show()
+    ## retrieved activity
+    # map the color index
+    xcol = np.floor((x - x0min)/(x0max - x0min)*numberOfColors) + 2
+    xcol[supp == 0] = 1
+    # plot figure
+    fig = plt.figure(2)
+    ax = fig.gca(projection="3d")
+    ax.view_init(30, 90)
+    cmap = plt.get_cmap("hot")
+    collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
+                             triangles=faces, cmap=cmap)
+    collec.set_array(xcol)
+    plt.axis("off")
+    ax.set_title("Retrieved brain activity")
+    fig.show()
+    if print_results:
+        print("print retrieved activity... ", end="", flush=True)
+        fig.savefig("EEG_retrieved_activity.pdf")
+        print("done.\n")
+
+    ## print retrieved support
+    # map the color index
+    xcol = 1 + suppa*numberOfColors;
+    fig = plt.figure(3)
+    ax = fig.gca(projection="3d")
+    ax.view_init(30, 90)
+    cmap = plt.get_cmap("hot")
+    collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
+                             triangles=faces, cmap=cmap)
+    collec.set_array(xcol)
+    plt.axis("off")
+    ax.set_title("Retrieved brain sources")
+    fig.show()
+    if print_results:
+        print("print retrieved sources... ", end="", flush=True)
+        fig.savefig("EEG_retrieved_sources.pdf")
+        print("done.\n")

@@ -8,18 +8,18 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 from cp_kmpp_d0_dist_cpy import cp_kmpp_d0_dist_cpy
 
 def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
-                   vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
-                   cp_it_max=10, K=2, split_iter_num=2, kmpp_init_num=3,
-                   kmpp_iter_num=3, verbose=int(1e2), max_num_threads=0, 
-                   balance_parallel_split=True, compute_Obj=False, 
-                   compute_Time=False, compute_Dif=False):
+                    vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
+                    cp_it_max=10, K=2, split_iter_num=2, kmpp_init_num=3,
+                    kmpp_iter_num=3, verbose=True, max_num_threads=0, 
+                    balance_parallel_split=True, compute_Obj=False, 
+                    compute_Time=False, compute_Dif=False):
 
     """
     Comp, rX, cp_it, Obj, Time, Dif = cp_kmpp_d0_dist(
             loss, Y, first_edge, adj_vertices, edge_weights=None, 
             vert_weights=None, coor_weights=None, cp_dif_tol=1e-3, 
             cp_it_max=10, K=2, split_iter_num=2, kmpp_init_num=3, 
-            kmpp_iter_num=3, verbose=1, max_num_threads=0, 
+            kmpp_iter_num=3, verbose=True, max_num_threads=0,
             balance_parallel_split=True, compute_Obj=False, 
             compute_Time=False, compute_Dif=False)
 
@@ -66,7 +66,7 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     INPUTS: real numeric type is either float32 or float64, not both;
             indices numeric type is uint32.
 
-    NOTA: by default, components are identified using uint16_t identifiers; 
+    NOTA: by default, components are identified using uint16 identifiers;
     this can be easily changed in the wrapper source if more than 65535 
     components are expected (recompilation is necessary)
 
@@ -99,16 +99,17 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         step
     kmpp_init_num - number of random k-means initializations in the split step
     kmpp_iter_num - number of k-means iterations in the split step
-    verbose       - if nonzero, display information on the progress
+    verbose - if true, display information on the progress
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
-        is balanced
+        is balanced; WARNING: this might trade off speed against optimality
     compute_Obj   - compute the objective functional along iterations 
     compute_Time  - monitor elapsing time along iterations
     compute_Dif   - compute relative evolution along iterations 
 
-    OUTPUTS: 
+    OUTPUTS: Obj, Time, Dif are optional, set parameters compute_Obj,
+        compute_Time, compute_Dif to True to request them
 
     Comp - assignement of each vertex to a component, array of length V 
         (uint16)
@@ -221,15 +222,15 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     split_iter_num = int(split_iter_num)
     kmpp_init_num = int(kmpp_init_num)
     kmpp_iter_num = int(kmpp_iter_num)
-    verbose = int(verbose)
     max_num_threads = int(max_num_threads)
 
     # Check type of all booleen arguments (AtA_if_square, compute_Obj, 
     # compute_Time, compute_Dif)
     for name, b_args in zip(
-        ["balance_parallel_split", "compute_Obj", "compute_Time", 
+        ["verbose", "balance_parallel_split", "compute_Obj", "compute_Time", 
          "compute_Dif"],
-        [balance_parallel_split, compute_Obj, compute_Time, compute_Dif]):
+        [verbose, balance_parallel_split, compute_Obj, compute_Time,
+         compute_Dif]):
         if type(b_args) != bool:
             raise TypeError("argument '{0}' must be boolean".format(name))
 

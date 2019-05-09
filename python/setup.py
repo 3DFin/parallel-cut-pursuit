@@ -28,7 +28,7 @@ extra_compile_args = ["-Wextra", "-Wpedantic", "-std=c++11", "-fopenmp", "-g0",
 extra_link_args = ["-lgomp"]
 
 ###  auxiliary functions  ###
-class MyBuild(build):
+class build_class(build):
     def initialize_options(self):
         build.initialize_options(self)
         self.build_lib = "bin" 
@@ -52,7 +52,7 @@ except FileExistsError:
 
 # remove previously compiled lib
 for shared_obj in to_compile: 
-    purge("bin/", shared_obj) 
+    purge("bin/", shared_obj)
 
 ###  compilation  ###
 
@@ -69,7 +69,7 @@ if name in to_compile:
             include_dirs=include_dirs,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)
-    setup(name=name, ext_modules=[mod], cmdclass=dict(build=MyBuild))
+    setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
 
 
 name = "cp_pfdr_d1_lsx_cpy"
@@ -85,7 +85,7 @@ if name in to_compile:
             include_dirs=include_dirs,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)
-    setup(name=name, ext_modules=[mod], cmdclass=dict(build=MyBuild))
+    setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
 
 
 name = "cp_kmpp_d0_dist_cpy"
@@ -99,7 +99,7 @@ if name in to_compile:
             include_dirs=include_dirs,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)
-    setup(name=name, ext_modules=[mod], cmdclass=dict(build=MyBuild))
+    setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
 
 ###  postprocessing  ###
 try:

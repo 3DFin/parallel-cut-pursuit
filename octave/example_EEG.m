@@ -10,8 +10,8 @@ cd(fileparts(which('example_EEG.m')));
 addpath('bin/');
 
 %%%  general parameters  %%%
-plotResults = false;
-printResults = false; % requires color encapsulated postscript driver on your
+plot_results = true;
+print_results = false; % requires color encapsulated postscript driver on your
                       % system; be sure to run octave 4.2.2 or later, fixing a
                       % bug in trisurf
 
@@ -42,46 +42,6 @@ options.edge_weights = d1_weights;
 options.l1_weights = l1_weights;
 options.low_bnd = 0.0;
 
-supp0 = x0 ~= 0; % ground truth support 
-
-if plotResults
-
-    % the following creates a colormap adapted to representation of sparse data
-    n = numberOfColors/3;
-    % luminance of pure red is 0.2989
-    redMap = [linspace(darkLevel/0.2989, 1, floor(n))'; ...
-              ones(round(n) + ceil(n), 1)];
-    greenMap = [zeros(floor(n), 1);  (1:round(n))'/round(n); ones(ceil(n), 1)];
-    blueMap = [zeros(floor(n) + round(n), 1); (1:ceil(n))'/ceil(n)];
-    colMap = [redMap, greenMap, blueMap];
-    colMap = [darkLevel*[1, 1, 1]; colMap]; % this is luminance of pure red
-    clear redMap greenMap blueMap
-    % plot the ground truth and estimated brain sources
-    CAM = 1.0e+03*[-0.6329 1.5675 0.1686]; % camera parameter well adapted to
-                                           % the sources distribution
-    % get absolute min and max values to plot with same colormap
-    x0min = min(x0); 
-    x0max = max(x0);
-
-    % print the ground truth activity
-    figure(1), clf, colormap(colMap);
-    % map the color index
-    xcol = floor((x0 - x0min)/(x0max - x0min)*numberOfColors) + 2;
-    xcol(~supp0) = 1;
-    % require octave 4.2.2 or later, fixing a bug in trisurf
-    trisurf(mesh.f, mesh.v(:,1), mesh.v(:,2), mesh.v(:,3), xcol, ...
-        'CDataMapping', 'direct');
-    set(gca, 'Color', 'none'); axis off;
-    set(gca, 'CameraPosition', CAM);
-    drawnow('expose');
-    if printResults
-        fprintf('print ground truth... ');
-        print(gcf, '-depsc', 'EEG_ground_truth');
-        fprintf('done.\n');
-    end
-
-end
-
 %%%  solve the optimization problem  %%%
 tic;
 [Comp, rX] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, adj_vertices, options);
@@ -92,6 +52,7 @@ fprintf('Total MEX execution time %.1f s\n\n', time);
 
 %%%  compute Dice scores and print results  %%%
 % support retrieved with raw model
+supp0 = x0 ~= 0; % ground truth support 
 supp = x ~= 0;
 DS = 2*sum(supp0 & supp)/(sum(supp0) + sum(supp));
 % support retrieved by discarding nonsignificant values with 2-means clustering
@@ -112,10 +73,42 @@ DSa = 2*sum(supp0 & suppa)/(sum(supp0) + sum(suppa));
 fprintf(['Dice score: raw %.2f; approx (discard less significant with ' ...
     '2-means) %.2f\n\n'], DS, DSa);
 
+if plot_results
+    % the following creates a colormap adapted to representation of sparse data
+    n = numberOfColors/3;
+    % luminance of pure red is 0.2989
+    redMap = [linspace(darkLevel/0.2989, 1, floor(n))'; ...
+              ones(round(n) + ceil(n), 1)];
+    greenMap = [zeros(floor(n), 1);  (1:round(n))'/round(n); ones(ceil(n), 1)];
+    blueMap = [zeros(floor(n) + round(n), 1); (1:ceil(n))'/ceil(n)];
+    colMap = [redMap, greenMap, blueMap];
+    colMap = [darkLevel*[1, 1, 1]; colMap]; % this is luminance of pure red
+    clear redMap greenMap blueMap
 
-if plotResults
+    CAM = 1.0e+03*[-0.6329 1.5675 0.1686]; % camera parameter well adapted to
+                                           % the sources distribution
+    % get absolute min and max values to plot with same colormap
+    x0min = min(x0); 
+    x0max = max(x0);
 
-    % print retrieved activity
+    %% ground truth activity
+    figure(1), clf, colormap(colMap);
+    % map the color index
+    xcol = floor((x0 - x0min)/(x0max - x0min)*numberOfColors) + 2;
+    xcol(~supp0) = 1;
+    % require octave 4.2.2 or later, fixing a bug in trisurf
+    trisurf(mesh.f, mesh.v(:,1), mesh.v(:,2), mesh.v(:,3), xcol, ...
+        'CDataMapping', 'direct');
+    set(gca, 'Color', 'none'); axis off;
+    set(gca, 'CameraPosition', CAM);
+    drawnow('expose');
+    if print_results
+        fprintf('print ground truth... ');
+        print(gcf, '-depsc', 'EEG_ground_truth');
+        fprintf('done.\n');
+    end
+
+    %% retrieved activity
     figure(2), clf, colormap(colMap);
     xcol = floor((x - x0min)/(x0max - x0min)*numberOfColors) + 2;
     xcol(~supp) = 1;
@@ -125,13 +118,13 @@ if plotResults
     set(gca, 'Color', 'none'); axis off;
     set(gca, 'CameraPosition', CAM);
     drawnow('expose');
-    if printResults
+    if print_results
         fprintf('print retrieved brain activity... ');
         print(gcf, '-depsc', 'EEG_brain_activity');
         fprintf('done.\n');
     end
 
-    % print retrieved support
+    %% retrieved support
     figure(3), clf, colormap(colMap);
     xcol = 1 + suppa*numberOfColors;
     % be sure to run octave 4.2.2 or later, fixing a bug in trisurf
@@ -140,7 +133,7 @@ if plotResults
     set(gca, 'Color', 'none'); axis off;
     set(gca, 'CameraPosition', CAM);
     drawnow('expose');
-    if printResults
+    if print_results
         fprintf('print retrieved brain sources... ')
         print(gcf, '-depsc', 'EEG_brain_sources');
         fprintf('done.\n');
