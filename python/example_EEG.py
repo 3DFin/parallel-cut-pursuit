@@ -21,14 +21,14 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 from cp_pfdr_d1_ql1b import cp_pfdr_d1_ql1b 
 
 ###  parameters; see documentation of cp_pfdr_d1_ql1b  ###
-cp_dif_tol = 1e-4
+# cp_dif_tol = 1e-4
 cp_it_max = 15
 pfdr_rho = 1.5
-pfdr_cond_min = 1e-2
-pfdr_dif_rcd = 0
-pfdr_dif_tol = 1e-3*cp_dif_tol
-pfdr_it_max = int(1e4)
-pfdr_verbose = int(1e3)
+# pfdr_cond_min = 1e-2
+# pfdr_dif_rcd = 0.0
+# pfdr_dif_tol = 1e-3*cp_dif_tol
+# pfdr_it_max = 1e4
+# pfdr_verbose = 1e3
 
 # dataset courtesy of Ahmad Karfoul and Isabelle Merlet, LTSI, INSERM U1099
 # Penalization parameters computed with SURE methods, heuristics adapted from
@@ -68,14 +68,13 @@ ax.set_title("Ground truth activity")
 fig.show()
 
 ###  solve the optimization problem  ###
-Yl1 = np.array([], dtype="float") 
 low_bnd = 0.0 
 upp_bnd = np.inf
 it1 = time.time()
 Comp, rX, it = cp_pfdr_d1_ql1b(
-        y, Phi, first_edge, adj_vertices, d1_weights, Yl1, l1_weights,
-        low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
-        pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, pfdr_verbose)
+        y, Phi, first_edge, adj_vertices,
+        d1_weights=d1_weights, l1_weights=l1_weights,
+        low_bnd=low_bnd, upp_bnd=upp_bnd, pfdr_rho=pfdr_rho)
 it2 = time.time()
 x = rX[Comp] # rX is components values, Comp is components assignment
 del rX, Comp

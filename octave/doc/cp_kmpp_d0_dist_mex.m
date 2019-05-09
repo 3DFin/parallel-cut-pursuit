@@ -1,13 +1,8 @@
 function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
-    first_edge, adj_vertices, edge_weights, vert_weights, coor_weights, ...
-    cp_dif_tol, cp_it_max, K, split_iter_num, kmpp_init_num, kmpp_iter_num, ...
-    verbose, max_num_threads, balance_parallel_split)
+    first_edge, adj_vertices, options)
 %
 %        [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y,
-%   first_edge, adj_vertices, edge_weights = 1.0, vert_weights = [],
-%   coor_weights = [], cp_dif_tol = 1e-3, cp_it_max = 10, K = 2,
-%   split_iter_num = 2, kmpp_init_num = 3, kmpp_iter_num = 3, verbose = 1,
-%   max_num_threads = 0, balance_parallel_split = true)
+%   first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d0 (weighted contour length) penalization, with a
 % loss akin to a distance:
@@ -70,11 +65,14 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 %         the last value is always the total number of edges;
 %     for each edge, 'adj_vertices' indicates its ending vertex, array of 
 %         length E (uint32)
+% options - structure with any of the following fields [with default values]:
+%     edge_weights [1.0], vert_weights [none], coor_weights [none],
+%     cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
+%     kmpp_init_num [3], kmpp_iter_num [3], verbose [true],
+%     max_num_threads [none], balance_parallel_split [true]
 % edge_weights - (real) array of length E or scalar for homogeneous weights
-% vert_weights - weights on vertices (w_v in above notations);
-%     (real) array of length V or empty for no weights
-% coor_weights - weights on coordinates (m_d above notations);
-%     (real) array of length D or empty for no weights
+% vert_weights - weights on vertices (w_v above); (real) array of length V
+% coor_weights - weights on coordinates (m_d above); (real) array of length D
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (that is, relative dissimilarity measures defined by the
 %     choosen loss between succesive iterates and between current iterate and
@@ -89,7 +87,7 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % max_num_threads - if greater than zero, set the maximum number of threads
 %     used for parallelization with OpenMP
 % balance_parallel_split - if true, the parallel workload of the split step 
-%     is balanced
+%     is balanced; WARNING: this might trade off speed against optimality
 %
 % OUTPUTS: indices are C-style (start at 0)
 %

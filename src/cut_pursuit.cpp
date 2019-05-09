@@ -116,6 +116,7 @@ TPL void CP::set_cp_param(real_t dif_tol, int it_max, int verbose, real_t eps)
 
 TPL void CP::set_parallel_param(int max_num_threads, bool balance_par_split)
 {
+    if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
     this->max_num_threads = max_num_threads;
     this->balance_par_split = balance_par_split;
 }

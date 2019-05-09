@@ -15,22 +15,24 @@ classNames = {'road', 'vegetation', 'facade', 'hardscape', ...
 classId = uint8(1:6)';
 
 %%%  parameters; see octave/doc/cp_pfdr_d1_lsx_mex.m  %%%
-cp_dif_tol = 1e-3;
-cp_it_max = 10;
-pfdr_rho = 1.5;
-pfdr_cond_min = 1e-2;
-pfdr_dif_rcd = 0;
-pfdr_dif_tol = 1e-3*cp_dif_tol;
-pfdr_it_max = 1e4;
-pfdr_verbose = 1e2;
-max_num_threads = 0;
-balance_parallel_split = true;
+options = struct; % reinitialize
+% options.cp_dif_tol = 1e-3;
+% options.cp_it_max = 10;
+options.pfdr_rho = 1.5;
+% options.pfdr_cond_min = 1e-2;
+% options.pfdr_dif_rcd = 0.0;
+% options.pfdr_dif_tol = 1e-3*options.cp_dif_tol;
+% options.pfdr_it_max = 1e4;
+% options.pfdr_verbose = 1e2;
+% options.max_num_threads = 0;
+% options.balance_parallel_split = true;
 
 %%%  initialize data  %%%
 % For details on the data and parameters, see H. Raguet, A Note on the
 % Forward-Douglas--Rachford Splitting for Monotone Inclusion and Convex
 % Optimization Optimization Letters, 2018, 1-24
 load('../data/labeling_3D.mat')
+options.edge_weights = homo_d1_weight;
 
 % compute prediction performance of random forest
 [~, ML] = max(y, [], 1);
@@ -45,12 +47,7 @@ clear predk truek
 
 %%%  solve the optimization problem  %%%
 tic;
-loss_weights = []; d1_coor_weights = [];
-[Comp, rX] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, ...
-    adj_vertices, homo_d1_weight, loss_weights, d1_coor_weights, ...
-    cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, ...
-    pfdr_dif_tol, pfdr_it_max, pfdr_verbose, max_num_threads,
-    balance_parallel_split);
+[Comp, rX] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;

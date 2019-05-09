@@ -1,15 +1,8 @@
 function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
-    first_edge, adj_vertices, edge_weights, loss_weights, ...
-    d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, ...
-    pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads, ...
-    balance_parallel_split)
+    first_edge, adj_vertices, options)
 %
 %        [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y,
-%   first_edge, adj_vertices, edge_weights = 1.0, loss_weights = [],
-%   d1_coor_weights = [], cp_dif_tol = 1e-3, cp_it_max = 10, pfdr_rho = 1.0,
-%   pfdr_cond_min = 1e-2, pfdr_dif_rcd = 0.0, pfdr_dif_tol = 1e-3*cp_dif_tol,
-%   pfdr_it_max = 1e4, verbose = 1e2, max_num_threads = 0,
-%   balance_parallel_split = true)
+%   first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d1 (total variation) penalization, with a
 % separable loss term and simplex constraints:
@@ -74,12 +67,17 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %         the last value is always the total number of edges;
 %     for each edge, 'adj_vertices' indicates its ending vertex, array of 
 %         length E (uint32)
-% edge_weights - (real) array of length E or scalar for homogeneous weights
-% loss_weights - weights on vertices; (real) array of length V or empty for
-%     no weights
+% options - structure with any of the following fields [with default values]:
+%     edge_weights [1.0], loss_weights [none], d1_coor_weights [none],
+%     cp_dif_tol [1e-3], cp_it_max [10], pfdr_rho [1.0], pfdr_cond_min [1e-2],
+%     pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4],
+%     verbose [1e2], max_num_threads [none], balance_parallel_split [true]
+% edge_weights - (real) array of length E, or scalar for homogeneous weights
+% loss_weights - weights on vertices; (real) array of length V
 % d1_coor_weights - for multidimensional data, weights the coordinates in the
-%     l1 norms of finite differences; all weights must be strictly positive,
-%     it is advised to normalize the weights so that the first value is unity
+%     l1 norms of finite differences; (real) array of length D;
+%     all weights must be strictly positive, it is advised to normalize the
+%     weights so that the first value is unity
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (in Euclidean norm) is less than dif_tol;
 %     1e-3 is a typical value; a lower one can give better precision but with

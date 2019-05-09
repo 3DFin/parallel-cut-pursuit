@@ -20,16 +20,17 @@ numberOfColors = 256;
 darkLevel = 1/16;
 
 %%%  parameters; see octave/doc/cp_pfdr_d1_ql1b_mex.m %%%
-cp_dif_tol = 1e-4;
-cp_it_max = 15;
-pfdr_rho = 1.5;
-pfdr_cond_min = 1e-2;
-pfdr_dif_rcd = 0;
-pfdr_dif_tol = 1e-3*cp_dif_tol;
-pfdr_it_max = 1e4;
-pfdr_verbose = 1e3;
-max_num_threads = 0;
-balance_parallel_split = false;
+options = struct; % reinitialize
+% options.cp_dif_tol = 1e-4;
+options.cp_it_max = 15;
+options.pfdr_rho = 1.5;
+% options.pfdr_cond_min = 1e-2;
+% options.pfdr_dif_rcd = 0.0;
+% options.pfdr_dif_tol = 1e-3*options.cp_dif_tol;
+% options.pfdr_it_max = 1e4;
+% options.pfdr_verbose = 1e3;
+% options.max_num_threads = 8;
+options.balance_parallel_split = false;
 
 %%%  initialize data  %%%
 % dataset courtesy of Ahmad Karfoul and Isabelle Merlet, LTSI, INSERM U1099
@@ -37,6 +38,9 @@ balance_parallel_split = false;
 % H. Raguet: A Signal Processing Approach to Voltage-Sensitive Dye Optical
 % Imaging, Ph.D. Thesis, Paris-Dauphine University, 2014
 load('../data/EEG.mat')
+options.edge_weights = d1_weights;
+options.l1_weights = l1_weights;
+options.low_bnd = 0.0;
 
 supp0 = x0 ~= 0; % ground truth support 
 
@@ -80,12 +84,7 @@ end
 
 %%%  solve the optimization problem  %%%
 tic;
-Yl1 = []; low_bnd = 0.0; upp_bnd = Inf;
-[Comp, rX] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, ...
-    adj_vertices, d1_weights, Yl1, l1_weights, low_bnd, upp_bnd, ...
-    cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, ...
-    pfdr_dif_tol, pfdr_it_max, pfdr_verbose, max_num_threads, ...
-    balance_parallel_split);
+[Comp, rX] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, adj_vertices, options);
 time = toc;
 x = rX(Comp + 1); % rX is components values, Comp is components assignment
 clear Comp rX;

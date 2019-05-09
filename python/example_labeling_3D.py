@@ -24,14 +24,14 @@ classNames = ["road", "vegetation", "facade", "hardscape",
 classId = np.arange(1, 7, dtype="uint8")
 
 ###  parameters; see documentation of cp_pfdr_d1_lsx.py  ###
-cp_dif_tol = 1e-3
-cp_it_max = 10
+# cp_dif_tol = 1e-3
+# cp_it_max = 10
 pfdr_rho = 1.5
-pfdr_cond_min = 1e-2
-pfdr_dif_rcd = 0
-pfdr_dif_tol = 1e-3*cp_dif_tol
-pfdr_it_max = 1e4
-pfdr_verbose = 1e2
+# pfdr_cond_min = 1e-2
+# pfdr_dif_rcd = 0.0
+# pfdr_dif_tol = 1e-3*cp_dif_tol
+# pfdr_it_max = 1e4
+# pfdr_verbose = 1e2
 
 ###  initialize data  ###
 # For details on the data and parameters, see H. Raguet, A Note on the
@@ -56,13 +56,9 @@ print("\naverage F1 of random forest prediction: {:.2f}\n\n".format(F1.mean()))
 del predk, truek
 
 ###  solve the optimization problem  ###
-loss_weights = np.array([], dtype="float32")
-d1_coor_weights = np.array([], dtype="float32")
 it1 = time.time()
-Comp, rX, it = cp_pfdr_d1_lsx(
-        loss, y, first_edge, adj_vertices, homo_d1_weight, loss_weights,
-        d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
-        pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, pfdr_verbose)
+Comp, rX, it = cp_pfdr_d1_lsx(loss, y, first_edge, adj_vertices,
+                              edge_weights=homo_d1_weight, pfdr_rho=pfdr_rho)
 it2 = time.time()
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX
