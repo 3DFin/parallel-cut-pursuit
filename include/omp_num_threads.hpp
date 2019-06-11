@@ -12,7 +12,7 @@
 
     /* rough minimum number of operations per thread */
     #ifndef MIN_OPS_PER_THREAD
-        #define MIN_OPS_PER_THREAD 1000
+        #define MIN_OPS_PER_THREAD 10000
     #endif
 
     /* num_ops is a rough estimation of the total number of operations 

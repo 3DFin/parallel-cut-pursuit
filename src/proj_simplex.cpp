@@ -1,7 +1,7 @@
 /*==================================================================
  * Hugo Raguet 2016
  *================================================================*/
-#include <alloca.h>
+#include <cstdlib>
 #include "../include/proj_simplex.hpp"
 #include "../include/omp_num_threads.hpp"
 
@@ -18,7 +18,7 @@ void proj_simplex(real_t *X, size_t D, size_t N, const real_t *A, real_t a,
     const bool weighted_metric = M || m;
     #pragma omp parallel firstprivate(m) NUM_THREADS(10*D*N, N)
     {
-    bool *is_larger = (bool*) alloca(D*sizeof(bool));
+    bool *is_larger = (bool*) malloc(D*sizeof(bool));
     #pragma omp for schedule(static)
     for (size_t n = 0; n < N; n++){
         real_t *x = X + D*n;
@@ -59,6 +59,7 @@ void proj_simplex(real_t *X, size_t D, size_t N, const real_t *A, real_t a,
             else{ x[d] = ZERO; }
         }
     }
+    free(is_larger);
     } // end omp parallel
 }
 

@@ -23,7 +23,7 @@ options.pfdr_rho = 1.5;
 % options.pfdr_dif_rcd = 0;
 options.pfdr_dif_tol = 1e-1*options.cp_dif_tol;
 % options.pfdr_it_max = 1e4;
-% options.pfdr_verbose = 1e3;
+% options.verbose = 1e3;
 % options.max_num_threads = 8;
 options.balance_parallel_split = false;
 

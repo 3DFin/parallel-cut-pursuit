@@ -23,7 +23,7 @@ options.pfdr_rho = 1.5;
 % options.pfdr_dif_rcd = 0.0;
 % options.pfdr_dif_tol = 1e-3*options.cp_dif_tol;
 % options.pfdr_it_max = 1e4;
-% options.pfdr_verbose = 1e2;
+% options.verbose = 1e2;
 % options.max_num_threads = 0;
 % options.balance_parallel_split = true;
 
@@ -48,6 +48,7 @@ clear predk truek
 %%%  solve the optimization problem  %%%
 tic;
 [Comp, rX] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, adj_vertices, options);
+% [Comp, rX, it, Obj, Tim] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;

@@ -148,8 +148,8 @@ real_t operator_norm_matrix(size_t M, size_t N, const real_t* A,
     #pragma omp parallel reduction(max:matrix_norm2) num_threads(num_procs)
     {
     unsigned int rand_seed = time(nullptr) + omp_get_thread_num();
-    real_t* X = (real_t*) alloca(N*sizeof(real_t));
-    real_t* AX = (real_t*) alloca(M*sizeof(real_t));
+    real_t* X = (real_t*) malloc(sizeof(real_t)*N);
+    real_t* AX = (real_t*) malloc(sizeof(real_t)*M);
     #pragma omp for schedule(static)
     for (int init = 0; init < nb_init; init++){
         /* random initialization */
@@ -171,6 +171,8 @@ real_t operator_norm_matrix(size_t M, size_t N, const real_t* A,
         }
         if (norm > matrix_norm2){ matrix_norm2 = norm; }
     }
+    free(X);
+    free(AX);
     } // end pragma omp parallel
     if (verbose){ cout << "done." << endl; }
     free(AA);
