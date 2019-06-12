@@ -11,9 +11,10 @@ try
     if LDFLAGS(end)==10, LDFLAGS = LDFLAGS(1:end-1); end
     CXXFLAGSorig = CXXFLAGS;
     LDFLAGSorig = LDFLAGS;
-    % -D_GLIBCXX_PARALLEL is only useful for libstdc++ users
+    % _GLIBCXX_PARALLEL is only useful for libstdc++ users
+    % MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
     CXXFLAGS = [CXXFLAGS ' -Wextra -Wpedantic -std=c++11 -fopenmp -g0 ' ...
-        '-D_GLIBCXX_PARALLEL'];
+        '-D_GLIBCXX_PARALLEL -DMIN_OPS_PER_THREAD=10000'];
     LDFLAGS = [LDFLAGS ',-fopenmp'];
     setenv('CXXFLAGS', CXXFLAGS);
     setenv('LDFLAGS', LDFLAGS);
@@ -45,7 +46,7 @@ try
     clear cp_kmpp_d0_dist_mex
     %}
 
-    % system('rm *.o');
+    if exist('cut_pursuit.o'), system('rm *.o'); end
 catch % if an error occur, makes sure not to change the working directory
     % back to original environment
     setenv('CXXFLAGS', CXXFLAGSorig);
