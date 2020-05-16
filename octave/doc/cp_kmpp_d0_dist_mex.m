@@ -39,43 +39,56 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 %         - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) x_{v,d}) ,
 % where H_m is the (weighted) entropy, that is H_m(s u + (1 - s) y_v)
 %       = - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) y_{v,d}) ;
-% note that the choosen order of the arguments in the Kullback--Leibler
+% note that the choosen order of the arguments in the Kullback-Leibler
 % does not favor the entropy of x (H_m(s u + (1 - s) y_v) is a constant),
 % hence this loss is actually equivalent to cross-entropy.
-% 
-% INPUTS: real numeric type is either single or double, not both;
-%         indices are C-style (start at 0) of type uint32
-%         inputs with default arguments can be omited but all the subsequent
-%         arguments must then be omited as well
 %
-% NOTA: by default, components are identified using uint16_t identifiers; this
+% NOTA: by default, components are identified using uint16 identifiers; this
 % can be easily changed in the mex source if more than 65535 components are
 % expected (recompilation is necessary)
+%
+% INPUTS: real numeric type is either single or double, not both;
+%         indices are C-style (start at 0) of type uint32
 %
 % loss - 1 for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler
 % Y - observations, (real) D-by-V array, column-major format;
 %     for Kullback-Leibler loss, the value at each vertex is supposed to lie on
 %     the probability simplex 
-% first_edge, adj_vertices - graph forward-star representation:
+% first_edge, adj_vertices - forward-star graph representation:
 %     edges are numeroted (C-style indexing) so that all vertices originating
 %         from a same vertex are consecutive;
-%     for each vertex, 'first_edge' indicates the first edge starting from the
+%     for each vertex, first_edge indicates the first edge starting from the
 %         vertex (or, if there are none, starting from the next vertex);
 %         array of length V + 1 (uint32), the first value is always zero and
-%         the last value is always the total number of edges;
-%     for each edge, 'adj_vertices' indicates its ending vertex, array of 
+%         the last value is always the total number of edges E;
+%     for each edge, adj_vertices indicates its ending vertex, array of 
 %         length E (uint32)
+%
+%     NOTA: if performing multiple calls to this function on the same graph
+%     structure, it might be worth precomputing the "two-ways forward-star
+%     graph representation" used by the cut-pursuit algorithm;
+%     this consists in specifying the reverse edges in the same fashion,
+%     contiguously to the above arrays, and, for each resulting oriented edge,
+%     the index of the oriented edge in the reverse direction; in that case,
+%     first_edge is of length 2V + 1, its last value is always twice the
+%     total number of edges 2E, adj_vertices is of length 2E, and the reverse
+%     arc table is an array of length 2E given in the dedicated option below;
+%     see also the function forward_star_to_reverse_mex
+%
 % options - structure with any of the following fields [with default values]:
-%     edge_weights [1.0], vert_weights [none], coor_weights [none],
-%     cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
-%     kmpp_init_num [3], kmpp_iter_num [3], verbose [true],
+%     reverse_arc [none], edge_weights [1.0], vert_weights [none],
+%     coor_weights [none], cp_dif_tol [1e-3], cp_it_max [10], K [2],
+%     split_iter_num [2], kmpp_init_num [3], kmpp_iter_num [3], verbose [true],
 %     max_num_threads [none], balance_parallel_split [true]
+% reverse_arc - in the "two-ways forward-star graph representation" (see
+%     first_edge parameter), (uint32) array of length 2E, giving, for each
+%     oriented edge, the index of its reverse edge
 % edge_weights - (real) array of length E or scalar for homogeneous weights
 % vert_weights - weights on vertices (w_v above); (real) array of length V
 % coor_weights - weights on coordinates (m_d above); (real) array of length D
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (that is, relative dissimilarity measures defined by the
-%     choosen loss between succesive iterates and between current iterate and
+%     choosen loss between successive iterates and between current iterate and
 %     observation) is less than dif_tol; 1e-3 is a typical value
 % cp_it_max  - maximum number of iterations (graph cut, subproblem, merge)
 %     10 cuts solve accurately most problems
@@ -112,4 +125,4 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % smoothing semantic labelings of 3D point clouds, ISPRS Journal of
 % Photogrammetry and Remote Sensing, 132:102-118, 2017
 %
-% Hugo Raguet 2019
+% Hugo Raguet 2019, 2020

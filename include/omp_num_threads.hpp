@@ -45,6 +45,4 @@
     static inline int compute_num_threads(int num_ops, int max_threads = 1)
         { return 1; }
 
-    #define NUM_THREADS(...) num_threads(1)
-
 #endif

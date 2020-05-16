@@ -26,12 +26,13 @@ public:
     enum D1p {D11, D12};
 
     Cp_d1(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices, size_t D, D1p d1p = D12);
+        const index_t* adj_vertices, const index_t* reverse_arc, size_t D,
+        D1p d1p = D12);
 
     /* delegation for monodimensional setting */
     Cp_d1(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices) :
-        Cp_d1(V, E, first_edge, adj_vertices, 1, D11){};
+        const index_t* adj_vertices, const index_t* reverse_arc) :
+        Cp_d1(V, E, first_edge, adj_vertices, reverse_arc, 1, D11){};
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 

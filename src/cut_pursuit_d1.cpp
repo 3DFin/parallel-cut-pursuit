@@ -14,8 +14,9 @@
 using namespace std;
 
 TPL CP_D1::Cp_d1(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, size_t D, D1p d1p)
-    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D), d1p(d1p)
+    const index_t* adj_vertices, const index_t* reverse_arc, size_t D, D1p d1p)
+    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, reverse_arc,
+        D), d1p(d1p)
 { coor_weights = nullptr; }
 
 TPL void CP_D1::set_edge_weights(const real_t* edge_weights,

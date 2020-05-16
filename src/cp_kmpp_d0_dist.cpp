@@ -16,8 +16,10 @@
 using namespace std;
 
 TPL CP_D0_DIST::Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const real_t* Y, size_t D) :
-    Cp_d0<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D), Y(Y)
+    const index_t* adj_vertices, const index_t* reverse_arc, const real_t* Y,
+    size_t D)
+    : Cp_d0<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices,
+        reverse_arc, D), Y(Y)
 {
     vert_weights = coor_weights = nullptr;
     comp_weights = nullptr; 
@@ -111,9 +113,10 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
     real_t* nearest_dist = (real_t*) malloc_check(sizeof(real_t)*comp_size);
     default_random_engine rand_gen; // default seed also enough for our purpose
 
-    /* current centroids and best sum of distances */
+    /* current centroids, min sum of distances and corresponding assignment */
     real_t* centroids = (real_t*) malloc_check(sizeof(real_t)*D*K);
     real_t min_sum_dist = INF_REAL;
+    comp_t* best_assign = (comp_t*) malloc_check(sizeof(comp_t)*comp_size);
 
     /* store centroids entropy for Kullback-Leibler divergence */
     real_t* bottom_dist = loss == QUADRATIC ?
@@ -178,9 +181,9 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
         if (sum_dist < min_sum_dist){
             min_sum_dist = sum_dist;
             for (size_t dk = 0; dk < D*K; dk++){ altX[dk] = centroids[dk]; }
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
-                tmp_comp_assign(v) = label_assign[v];
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list[first_vertex[rv] + i];
+                best_assign[i] = label_assign[v];
             }
         }
 
@@ -191,10 +194,12 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
     free(nearest_dist);
 
     /**  copy best label assignment  **/
-    for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-        index_t v = comp_list[i];
-        label_assign[v] = tmp_comp_assign(v);
+    for (index_t i = 0; i < comp_size; i++){
+        index_t v = comp_list[first_vertex[rv] + i];
+        label_assign[v] = best_assign[i];
     }
+
+    free(best_assign);
 }
 
 TPL void CP_D0_DIST::update_split_values(comp_t rv, real_t* altX)
@@ -298,12 +303,12 @@ TPL real_t CP_D0_DIST::compute_evolution(bool compute_dif)
     #pragma omp parallel for schedule(dynamic) reduction(+:dif) \
         NUM_THREADS(D*(V - saturated_vert), rV)
     for (comp_t rv = 0; rv < rV; rv++){
-        if (saturation(rv)){ continue; }
+        if (is_saturated[rv]){ continue; }
         real_t* rXv = rX + D*rv;
         real_t distXX = loss == QUADRATIC ? ZERO : distance(rXv, rXv);
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
-            real_t* lrXv = last_rX + D*tmp_comp_assign(v);
+            real_t* lrXv = last_rX + D*last_comp_assign[v];
             dif += VERT_WEIGHTS_(v)*(distance(rXv, lrXv) - distXX);
         }
     }

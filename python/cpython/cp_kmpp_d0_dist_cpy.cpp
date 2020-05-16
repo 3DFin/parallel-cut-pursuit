@@ -17,10 +17,10 @@
 
 using namespace std;
 
-/* index_t must be able to represent the number of vertices and of (undirected)
- * edges in the main graph;
+/* index_t must be able to represent the number of vertices plus one 
+ * and twice the number of edges plus one in the main graph;
  * comp_t must be able to represent the number of constant connected components
- * in the reduced graph, as well as the dimension D */
+ * plus one in the reduced graph, as well as the dimension D */
 typedef uint32_t index_t;
 typedef uint16_t comp_t;
 #define NPY_COMP_CLASS NPY_UINT16

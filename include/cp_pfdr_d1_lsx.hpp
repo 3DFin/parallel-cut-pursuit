@@ -25,7 +25,7 @@
  * H. Raguet, A Note on the Forward-Douglas-Rachford Splitting for Monotone 
  * Inclusion and Convex Optimization, Optimization Letters, 2018, 1-24
  *
- * Hugo Raguet 2018
+ * Hugo Raguet 2018, 2020
  *=========================================================================*/
 #pragma once
 #include "cut_pursuit_d1.hpp"
@@ -51,7 +51,8 @@ public:
 
     /* only creates BK graph structure and assign Y, D */
     Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
-        const index_t* adj_vertices, size_t D, const real_t* Y);
+        const index_t* adj_vertices, const index_t* reverse_arc, size_t D,
+        const real_t* Y);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -126,7 +127,8 @@ private:
      * useful for estimating the number of parallel threads */
     uintmax_t split_complexity() override;
     real_t* grad; // store gradient of smooth part
-    void split_component(Cp_graph<real_t, index_t, comp_t>* G, comp_t rv)
+    /* type resolution for base template class members */
+    void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
         override;
     index_t split() override; // overload for computing gradient
 
@@ -147,12 +149,8 @@ private:
     using Cp<real_t, index_t, comp_t>::monitor_evolution;
     using Cp<real_t, index_t, comp_t>::is_active;
     using Cp<real_t, index_t, comp_t>::is_free;
-    using Cp<real_t, index_t, comp_t>::is_sink;
-    using Cp<real_t, index_t, comp_t>::saturation;
-    using Cp<real_t, index_t, comp_t>::set_edge_capacities;
-    using Cp<real_t, index_t, comp_t>::term_capacities;
-    using Cp<real_t, index_t, comp_t>::tmp_comp_assign;
-    using Cp<real_t, index_t, comp_t>::get_parallel_flow_graph;
+    using Cp<real_t, index_t, comp_t>::is_saturated;
+    using Cp<real_t, index_t, comp_t>::last_comp_assign;
     using Cp<real_t, index_t, comp_t>::maxflow_complexity;
     using Cp<real_t, index_t, comp_t>::eps;
     using Cp<real_t, index_t, comp_t>::V;

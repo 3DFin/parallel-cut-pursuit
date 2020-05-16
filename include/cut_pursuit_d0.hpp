@@ -24,7 +24,7 @@
  * smoothing semantic labelings of 3D point clouds, ISPRS Journal of
  * Photogrammetry and Remote Sensing, 132:102-118, 2017
  *
- * Hugo Raguet 2019
+ * Hugo Raguet 2019, 2020
  *===========================================================================*/
 #pragma once
 #include "cut_pursuit.hpp"
@@ -43,7 +43,7 @@ class Cp_d0 : public Cp<real_t, index_t, comp_t, value_t>
 {
 public:
     Cp_d0(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices, size_t D = 1);
+        const index_t* adj_vertices, const index_t* reverse_arc, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -69,8 +69,9 @@ protected:
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
     uintmax_t split_complexity() override;
-    void split_component(Cp_graph<real_t, index_t, comp_t>* G, comp_t rv)
-        override;
+    /* type resolution for base template class members */
+    using typename Maxflow<index_t, real_t>;
+    void split_component(comp_t rv, Maxflow* maxflow) override;
 
     /* remove or activate separating edges used for balancing parallel
      * workload; see header `cut_pursuit.hpp` */
@@ -189,5 +190,4 @@ private:
     using Cp<real_t, index_t, comp_t>::is_sink;
     using Cp<real_t, index_t, comp_t>::set_edge_capacities;
     using Cp<real_t, index_t, comp_t>::term_capacities;
-    using Cp<real_t, index_t, comp_t>::tmp_comp_list;
 };

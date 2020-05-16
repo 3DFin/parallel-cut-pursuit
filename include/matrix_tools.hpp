@@ -1,5 +1,5 @@
 /*=============================================================================
- * tools for manipulating matrices
+ * tools for manipulating real matrices
  *
  * Parallel implementation with OpenMP API
  *

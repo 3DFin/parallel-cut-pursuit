@@ -44,7 +44,8 @@ public:
 
     /* only creates BK graph structure and assign Y, D */
     Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
-        const index_t* adj_vertices, const real_t* Y, size_t D = 1);
+        const index_t* adj_vertices, const index_t* reverse_arc,
+        const real_t* Y, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -164,7 +165,7 @@ private:
     using Cp<real_t, index_t, comp_t>::last_rX;
     using Cp<real_t, index_t, comp_t>::saturated_comp;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
-    using Cp<real_t, index_t, comp_t>::tmp_comp_assign;
+    using Cp<real_t, index_t, comp_t>::last_comp_assign;
     using Cp<real_t, index_t, comp_t>::eps;
     using Cp<real_t, index_t, comp_t>::V;
     using Cp<real_t, index_t, comp_t>::E;
@@ -179,7 +180,7 @@ private:
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
-    using Cp<real_t, index_t, comp_t>::saturation;
+    using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::verbose;
     using Cp<real_t, index_t, comp_t>::malloc_check;
 };

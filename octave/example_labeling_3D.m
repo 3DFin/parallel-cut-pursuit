@@ -47,7 +47,7 @@ clear predk truek
 
 %%%  solve the optimization problem  %%%
 tic;
-[Comp, rX] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, adj_vertices, options);
+[Comp, rX] = cp_pfdr_d1_lsx_mex_old(loss, y, first_edge, adj_vertices, options);
 % [Comp, rX, it, Obj, Tim] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments

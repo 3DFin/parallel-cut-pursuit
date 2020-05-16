@@ -21,9 +21,10 @@
 using namespace std;
 
 TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, size_t D, const real_t* Y) :
-    Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D, D11),
-    Y(Y)
+    const index_t* adj_vertices, const index_t* reverse_arc, size_t D,
+    const real_t* Y)
+    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices,
+        reverse_arc, D, D11), Y(Y)
 {
     if (numeric_limits<comp_t>::max() < D){
         cerr << "Cut-pursuit d1 loss simplex: comp_t must be able to represent"
@@ -151,6 +152,8 @@ TPL uintmax_t CP_D1_LSX::split_complexity()
 
 TPL index_t CP_D1_LSX::split()
 {
+    /* NOTA: gradient could be computed only componentwise within method
+     * split_component(), thus saving space but maybe losing speed */
     grad = (real_t*) malloc_check(sizeof(real_t)*D*V);
 
     const real_t c = (ONE - loss), q = loss/D, r = q/c; // useful for KLs
@@ -162,7 +165,7 @@ TPL index_t CP_D1_LSX::split()
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
     for (index_t v = 0; v < V; v++){
         comp_t rv = comp_assign[v];
-        if (saturation(rv)){ continue; }
+        if (is_saturated[rv]){ continue; }
 
         real_t* gradv = grad + D*v;
         real_t* rXv = rX + D*rv;
@@ -213,8 +216,8 @@ TPL index_t CP_D1_LSX::split()
     return activation;
 }
 
-TPL void CP_D1_LSX::split_component(Cp_graph<real_t, index_t, comp_t>* G,
-    comp_t rv)
+TPL void CP_D1_LSX::split_component(comp_t rv,
+    Maxflow<index_t, real_t>* maxflow)
 {
     /**  directions are searched in the set \prod_v Dv, where for each vertex,
      * Dv = {1d - 1dmv in R^D | d in {1,...,D}}, with dmv in argmax_d' {x_vd'}
@@ -244,7 +247,7 @@ TPL void CP_D1_LSX::split_component(Cp_graph<real_t, index_t, comp_t>* G,
             index_t v = comp_list[i];
             real_t* gradv = grad + v*D;
             /* unary cost for changing current dir_v to 1d - 1dmv */
-            term_capacities(v) = gradv[d] - gradv[label_assign[v]];
+            maxflow->terminal_capacity(v) = gradv[d] - gradv[label_assign[v]];
         }
 
         /* set d1 edge capacities within each component;
@@ -287,19 +290,19 @@ TPL void CP_D1_LSX::split_component(Cp_graph<real_t, index_t, comp_t>* G,
                     *(COOR_WEIGHTS_(dv) + COOR_WEIGHTS_(d));
                 /* D = E(1,1) = 0 is for changing both du and dv to d */
                 /* set weights in accordance with orientation u -> v */
-                term_capacities(u) += C - A;
-                term_capacities(v) -= C;
-                set_edge_capacities(e, B + C - A, ZERO);
+                maxflow->terminal_capacity(u) += C - A;
+                maxflow->terminal_capacity(v) -= C;
+                maxflow->set_edge_capacities(e, B + C - A, ZERO);
             }
         }
 
         /* find min cut and update best ascent coordinates accordingly */
-        G->maxflow(first_vertex[rv + 1] - first_vertex[rv], comp_list +
-            first_vertex[rv]);
+        maxflow->maxflow(first_vertex[rv + 1] - first_vertex[rv],
+            comp_list + first_vertex[rv]);
         
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
-            if (is_sink(v)){ label_assign[v] = d; }
+            if (maxflow->is_sink(v)){ label_assign[v] = d; }
         }
     } // end for d_alt
 }
@@ -315,13 +318,13 @@ TPL real_t CP_D1_LSX::compute_evolution(bool compute_dif)
         reduction(+:dif, saturated_comp_par, saturated_vert_par)
     for (comp_t rv = 0; rv < rV; rv++){
         real_t* rXv = rX + rv*D;
-        if (saturation(rv)){
+        if (is_saturated[rv]){
             real_t* lrXv = last_rX +
-                tmp_comp_assign(comp_list[first_vertex[rv]])*D;
+                last_comp_assign[comp_list[first_vertex[rv]]]*D;
             real_t rv_dif = ZERO;
             for (size_t d = 0; d < D; d++){ rv_dif += abs(lrXv[d] - rXv[d]); }
             if (rv_dif > dif_tol){
-                saturation(rv) = false;
+                is_saturated[rv] = false;
             }else{
                 saturated_comp_par++;
                 saturated_vert_par += first_vertex[rv + 1] - first_vertex[rv];
@@ -331,7 +334,7 @@ TPL real_t CP_D1_LSX::compute_evolution(bool compute_dif)
             }
         }else if (compute_dif){
             for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                real_t* lrXv = last_rX + tmp_comp_assign(comp_list[i])*D;
+                real_t* lrXv = last_rX + last_comp_assign[comp_list[i]]*D;
                 for (size_t d = 0; d < D; d++){ dif += abs(lrXv[d] - rXv[d]); }
             }
         }

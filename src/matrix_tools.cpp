@@ -1,8 +1,7 @@
 /*=============================================================================
- * compute the squared operator norm (squared greatest eigenvalue) of a real 
- * matrix using power method.
+ * tools for manipulating real matrices
  *
- * Hugo Raguet 2016
+ * Hugo Raguet 2016, 2018
  *===========================================================================*/
 #include <iostream>
 #include <cstdlib>

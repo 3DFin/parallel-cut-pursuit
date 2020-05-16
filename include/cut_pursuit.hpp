@@ -1,16 +1,17 @@
 /*=============================================================================
  * Base class for cut-pursuit algorithm
  * 
- * index_t must be able to represent the numbers of vertices and of edges in 
- * the main graph;
- * comp_t must be able to represent the numbers of constant connected 
- * components and of reduced edges in the reduced graph
+ * index_t must be able to represent twice the number of vertices in the main
+ * graph plus one, as well as twice the number of edges in the main graph plus
+ * one.
+ * comp_t must be able to represent the number of constant connected 
+ * components plus one and the number of reduced edges in the reduced graph.
  *
  * L. Landrieu, L. and G. Obozinski, Cut Pursuit: Fast Algorithms to Learn 
  * Piecewise Constant Functions on General Weighted Graphs, SIAM Journal on 
  * Imaging Sciences, 2017, 10, 1724-1766
  *
- * Hugo Raguet 2018
+ * Hugo Raguet 2018, 2020
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,28 +28,28 @@
  *===========================================================================*/
 #pragma once
 #include <cstdint> // for uintmax_t, requires C++11
-#include <cstdlib> // for size_t and malloc
+#include <cstdlib> // for size_t, malloc, exit
 #include <chrono>
 #include <limits>
 #include <iostream>
-#include "cp_graph.hpp" /* Boykov-Kolmogorov graph class modified for CP */
 #include "../include/omp_num_threads.hpp"
+#include "../include/parallel_maxflow.hpp"
 
 /* flag an activated edge on residual capacity of its corresponding arcs */
 #define ACTIVE_EDGE ((real_t) -1.0) 
 #define PAR_SEP_EDGE ((real_t) -2.0) // for parallelization
 /* maximum number of components; no component can have this identifier */
-#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max())
+#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max() - 1)
 /* special values for merge step */
 #define CHAIN_ROOT MAX_NUM_COMP
 #define CHAIN_LEAF MAX_NUM_COMP
 
 /* real_t is the real numeric type, used for objective functional computation
  * and thus for edge weights and flow graph capacities;
- * index_t must be able to represent the number of vertices and of (undirected)
- * edges in the main graph;
- * comp_t must be able to represent the number of constant connected components
- * in the reduced graph;
+ * index_t is an integer type, must be able to represent twice the number of
+ * vertice plus one and the number of arcs plus one (twice the number of edges) * in the main graph;
+ * comp_t is an integer type, must be able to represent the maximum number of
+ * constant connected components in the reduced graph;
  * value_t is the type associated to the space to which the values belong, it
  * is usually real_t, and if multidimensional, this must be specified in the
  * parameter D (e.g. for R^3, specify value_t = real_t and D = 3) */
@@ -59,9 +60,10 @@ class Cp
 public:
     /**  constructor, destructor  **/
 
-    /* only creates flow graph structure */
+    /* mandatory arguments constitutes the main graph structure, according to a
+     * two-ways forward-star graph structure, see corresponding members */
     Cp(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices, size_t D = 1);
+        const index_t* adj_vertices, const index_t* reverse_arc, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -100,7 +102,7 @@ public:
 
     void set_parallel_param(int max_num_threads,
         bool balance_par_split = true);
-    /* overload for default max_num_threads paramter */
+    /* overload for default max_num_threads parameter */
     void set_parallel_param(bool balance_par_split)
     {
         set_parallel_param(omp_get_max_threads(), balance_par_split);
@@ -114,7 +116,7 @@ public:
     comp_t get_components(comp_t** comp_assign = nullptr,
         index_t** first_vertex = nullptr, index_t** comp_list = nullptr);
 
-    size_t get_reduced_graph(comp_t** reduced_edges = nullptr,
+    index_t get_reduced_graph(comp_t** reduced_edges = nullptr,
         real_t** reduced_edge_weights = nullptr);
 
     /* retrieve the reduced iterate (values of the components);
@@ -131,37 +133,59 @@ public:
     int cut_pursuit(bool init = true);
 
 protected:
+    const size_t D; // dimension of the data; total size is V*D
+
     /**  main graph  **/
 
     const index_t V, E; // number of vertices, of edges
-    /* forward-star representation:
-     * - edges are numeroted so that all vertices originating from a same 
-     * vertex are consecutive;
+
+    /**  two-ways forward-star graph representation  **/
+    /* simple forward-star representation:
+     * - edges (unoriented arc) are numeroted so that all vertices originating
+     * from a same vertex are consecutive;
      * - for each vertex, 'first_edge' indicates the first edge starting
      * from the vertex (or, if there are none, starting from the next vertex);
-     * array of length V + 1, the first value is always zero and the the last
-     * value is always the total number of edges
+     * array of length V + 1, the first value is always zero and the last
+     * value is always the total number of edges E
      * - for each edge, 'adj_vertices' indicates its ending vertex */
+    /* now, there is need to scan all arcs involving a given vertex in linear
+     * time; we keep the reverse arcs also in a forward-star representation as
+     * above; moreover, it is useful to keep the array of adjacent vertices
+     * for the reverse arcs contiguous with the array of adjacent vertices for
+     * the edges; likewise, the indices of the first reverse arcs are put
+     * contiguously to the indices of the first edges; finally
+     * - 'first_edge' is thus of lengthe 2V + 1, the first value is always
+     * zero, the (V+1)-th value is always the total numer of edges E, the last
+     * value is always the total number of arcs 2E
+     * - 'adj_vertices' is thus of length 2 E. */
     const index_t *first_edge, *adj_vertices; 
+    const index_t* first_rev_arc; // = this will be first_edge + V
+    const index_t* reverse_arc; // for each arc, the index of its reverse arc
+
     const real_t *edge_weights;
     real_t homo_edge_weight;
 
-    const size_t D; // dimension of the data; total size is V*D
-    value_t *rX, *last_rX; // reduced iterate (values of the components)
-    comp_t saturated_comp; // number of saturated components
-    comp_t saturated_vert; // number of saturated components
+    comp_t saturated_vert; // number of vertices within saturated components
 
     /**  reduced graph  **/
 
     comp_t rV, last_rV; // number of components (reduced vertices)
-    size_t rE; // number of reduced edges
-    comp_t* comp_assign; // assignment of each vertex to a component
+    value_t *rX, *last_rX; // reduced iterate (values of the components)
+    index_t rE; // number of reduced edges
+    /* assignment of each vertex to a component;
+     * last_ is used both for identifying saturated components
+     * and computing iterate evolution */
+    comp_t* comp_assign, *last_comp_assign;
     /* list the vertices of each components:
      * - vertices are gathered in 'comp_list' so that all vertices belonging
      * to a same components are consecutive
      * - for each component, 'first_vertex' indicates the index of its first
      * vertex in 'comp_list' */
     index_t *comp_list, *first_vertex;
+    /* components saturation */
+    bool* is_saturated;
+    comp_t saturated_comp; // number of saturated components
+    /* reduced connectivity */
     comp_t* reduced_edges; // array with pair of vertices
     real_t* reduced_edge_weights;
 
@@ -176,9 +200,11 @@ protected:
     /* for stopping criterion or component saturation */
     bool monitor_evolution;
 
-    /**  methods for manipulating nodes and arcs in the flow graph  **/
+    /**  methods for manipulating nodes and arcs in the directed graph  **/
 
-    bool is_active(index_t e); // check if edge e is active
+    index_t arc_to_edge(index_t a); // get corresponding edge identifier
+
+    bool is_active(index_t a); // check if arc e is active
 
     bool is_par_sep(index_t e); // check if edge e is a parallel cut separation
 
@@ -190,20 +216,7 @@ protected:
 
     void set_inactive(index_t e); // flag an inactive edge
 
-    bool is_sink(index_t v); // check if vertex v is in the sink after min cut
-
-    /* temporary components list and assignment in the flow graph graph */
-    comp_t& tmp_comp_assign(index_t v);
-    index_t& tmp_comp_list(index_t i);
-
-    /* NOTA: saturation is flagged on the first vertex of the component, so
-     * this must be reset if the component list is modified or reordered */
-    bool& saturation(comp_t rv); // check component's saturation
-
-    /* manipulate flow graph residual capacities */
     void set_edge_capacities(index_t e, real_t cap_uv, real_t cap_vu);
-
-    real_t& term_capacities(index_t v);
 
     /**  split components with graph cuts and activate edges, in parallel  **/
 
@@ -226,17 +239,14 @@ protected:
 
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
-    uintmax_t maxflow_complexity(); // just for a graph cut
+    uintmax_t maxflow_complexity(); // just for a graph cut; heuristic
     virtual uintmax_t split_complexity() = 0;
-
-    /* get a parallel copy of the flow graph */
-    Cp_graph<real_t, index_t, comp_t>* get_parallel_flow_graph();
 
     /* prefered alternative value for each vertex */
     comp_t*& label_assign = comp_assign; // reuse the same storage
 
-    virtual void split_component(Cp_graph<real_t, index_t, comp_t>* G,
-        comp_t rv) = 0;
+    virtual void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
+        = 0;
 
     virtual index_t split();
 
@@ -273,7 +283,8 @@ protected:
      * O(rE^2), but is expected to be much less in practice */
     virtual comp_t compute_merge_chains() = 0;
 
-    /* main routine using the above to perform the merge step */
+    /* main routine using the above to perform the merge step
+     * NOTA: saturation per component is updated here */
     virtual index_t merge();
 
     /**  monitoring evolution; set monitor_evolution to true  **/
@@ -322,10 +333,6 @@ private:
     int it_max; // maximum number of cut-pursuit iterations
     bool balance_par_split; // switch controling parallel split balancing
 
-    using arc = typename Cp_graph<real_t, index_t, comp_t>::arc;
-
-    Cp_graph<real_t, index_t, comp_t>* G; // flow graph
-
     /* monitoring */
     real_t* objective_values;
     double* elapsed_time;
@@ -345,7 +352,8 @@ private:
     /* initialize with only one component and reduced graph accordingly */
     void single_connected_component();
 
-    /* update connected components and count saturated ones */
+    /* update connected components and count saturated ones;
+     * NOTA: saturation per component is not updated until merge step */
     void compute_connected_components();
 
     /* allocate and compute reduced graph structure */
@@ -353,6 +361,13 @@ private:
 
     /* during the merging step, merged components are stored as chains */
     comp_t *merge_chains_root, *merge_chains_next, *merge_chains_leaf;
+
+    /* arcs' residual capacities and edge activation; indexed in the same order
+     * as adjacent vertices in forward-star representation */
+    real_t* arc_status;
+
+    /**  type resolution for base template class members  **/
+    using Flow_node = typename Maxflow<index_t, real_t>::Flow_node;
 };
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
@@ -361,49 +376,35 @@ private:
 
 /***  inline methods in relation with main graph  ***/
 
-TPL inline bool CP::is_active(index_t e)
-{ return G->arcs[(size_t) 2*e].r_cap == ACTIVE_EDGE; }
+TPL inline index_t CP::arc_to_edge(index_t a)
+{ return a < E ? a : reverse_arc[a]; }
+
+TPL inline bool CP::is_active(index_t a)
+{ return arc_status[a] == ACTIVE_EDGE; }
 
 TPL inline bool CP::is_par_sep(index_t e)
-{ return G->arcs[(size_t) 2*e].r_cap == PAR_SEP_EDGE; }
+{ return arc_status[e] == PAR_SEP_EDGE; }
 
 TPL inline bool CP::is_free(index_t e)
-{ return G->arcs[(size_t) 2*e].r_cap >= 0.0; }
-
-TPL inline bool CP::is_sink(index_t v)
-{ return G->nodes[v].is_sink; }
-
-TPL inline comp_t& CP::tmp_comp_assign(index_t v)
-{ return G->nodes[v].comp; }
-
-TPL inline index_t& CP::tmp_comp_list(index_t i)
-{ return G->nodes[i].vertex; }
-
-TPL inline void CP::set_edge_capacities(index_t e, real_t cap_uv,
-    real_t cap_vu)
-{
-    size_t a = (size_t) 2*e; // cast as size_t to avoid overflow
-    G->arcs[a].r_cap = cap_uv;
-    G->arcs[a + 1].r_cap = cap_vu;
-}
+{ return arc_status[e] >= 0.0; }
 
 TPL inline void CP::set_active(index_t e)
-{ set_edge_capacities(e, ACTIVE_EDGE, ACTIVE_EDGE); }
+{
+    arc_status[e] = ACTIVE_EDGE;
+    arc_status[reverse_arc[e]] = ACTIVE_EDGE;
+}
 
 TPL inline void CP::set_par_sep(index_t e)
-{ set_edge_capacities(e, PAR_SEP_EDGE, PAR_SEP_EDGE); }
+{
+    arc_status[e] = PAR_SEP_EDGE;
+    arc_status[reverse_arc[e]] = PAR_SEP_EDGE;
+}
 
 TPL inline void CP::set_inactive(index_t e)
-{ set_edge_capacities(e, 0.0, 0.0); }
-
-TPL inline real_t& CP::term_capacities(index_t v)
-{ return G->nodes[v].tr_cap; }
-
-TPL inline Cp_graph<real_t, index_t, comp_t>* CP::get_parallel_flow_graph()
-{ return new Cp_graph<real_t, index_t, comp_t>(*G); }
-
-TPL inline bool& CP::saturation(comp_t rv)
-{ return G->nodes[comp_list[first_vertex[rv]]].saturation; }
+{
+    arc_status[e] = 0.0;
+    arc_status[reverse_arc[e]] = 0.0;
+}
 
 TPL inline comp_t CP::get_merge_chain_root(comp_t rv)
 {

@@ -21,8 +21,9 @@
 using namespace std;
 
 TPL CP_D1_QL1B::Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices)
-    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices)
+    const index_t* adj_vertices, const index_t* reverse_arc)
+    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices,
+        reverse_arc)
 {
     /* ensure handling of infinite values (negation, comparisons) is safe */
     static_assert(numeric_limits<real_t>::is_iec559,
@@ -247,25 +248,17 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                     rl1_weights[rv] += l1_weights[comp_list[i]];
                 }
                 if (Yl1){
-                    /* saturation is flagged on first vertex */
-                    bool saturated = saturation(rv);
                     rYl1[rv] = wth_element(comp_list + first_vertex[rv],
                         Yl1, first_vertex[rv + 1] - first_vertex[rv],
                         (double) HALF*rl1_weights[rv], l1_weights);
-                    /* ordering has changed, retrieve saturation info */
-                    saturation(rv) = saturated;
                 }
             }else if (homo_l1_weight){
                 rl1_weights[rv] = (first_vertex[rv + 1] - first_vertex[rv])
                     *homo_l1_weight;
                 if (Yl1){
-                    /* saturation is flagged on first vertex */
-                    bool saturated = saturation(rv);
                     rYl1[rv] = nth_element_idx(comp_list + first_vertex[rv],
                         Yl1, first_vertex[rv + 1] - first_vertex[rv],
                         (first_vertex[rv + 1] - first_vertex[rv])/2);
-                    /* ordering has changed, retrieve saturation info */
-                    saturation(rv) = saturated;
                 }
             }
             if (low_bnd){
@@ -348,6 +341,8 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
 
 TPL index_t CP_D1_QL1B::split()
 {
+    /* NOTA: gradient could be computed only componentwise within method
+     * split_component(), thus saving space but maybe losing speed */
     grad = (real_t*) malloc_check(sizeof(real_t)*V);
     for (index_t v = 0; v < V; v++){ grad[v] = ZERO; }
 
@@ -359,7 +354,7 @@ TPL index_t CP_D1_QL1B::split()
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
     for (index_t v = 0; v < V; v++){
         comp_t rv = comp_assign[v];
-        if (saturation(rv)){ continue; }
+        if (is_saturated[rv]){ continue; }
 
         /**  gradient of quadratic term  **/ 
         if (!IS_ATA(N)){ /* direct matricial case, grad = -(A^t) R */
@@ -423,8 +418,8 @@ TPL uintmax_t CP_D1_QL1B::split_complexity()
     return complexity*(V - saturated_vert)/V; // account saturation linearly
 }
 
-TPL void CP_D1_QL1B::split_component(Cp_graph<real_t, index_t, comp_t>* G,
-    comp_t rv)
+TPL void CP_D1_QL1B::split_component(comp_t rv,
+    Maxflow<index_t, real_t>* maxflow)
 {
     for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
         label_assign[comp_list[i]] = 0;
@@ -437,12 +432,12 @@ TPL void CP_D1_QL1B::split_component(Cp_graph<real_t, index_t, comp_t>* G,
     if (dir == 1){
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
-            term_capacities(v) = grad[v];
+            maxflow->terminal_capacity(v) = grad[v];
         }
     }else{
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
-            term_capacities(v) = -grad[v];
+            maxflow->terminal_capacity(v) = -grad[v];
         }
     }
 
@@ -451,7 +446,7 @@ TPL void CP_D1_QL1B::split_component(Cp_graph<real_t, index_t, comp_t>* G,
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
             if (rX[rv] == Yl1_(v)){
-                term_capacities(v) += L1_WEIGHTS_(v);
+                maxflow->terminal_capacity(v) += L1_WEIGHTS_(v);
             }
         }
     }
@@ -460,14 +455,18 @@ TPL void CP_D1_QL1B::split_component(Cp_graph<real_t, index_t, comp_t>* G,
     if (dir == 1 && upp_bnd){
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
-            if (rX[rv] == upp_bnd[v]){ term_capacities(v) = INF_REAL; }
+            if (rX[rv] == upp_bnd[v]){
+                maxflow->terminal_capacity(v) = INF_REAL;
+            }
         }
     }else if (dir == 1 && homo_upp_bnd < INF_REAL && rX[rv] == homo_upp_bnd){
         continue; // no value can increase
     }else if (dir == 2 && low_bnd){
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
-            if (rX[rv] == low_bnd[v]){ term_capacities(v) = INF_REAL; }
+            if (rX[rv] == low_bnd[v]){
+                maxflow->terminal_capacity(v) = INF_REAL;
+            }
         }
     }else if (dir == 2 && homo_low_bnd > -INF_REAL && rX[rv] == homo_low_bnd){
         continue; // no value can decrease
@@ -478,22 +477,23 @@ TPL void CP_D1_QL1B::split_component(Cp_graph<real_t, index_t, comp_t>* G,
         index_t v = comp_list[i];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
             if (is_free(e)){
-                set_edge_capacities(e, EDGE_WEIGHTS_(e), EDGE_WEIGHTS_(e));
+                maxflow->set_edge_capacities(e, EDGE_WEIGHTS_(e),
+                    EDGE_WEIGHTS_(e));
             } /* with high probability, both sides of a parallel separation
                * prefer the same descent direction, no additional capacity */
             /* else if (is_par_sep(e)){
-                add_term_capacities(v, EDGE_WEIGHTS_(e));
+                maxflow->term_capacity(v) += EDGE_WEIGHTS_(e);
             } */
         }
     }
 
     /* find min cut and assign label accordingly */
-    G->maxflow(first_vertex[rv + 1] - first_vertex[rv], comp_list +
-        first_vertex[rv]);
+    maxflow->maxflow(first_vertex[rv + 1] - first_vertex[rv],
+        comp_list + first_vertex[rv]);
 
     for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
         index_t v = comp_list[i];
-        if (is_sink(v)){ label_assign[v] = dir; }
+        if (maxflow->is_sink(v)){ label_assign[v] = dir; }
     }
     
     /* when no nondifferentiable part exists besides the total variation, 
@@ -515,14 +515,14 @@ TPL real_t CP_D1_QL1B::compute_evolution(bool compute_dif)
     index_t saturated_vert_par = 0;
     #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
         reduction(+:dif, amp, saturated_comp_par, saturated_vert_par)
-    for (comp_t rv = 0; rv < rV; rv++){  
+    for (comp_t rv = 0; rv < rV; rv++){
         real_t rXv = rX[rv];
-        if (saturation(rv)){
-            real_t lrXv =
-                last_rX[tmp_comp_assign(comp_list[first_vertex[rv]])];
+        if (is_saturated[rv]){
+            real_t lrXv = last_rX[
+                last_comp_assign[comp_list[first_vertex[rv]]] ];
             real_t rv_dif = abs(rXv - lrXv);
             if (rv_dif > abs(rX[rv])*dif_tol){
-                saturation(rv) = false;
+                is_saturated[rv] = false;
             }else{
                 saturated_comp_par++;
                 saturated_vert_par += first_vertex[rv + 1] - first_vertex[rv];
@@ -533,7 +533,7 @@ TPL real_t CP_D1_QL1B::compute_evolution(bool compute_dif)
             }
         }else if (compute_dif){
             for (index_t v = first_vertex[rv]; v < first_vertex[rv + 1]; v++){
-                real_t lrXv = last_rX[tmp_comp_assign(comp_list[v])];
+                real_t lrXv = last_rX[last_comp_assign[comp_list[v]]];
                 dif += (rXv - lrXv)*(rXv - lrXv);
             }
             amp += rXv*rXv*(first_vertex[rv + 1] - first_vertex[rv]);

@@ -1,32 +1,34 @@
 /*=============================================================================
  * [Comp, rX, it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y | AtY, A | AtA,
- *      first_edge, adj_vertices, options)
+ *      first_edge, adj_vertices, [options])
  *
  * options is a struct with any of the following fields [with default values]:
  *
- *      edge_weights [1.0], Yl1 [none], l1_weights [0.0], low_bnd [-Inf],
- *      upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
- *      pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
+ *      reverse_arc [none], edge_weights [1.0], Yl1 [none], l1_weights [0.0],
+ *      low_bnd [-Inf], upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10],
+ *      pfdr_rho [1.0], pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
  *      pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
  *      max_num_threads [none], balance_parallel_split [true],
  *      AtA_if_square [true]
  * 
- *  Hugo Raguet 2016, 2018, 2019
+ *  Hugo Raguet 2016, 2018, 2019, 2020
  *===========================================================================*/
 #include <cstdint>
 #include <cstring>
 #include "mex.h"
 #include "../../include/cp_pfdr_d1_ql1b.hpp"
+#include "../../include/graph_tools.hpp"
 
 using namespace std;
 
-/* index_t must be able to represent the number of vertices and of (undirected)
- * edges in the main graph;
+/* index_t must be able to represent twice the number of vertices plus one and
+ * twice the number of edges plus one in the main graph;
  * comp_t must be able to represent the number of constant connected components
- * in the reduced graph */
+ * plus one in the reduced graph */
 typedef uint32_t index_t;
 #define mxINDEX_CLASS mxUINT32_CLASS
 #define INDEX_CLASS_NAME "uint32"
+/* comment the following if more than 65535 components are expected */
 typedef uint16_t comp_t;
 #define mxCOMP_CLASS mxUINT16_CLASS
 /* uncomment the following if more than 65535 components are expected */
@@ -36,19 +38,20 @@ typedef uint16_t comp_t;
 /* function for checking optional parameters */
 static void check_opts(const mxArray* options)
 {
-    if (!options){
-        return;
-    }else if (!mxIsStruct(options)){
+    if (!options){ return; }
+
+    if (!mxIsStruct(options)){
         mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 quadratic l1 bounds: "
             "fifth parameter 'options' should be a structure, (%s given).",
             mxGetClassName(options));
     }
 
-    const int num_allow_opts = 16;
-    const char* opts_names[] = {"edge_weights", "Yl1", "l1_weights", "low_bnd",
-        "upp_bnd", "cp_dif_tol", "cp_it_max", "pfdr_rho", "pfdr_cond_min",
-        "pfdr_dif_rcd", "pfdr_dif_tol", "pfdr_it_max", "verbose",
-        "max_num_threads", "balance_parallel_split", "AtA_if_square"};
+    const int num_allow_opts = 17;
+    const char* opts_names[] = {"reverse_arc", "edge_weights", "Yl1",
+        "l1_weights", "low_bnd", "upp_bnd", "cp_dif_tol", "cp_it_max",
+        "pfdr_rho", "pfdr_cond_min", "pfdr_dif_rcd", "pfdr_dif_tol",
+        "pfdr_it_max", "verbose", "max_num_threads",
+        "balance_parallel_split", "AtA_if_square"};
 
     const int num_given_opts = mxGetNumberOfFields(options);
 
@@ -142,18 +145,52 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     check_arg_class(prhs[2], "first_edge", mxINDEX_CLASS, INDEX_CLASS_NAME);
     check_arg_class(prhs[3], "adj_vertices", mxINDEX_CLASS, INDEX_CLASS_NAME);
-    index_t E = mxGetNumberOfElements(prhs[3]);
+
     const index_t* first_edge = (index_t*) mxGetData(prhs[2]);
     const index_t* adj_vertices = (index_t*) mxGetData(prhs[3]);
-    if (mxGetNumberOfElements(prhs[2]) != (V + 1)){
-        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 quadratic l1 bounds: "
-            "third parameter 'first_edge' should contain |V| + 1 = %d "
-            "elements (%d given).", (V + 1), mxGetNumberOfElements(prhs[2]));
+    const index_t first_edge_length = mxGetNumberOfElements(prhs[2]);
+    const index_t adj_vertices_length = mxGetNumberOfElements(prhs[3]);
+
+    index_t E;
+    const index_t* reverse_arc;
+
+    if (nrhs < 5 || !mxGetField(prhs[4], 0, "reverse_arc")){
+        if (first_edge_length != (V + 1)){
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 quadratic l1 bounds: "
+                "third parameter 'first_edge' should contain |V| + 1 = %d "
+                "elements (%d given).", (V + 1), first_edge_length);
+        }
+        E = adj_vertices_length;
+
+        /* compute and store two-ways forward-star graph structure */
+        index_t* first_edge_rev = (index_t*)
+            mxMalloc(sizeof(index_t)*(2*V + 1));
+        index_t* adj_vertices_rev = (index_t*) mxMalloc(sizeof(index_t)*2*E);
+        index_t* rev_arc = (index_t*) mxMalloc(sizeof(index_t)*2*E);
+
+        forward_star_to_reverse<index_t, index_t>(V, E, first_edge, 
+            adj_vertices, first_edge_rev, adj_vertices_rev, rev_arc);
+
+        first_edge = first_edge_rev;
+        adj_vertices = adj_vertices_rev;
+        reverse_arc = rev_arc;
+    }else{
+        if (first_edge_length != (2*V + 1)){
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 quadratic l1 bounds: "
+                "when option 'reverse_arc' is provided, third parameter"
+                "'first_edge' should contain 2|V| + 1 = %d elements "
+                "(%d given).", (2*V + 1), first_edge_length);
+        }
+        E = adj_vertices_length/2;
+
+        reverse_arc = (index_t*) mxGetData(mxGetField(prhs[4], 0,
+            "reverse_arc"));
     }
 
     /**  optional parameters  **/
 
     const mxArray* options = nrhs > 4 ? prhs[4] : nullptr;
+
     check_opts(options);
     const mxArray* opt;
 
@@ -161,7 +198,7 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     #define GET_REAL_OPT(NAME, DFLT) \
         const real_t* NAME = nullptr; \
         real_t homo_ ## NAME = DFLT; \
-        if (opt = mxGetField(options, 0, #NAME)){ \
+        if (options && (opt = mxGetField(options, 0, #NAME))){ \
             check_arg_class(opt, #NAME, mxREAL_CLASS, real_class_name); \
             if (mxGetNumberOfElements(opt) > 1){ \
                 NAME = (real_t*) mxGetData(opt); \
@@ -213,7 +250,8 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
 
     Cp_d1_ql1b<real_t, index_t, comp_t> *cp =
-       new Cp_d1_ql1b<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices);
+        new Cp_d1_ql1b<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices,
+            reverse_arc);
 
     cp->set_edge_weights(edge_weights, homo_edge_weights);
     cp->set_quadratic(Y, N, A, a);

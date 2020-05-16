@@ -28,15 +28,13 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 % Moreover, when A is the identity and M is diagonal (weighted square l2 
 % distance between x and y), one should call on the precomposed version 
 % (see below) with Y <- DDy = My and A <- D2 = M.
+%
+% NOTA: by default, components are identified using uint16 identifiers; this
+% can be easily changed in the mex source if more than 65535 components are
+% expected (recompilation is necessary)
 % 
 % INPUTS: real numeric type is either single or double, not both;
 %         indices are C-style (start at 0) of type uint32
-%         inputs with default arguments can be omited but all the subsequent
-%         arguments must then be omited as well
-%
-% NOTA: by default, components are identified using uint16_t identifiers; this
-% can be easily changed in the mex source if more than 65535 components are
-% expected (recompilation is necessary)
 %
 % Y - observations, (real) array of length N (direct matricial case), or
 %                          array of length V (left-premult. by A^t), or
@@ -48,23 +46,39 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %                    zero scalar (for no quadratic part);
 %     for an arbitrary scalar matrix, use identity and scale observations and
 %     penalizations accordingly
-%     if N = V in a direct matricial case, the last argument 'AtA_if_square'
-%     must be set to false
-% first_edge, adj_vertices - graph forward-star representation:
+%     if N = V in a direct matricial case, set the last option 'AtA_if_square'
+%     to false
+% first_edge, adj_vertices - forward-star graph representation:
 %     edges are numeroted (C-style indexing) so that all vertices originating
 %         from a same vertex are consecutive;
-%     for each vertex, 'first_edge' indicates the first edge starting from the
+%     for each vertex, first_edge indicates the first edge starting from the
 %         vertex (or, if there are none, starting from the next vertex);
 %         array of length V + 1 (uint32), the first value is always zero and
-%         the last value is always the total number of edges;
-%     for each edge, 'adj_vertices' indicates its ending vertex, array of 
+%         the last value is always the total number of edges E;
+%     for each edge, adj_vertices indicates its ending vertex, array of 
 %         length E (uint32)
+%
+%     NOTA: if performing multiple calls to this function on the same graph
+%     structure, it might be worth precomputing the "two-ways forward-star
+%     graph representation" used by the cut-pursuit algorithm;
+%     this consists in specifying the reverse edges in the same fashion,
+%     contiguously to the above arrays, and, for each resulting oriented edge,
+%     the index of the oriented edge in the reverse direction; in that case,
+%     first_edge is of length 2V + 1, its last value is always twice the
+%     total number of edges 2E, adj_vertices is of length 2E, and the reverse
+%     arc table is an array of length 2E given in the dedicated option below;
+%     see also the function forward_star_to_reverse_mex
+%
 % options - structure with any of the following fields [with default values]:
-%     edge_weights [1.0], Yl1 [none], l1_weights [0.0], low_bnd [-Inf],
-%     upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
-%     pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-3*cp_dif_tol],
-%     pfdr_it_max [1e4], verbose [1e3], max_num_threads [none],
-%     balance_parallel_split [true], AtA_if_square [true]
+%     reverse_arc [none], edge_weights [1.0], Yl1 [none], l1_weights [0.0],
+%     low_bnd [-Inf], upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10],
+%     pfdr_rho [1.0], pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
+%     pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
+%     max_num_threads [none], balance_parallel_split [true],
+%     AtA_if_square [true]
+% reverse_arc - in the "two-ways forward-star graph representation" (see
+%     first_edge parameter), (uint32) array of length 2E, giving, for each
+%     oriented edge, the index of its reverse edge
 % edge_weights - (real) array of length E, or scalar for homogeneous weights
 % Yl1 - offset for l1 penalty, (real) array of length V
 % l1_weights - (real) array of length V, or scalar for homogeneous weights
@@ -124,4 +138,4 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 % H. Raguet, A Note on the Forward-Douglas--Rachford Splitting for Monotone 
 % Inclusion and Convex Optimization Optimization Letters, 2018, 1-24
 %
-% Hugo Raguet 2017, 2018, 2019
+% Hugo Raguet 2017, 2018, 2019, 2020
