@@ -218,7 +218,9 @@ TPL index_t CP_D0::remove_parallel_separations(comp_t rV_new)
     }
 
     /* parallel separation edges are activated if at least one end vertex
-     * belongs to a nonsaturated component */
+     * belongs to a nonsaturated component
+     * update: this seems to be a bad idea after all, the merge step cannot
+     * always undo irrelevant cuts */
     #pragma omp parallel for schedule(static) reduction(+:activation) \
         NUM_THREADS(first_vertex[rV_new], rV_new)
     for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
@@ -228,12 +230,14 @@ TPL index_t CP_D0::remove_parallel_separations(comp_t rV_new)
             index_t v = comp_list[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_par_sep(e)){
-                    if (saturated && saturation(comp_assign[adj_vertices[e]])){
+                    set_inactive(e);
+                    /* if (saturated &&
+ *                         saturation(comp_assign[adj_vertices[e]])){
                         set_inactive(e);
                     }else{
                         set_active(e);
                         activation++;
-                    }
+                    } */
                 }
             }
         }
