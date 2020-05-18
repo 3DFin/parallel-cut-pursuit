@@ -25,7 +25,7 @@ using namespace std;
 TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
     const index_t* adj_vertices, const index_t* reverse_arc, size_t D)
     : V(V), E(E), first_edge(first_edge), adj_vertices(adj_vertices),
-      reverse_arc(reverse_arc), first_rev_arc(first_edge + E), D(D)
+      first_rev_arc(first_edge + V), reverse_arc(reverse_arc), D(D)
 {
     /* real type with infinity is handy */
     static_assert(numeric_limits<real_t>::has_infinity,
@@ -64,7 +64,7 @@ TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
 
 TPL CP::~Cp()
 {
-    free(edge_status);
+    free(arc_status);
     free(comp_assign); free(last_comp_assign);
     free(first_vertex); free(comp_list);
     free(is_saturated);
@@ -367,16 +367,17 @@ TPL void CP::compute_connected_components()
         } /* else component has been split */
 
         /**  build list of binding reverse edges  **/
+        const index_t* comp_list_rv = comp_list + first_vertex[rv];
         index_t* first_edge_r = (index_t*)
             malloc_check(sizeof(index_t)*(comp_size + 1));
         /* set index of each vertex in the component */
         for (index_t i = 0; i < comp_size; i++){
-            index_in_comp[comp_list[i]] = i;
+            index_in_comp[comp_list_rv[i]] = i;
         }
         /* count reverse edges for each vertex (shift by one index) */
         for (index_t i = 0; i <= comp_size; i++){ first_edge_r[i] = 0; }
         for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list[i];
+            index_t v = comp_list_rv[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_bind(e)){ /* keep only binding edges */
                     first_edge_r[index_in_comp[adj_vertices[e]] + 1]++;
@@ -388,11 +389,11 @@ TPL void CP::compute_connected_components()
         for (index_t i = 2; i <= comp_size; i++){
             first_edge_r[i] += first_edge_r[i - 1];
         }
-        /* get connected vertices, using previous sum as starting indices */
+        /* store adjacent vertices, using previous sum as starting indices */
         index_t* adj_vertices_r = (index_t*)
             malloc_check(sizeof(index_t)*first_edge_r[comp_size]);
         for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list[i];
+            index_t v = comp_list_rv[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_bind(e)){
                     index_t j = index_in_comp[adj_vertices[e]];
@@ -448,7 +449,9 @@ TPL void CP::compute_connected_components()
             } /* the current connected component is complete */
             tmp_rV++;
         }
+        free(first_edge_r); free(adj_vertices_r);
     }
+    free(index_in_comp);
     saturated_comp = saturated_comp_par;
     saturated_vert = saturated_vert_par;
 
@@ -568,8 +571,8 @@ TPL void CP::compute_reduced_graph()
             for (index_t a = first_edge[v]; a < first_rev_arc[v + 1]; a++){
                 if (a == first_edge[v + 1]){ // switch to reverse edges
                     a = first_rev_arc[v];
+                    if (a == first_rev_arc[v + 1]){ break; }
                 }
-                if (a == first_rev_arc[v + 1]){ break; }
                 if (!is_active(a)){ continue; }
                 real_t edge_weight = EDGE_WEIGHTS_(arc_to_edge(a));
                 if (edge_weight == ZERO){ continue; }
