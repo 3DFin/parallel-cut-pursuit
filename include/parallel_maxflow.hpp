@@ -154,7 +154,9 @@ TPL inline void MXFL::set_edge_capacities(index_t e, flow_t cap,
 
 TPL inline bool MXFL::is_sink(index_t node)
 {
-    return nodes[node].cut_side == SINK;
+    /* without parent a node is considered in the source side;
+     * this is arbitrary but coherent */
+    return (nodes[node].parent && nodes[node].cut_side == SINK);
 }
 
 #undef TPL

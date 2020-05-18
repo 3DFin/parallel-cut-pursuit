@@ -273,9 +273,36 @@ TPL void CP::single_connected_component()
         for (index_t v = 0; v < V; v++){ comp_assign[v] = 0; }
         for (index_t v = 0; v < V; v++){ comp_list[v] = v; }
     }else{
-        /* reorganizing the component list by breadth-first search is useful
-         * for the parallelization of the first split step; for now, we use
-         * only edges, so we get only "oriented" connected components */
+        /* reorganizing the component list by breadth-first search is necessary
+         * for the parallelization of the first split step */
+
+        /* build list of binding reverse edges */
+        index_t* first_edge_r = (index_t*)
+            malloc_check(sizeof(index_t)*(V + 1));
+        /* count reverse edges for each vertex (shift by one index) */
+        for (index_t v = 0; v <= V; v++){ first_edge_r[v] = 0; }
+        for (index_t e = 0; e < E; e++){ first_edge_r[adj_vertices[e] + 1]++; }
+        /* cumulative sum for actual first binding edge id for each vertex */
+        first_edge_r[0] = 0;
+        for (index_t v = 2; v <= V; v++){
+            first_edge_r[v] += first_edge_r[v - 1];
+        }
+        /* store adjacent vertices, using previous sum as starting indices */
+        index_t* adj_vertices_r = (index_t*)
+            malloc_check(sizeof(index_t)*first_edge_r[V]);
+        for (index_t v = 0; v < V; v++){
+            for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                index_t e_r = first_edge_r[adj_vertices[e]]++;
+                adj_vertices_r[e_r] = v;
+            }
+        }
+        /* first reverse edges have been shifted in the process, shift back */
+        for (index_t v = V; v > 0; v--){
+            first_edge_r[v] = first_edge_r[v - 1];
+        }
+        first_edge_r[0] = 0;
+
+        /* breadth-first traversal */
         for (index_t v = 0; v < V; v++){ comp_assign[v] = NOT_ASSIGNED; }
         index_t i, j, u;
         for (i = j = u = 0; u < V; u++){
@@ -286,14 +313,25 @@ TPL void CP::single_connected_component()
             while (i < j){
                 index_t v = comp_list[i++];
                 /* add neighbors to the connected component list */
-                for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                    index_t w = adj_vertices[e];
-                    if (comp_assign[w] != NOT_ASSIGNED){ continue; }
-                    comp_assign[w] = 0;
-                    comp_list[j++] = w;
+                index_t e = first_edge[v];
+                const index_t* adj_vert = adj_vertices;
+                while (adj_vert == adj_vertices || e < first_edge_r[v + 1]){
+                    if (e == first_edge[v + 1] && adj_vert == adj_vertices){
+                        e = first_edge_r[v];
+                        adj_vert = adj_vertices_r;
+                        continue;
+                    }
+                    index_t w = adj_vert[e];
+                    if (comp_assign[w] == NOT_ASSIGNED){
+                        comp_assign[w] = 0;
+                        comp_list[j++] = w;
+                    }
+                    e++;
                 }
             } /* the current "oriented" connected component is complete */
         }
+        free(first_edge_r);
+        free(adj_vertices_r);
     }
 }
 
@@ -419,24 +457,46 @@ TPL void CP::compute_connected_components()
             while (i < j){
                 index_t v = tmp_comp_list[i++];
                 /* add neighbors to the connected component list;
-                 * breadth-first search is useful for the parallelization of
+                 * breadth-first search is necessary for the parallelization of
                  * the split step */     
                 index_t e = first_edge[v];
                 index_t l = index_in_comp[v];
-                bool forward = true;
-                while (true){
-                    index_t w;
-                    if (forward){
+                const index_t* adj_vert = adj_vertices;
+                while (adj_vert == adj_vertices || e < first_edge_r[l + 1]){
+                    if (adj_vert == adj_vertices){
                         if (e == first_edge[v + 1]){
                             e = first_edge_r[l];
-                            forward = false;
+                            adj_vert = adj_vertices_r;
+                            continue;
+                        }else if (!is_bind(e)){
+                            e++; continue; 
+                        }
+                    }
+                    index_t w = adj_vert[e];
+                    if (comp_assign[w] == NOT_ASSIGNED){
+                        comp_assign[w] = ASSIGNED;
+                        tmp_comp_list[j++] = w;
+                    }
+                    e++;
+                }
+
+                #if 0
+                index_t e = first_edge[v];
+                index_t l = index_in_comp[v];
+                bool forward_edge = true;
+                while (true){
+                    index_t w;
+                    if (forward_edges){
+                        if (e == first_edge[v + 1]){
+                            e = first_edge_r[l];
+                            forward_edges = false;
                         }else if (is_bind(e)){
                             w = adj_vertices[e];
                         }else{
                             e++; continue;
                         }
                     }
-                    if (!forward){
+                    if (!forward_edges){
                         if (e == first_edge_r[l + 1]){ break; }
                         w = adj_vertices_r[e];
                     }
@@ -446,6 +506,7 @@ TPL void CP::compute_connected_components()
                     }
                     e++;
                 }
+                #endif
             } /* the current connected component is complete */
             tmp_rV++;
         }
