@@ -25,15 +25,17 @@ using namespace std;
 TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
     const index_t* adj_vertices, const index_t* reverse_arc, size_t D)
     : V(V), E(E), first_edge(first_edge), adj_vertices(adj_vertices),
-      first_rev_arc(first_edge + V), reverse_arc(reverse_arc), D(D)
+      reverse_arc(reverse_arc), first_rev_arc(first_edge + E), D(D)
 {
     /* real type with infinity is handy */
     static_assert(numeric_limits<real_t>::has_infinity,
         "Cut-pursuit: real_t must be able to represent infinity.");
 
-    /* flow residual capacities and activation */
+    /* edge activation */
+    // edge_status = (Edge_status*) malloc_check(sizeof(real_t)*E);
+    // for (index_t e = 0; e < E; e++){ bind(e); }
     arc_status = (real_t*) malloc_check(sizeof(real_t)*2*E);
-    for (index_t a = 0; a < 2*E; a++){ arc_status[a] = ZERO; }
+    for (index_t e = 0; e < E; e++){ bind(e); }
 
     /* reduced graph **/
     rV = 1; rE = 0;
@@ -57,12 +59,12 @@ TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
     monitor_evolution = false;
 
     max_num_threads = omp_get_max_threads();
-    balance_par_split = true;
+    balance_par_split = max_num_threads > 1;
 }
 
 TPL CP::~Cp()
 {
-    free(arc_status);
+    free(edge_status);
     free(comp_assign); free(last_comp_assign);
     free(first_vertex); free(comp_list);
     free(is_saturated);
@@ -71,7 +73,7 @@ TPL CP::~Cp()
 }
 
 TPL void CP::reset_edges()
-{ for (index_t e = 0; e < E; e++){ set_inactive(e); } }
+{ for (index_t e = 0; e < E; e++){ bind(e); } }
 
 TPL void CP::set_edge_weights(const real_t* edge_weights,
     real_t homo_edge_weight)
@@ -113,7 +115,7 @@ TPL void CP::set_parallel_param(int max_num_threads, bool balance_par_split)
 {
     if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
     this->max_num_threads = max_num_threads;
-    this->balance_par_split = balance_par_split;
+    this->balance_par_split = max_num_threads > 1 && balance_par_split;
 }
 
 TPL comp_t CP::get_components(comp_t** comp_assign, index_t** first_vertex,
@@ -267,12 +269,13 @@ TPL void CP::single_connected_component()
     first_vertex = (index_t*) malloc_check(sizeof(index_t)*2);
     first_vertex[0] = 0; first_vertex[1] = V;
     rV = 1;
-    if (compute_num_threads(split_complexity()) == 1){
+    if (!balance_par_split || compute_num_threads(split_complexity()) == 1){
         for (index_t v = 0; v < V; v++){ comp_assign[v] = 0; }
         for (index_t v = 0; v < V; v++){ comp_list[v] = v; }
     }else{
         /* reorganizing the component list by breadth-first search is useful
-         * for the parallelization of the split step */
+         * for the parallelization of the first split step; for now, we use
+         * only edges, so we get only "oriented" connected components */
         for (index_t v = 0; v < V; v++){ comp_assign[v] = NOT_ASSIGNED; }
         index_t i, j, u;
         for (i = j = u = 0; u < V; u++){
@@ -283,17 +286,13 @@ TPL void CP::single_connected_component()
             while (i < j){
                 index_t v = comp_list[i++];
                 /* add neighbors to the connected component list */
-                for (index_t a = first_edge[v]; a < first_rev_arc[v + 1]; a++){
-                    if (a == first_edge[v + 1]){ // switch to reverse edges
-                        a = first_rev_arc[v];
-                        if (a == first_rev_arc[v + 1]){ break; }
-                    }
-                    index_t w = adj_vertices[a];
+                for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                    index_t w = adj_vertices[e];
                     if (comp_assign[w] != NOT_ASSIGNED){ continue; }
                     comp_assign[w] = 0;
                     comp_list[j++] = w;
                 }
-            } /* the current connected component is complete */
+            } /* the current "oriented" connected component is complete */
         }
     }
 }
@@ -305,7 +304,7 @@ TPL void CP::assign_connected_components()
     for (index_t v = 0; v < V; v++){ /* will run along all edges */
         comp_t rv = comp_assign[v];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (rv != comp_assign[adj_vertices[e]]){ set_active(e); }
+            if (rv != comp_assign[adj_vertices[e]]){ cut(e); }
         }
     }
 
@@ -334,17 +333,23 @@ TPL void CP::compute_connected_components()
     /* auxiliary components lists */
     index_t* tmp_comp_list = (index_t*) malloc_check(sizeof(index_t)*V);
 
+    /**  new connected components hierarchically derives from previous ones,
+     **  we can thus compute them in parallel along previous components  **/
+
     /* auxiliary variables for parallel region */
     comp_t saturated_comp_par = 0;
     index_t saturated_vert_par = 0;
     index_t tmp_rV = 0; // identify and count components, prevent overflow
 
-    /**  new connected components hierarchically derives from previous ones,
-     **  we can thus compute them in parallel along previous components  **/
+    /* there is need to scan all edges involving a given vertex in linear time,
+     * so, we create the list of reverse edges within each component; to
+     * facilitate this, we keep the index of each vertex within components */
+    index_t* index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
 
     #pragma omp parallel for schedule(dynamic) NUM_THREADS(2*E, rV) \
         reduction(+:tmp_rV, saturated_comp_par, saturated_vert_par)
     for (comp_t rv = 0; rv < rV; rv++){
+        index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
         if (is_saturated[rv]){ // component stays the same
             index_t i = first_vertex[rv];
             index_t v = comp_list[i];
@@ -356,10 +361,53 @@ TPL void CP::compute_connected_components()
                 tmp_comp_list[i] = v;
             }
             saturated_comp_par++;
-            saturated_vert_par += first_vertex[rv + 1] - first_vertex[rv];
+            saturated_vert_par += comp_size;
             tmp_rV++;
             continue;
         } /* else component has been split */
+
+        /**  build list of binding reverse edges  **/
+        index_t* first_edge_r = (index_t*)
+            malloc_check(sizeof(index_t)*(comp_size + 1));
+        /* set index of each vertex in the component */
+        for (index_t i = 0; i < comp_size; i++){
+            index_in_comp[comp_list[i]] = i;
+        }
+        /* count reverse edges for each vertex (shift by one index) */
+        for (index_t i = 0; i <= comp_size; i++){ first_edge_r[i] = 0; }
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list[i];
+            for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                if (is_bind(e)){ /* keep only binding edges */
+                    first_edge_r[index_in_comp[adj_vertices[e]] + 1]++;
+                }
+            }
+        }
+        /* cumulative sum for actual first binding edge id for each vertex */
+        first_edge_r[0] = 0;
+        for (index_t i = 2; i <= comp_size; i++){
+            first_edge_r[i] += first_edge_r[i - 1];
+        }
+        /* get connected vertices, using previous sum as starting indices */
+        index_t* adj_vertices_r = (index_t*)
+            malloc_check(sizeof(index_t)*first_edge_r[comp_size]);
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list[i];
+            for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                if (is_bind(e)){
+                    index_t j = index_in_comp[adj_vertices[e]];
+                    index_t e_r = first_edge_r[j]++;
+                    adj_vertices_r[e_r] = v;
+                }
+            }
+        }
+        /* first reverse edges have been shifted in the process, shift back */
+        for (index_t i = comp_size; i > 0; i--){
+            first_edge_r[i] = first_edge_r[i - 1];
+        }
+        first_edge_r[0] = 0;
+
+        /**  compute the connected components  **/
         index_t i, j, k;
         for (i = j = k = first_vertex[rv]; k < first_vertex[rv + 1]; k++){
             index_t u = comp_list[k];
@@ -372,17 +420,30 @@ TPL void CP::compute_connected_components()
                 /* add neighbors to the connected component list;
                  * breadth-first search is useful for the parallelization of
                  * the split step */     
-                for (index_t a = first_edge[v]; a < first_rev_arc[v + 1]; a++){
-                    if (a == first_edge[v + 1]){ // switch to reverse edges
-                        a = first_rev_arc[v];
-                        if (a == first_rev_arc[v + 1]){ break; }
+                index_t e = first_edge[v];
+                index_t l = index_in_comp[v];
+                bool forward = true;
+                while (true){
+                    index_t w;
+                    if (forward){
+                        if (e == first_edge[v + 1]){
+                            e = first_edge_r[l];
+                            forward = false;
+                        }else if (is_bind(e)){
+                            w = adj_vertices[e];
+                        }else{
+                            e++; continue;
+                        }
                     }
-                    if (!is_active(a)){
-                        index_t w = adj_vertices[a];
-                        if (comp_assign[w] != NOT_ASSIGNED){ continue; }
+                    if (!forward){
+                        if (e == first_edge_r[l + 1]){ break; }
+                        w = adj_vertices_r[e];
+                    }
+                    if (comp_assign[w] == NOT_ASSIGNED){
                         comp_assign[w] = ASSIGNED;
                         tmp_comp_list[j++] = w;
                     }
+                    e++;
                 }
             } /* the current connected component is complete */
             tmp_rV++;
@@ -507,8 +568,8 @@ TPL void CP::compute_reduced_graph()
             for (index_t a = first_edge[v]; a < first_rev_arc[v + 1]; a++){
                 if (a == first_edge[v + 1]){ // switch to reverse edges
                     a = first_rev_arc[v];
-                    if (a == first_rev_arc[v + 1]){ break; }
                 }
+                if (a == first_rev_arc[v + 1]){ break; }
                 if (!is_active(a)){ continue; }
                 real_t edge_weight = EDGE_WEIGHTS_(arc_to_edge(a));
                 if (edge_weight == ZERO){ continue; }
@@ -656,7 +717,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
              i < first_vertex_bal[rv_new + 1]; i++){
             index_t v = comp_list[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                if (is_free(e) && rv_new != comp_assign[adj_vertices[e]]){
+                if (is_bind(e) && rv_new != comp_assign[adj_vertices[e]]){
                     set_par_sep(e);
                 }
             }
@@ -777,8 +838,8 @@ TPL index_t CP::split()
                 index_t v = comp_list[i];
                 comp_t l = label_assign[v];
                 for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                    if (is_free(e) && l != label_assign[adj_vertices[e]]){
-                        set_active(e);
+                    if (is_bind(e) && l != label_assign[adj_vertices[e]]){
+                        cut(e);
                         rv_activation++;
                     }
                 }
@@ -977,8 +1038,8 @@ TPL index_t CP::merge()
     for (index_t v = 0; v < V; v++){ /* will run along all edges */
         comp_t rv = comp_assign[v];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_active(e) && rv == comp_assign[adj_vertices[e]]){
-                set_inactive(e);
+            if (is_bind(e) && rv == comp_assign[adj_vertices[e]]){
+                cut(e);
                 deactivation++;
             }
         }

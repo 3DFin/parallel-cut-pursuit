@@ -390,7 +390,7 @@ TPL index_t CP_D1_QL1B::split()
     for (index_t v = 0; v < V; v++){
         real_t rXv = rX[comp_assign[v]];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_active(e)){
+            if (is_cut(e)){
                 index_t u = adj_vertices[e];
                 real_t grad_d1 = rXv > rX[comp_assign[u]] ?
                     EDGE_WEIGHTS_(e) : -EDGE_WEIGHTS_(e);
@@ -476,7 +476,7 @@ TPL void CP_D1_QL1B::split_component(comp_t rv,
     for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
         index_t v = comp_list[i];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_free(e)){
+            if (is_bind(e)){
                 maxflow->set_edge_capacities(e, EDGE_WEIGHTS_(e),
                     EDGE_WEIGHTS_(e));
             } /* with high probability, both sides of a parallel separation

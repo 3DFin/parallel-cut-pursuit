@@ -178,8 +178,8 @@ private:
     using Cp<real_t, index_t, comp_t>::rX;
     using Cp<real_t, index_t, comp_t>::last_rX;
     using Cp<real_t, index_t, comp_t>::monitor_evolution;
-    using Cp<real_t, index_t, comp_t>::is_active;
-    using Cp<real_t, index_t, comp_t>::is_free;
+    using Cp<real_t, index_t, comp_t>::is_cut;
+    using Cp<real_t, index_t, comp_t>::is_bind;
     using Cp<real_t, index_t, comp_t>::is_par_sep;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::saturated_comp;

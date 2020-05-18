@@ -90,8 +90,8 @@ private:
     comp_t compute_merge_chains() override;
 
     /**  type resolution for base template class members  **/
-    using Cp<real_t, index_t, comp_t>::set_active;
-    using Cp<real_t, index_t, comp_t>::set_inactive;
+    using Cp<real_t, index_t, comp_t>::cut;
+    using Cp<real_t, index_t, comp_t>::bind;
     using Cp<real_t, index_t, comp_t>::merge_components;
     using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
 };

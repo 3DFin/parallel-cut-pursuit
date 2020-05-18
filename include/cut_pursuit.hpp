@@ -148,19 +148,14 @@ protected:
      * array of length V + 1, the first value is always zero and the last
      * value is always the total number of edges E
      * - for each edge, 'adj_vertices' indicates its ending vertex */
-    /* now, there is need to scan all arcs involving a given vertex in linear
-     * time; we keep the reverse arcs also in a forward-star representation as
-     * above; moreover, it is useful to keep the array of adjacent vertices
-     * for the reverse arcs contiguous with the array of adjacent vertices for
-     * the edges; likewise, the indices of the first reverse arcs are put
-     * contiguously to the indices of the first edges; finally
-     * - 'first_edge' is thus of lengthe 2V + 1, the first value is always
-     * zero, the (V+1)-th value is always the total numer of edges E, the last
-     * value is always the total number of arcs 2E
-     * - 'adj_vertices' is thus of length 2 E. */
     const index_t *first_edge, *adj_vertices; 
-    const index_t* first_rev_arc; // = this will be first_edge + V
-    const index_t* reverse_arc; // for each arc, the index of its reverse arc
+    /* now, there is need to scan all edges involving a given vertex in linear
+     * time, for computing connected components and reduced connectivity;
+     * reverse edges are also kept in a forward-star representation as above */
+    const index_t *first_rev_arc, *reverse_arc;
+    
+    
+    // const index_t *first_edge_r, *adj_vertices_r;
 
     const real_t *edge_weights;
     real_t homo_edge_weight;
@@ -204,17 +199,19 @@ protected:
 
     index_t arc_to_edge(index_t a); // get corresponding edge identifier
 
-    bool is_active(index_t a); // check if arc e is active
+    bool is_active(index_t a); // check if arc a is active
+
+    bool is_cut(index_t e); // check if edge e is cut (active)
 
     bool is_par_sep(index_t e); // check if edge e is a parallel cut separation
 
-    bool is_free(index_t e); // check if edge e is not active or parallel cut 
+    bool is_bind(index_t e); // check if edge e is binding (inactive)
 
-    void set_active(index_t e); // flag an active edge
+    void cut(index_t e); // flag a cut (active) edge
 
     void set_par_sep(index_t e); // flag a parallel cut separation
 
-    void set_inactive(index_t e); // flag an inactive edge
+    void bind(index_t e); // flag an binding (inactive) edge
 
     void set_edge_capacities(index_t e, real_t cap_uv, real_t cap_vu);
 
@@ -329,6 +326,11 @@ protected:
     { return compute_num_threads(num_ops, num_ops); }
 
 private:
+    enum Edge_status : char // requires C++11 to ensure 1 byte
+        {BIND, CUT, PAR_SEP};
+    Edge_status* edge_status; // edge activation
+    real_t* arc_status; 
+
     /* parameters */
     int it_max; // maximum number of cut-pursuit iterations
     bool balance_par_split; // switch controling parallel split balancing
@@ -337,6 +339,9 @@ private:
     real_t* objective_values;
     double* elapsed_time;
     real_t* iterate_evolution;
+
+    /* during the merging step, merged components are stored as chains */
+    comp_t *merge_chains_root, *merge_chains_next, *merge_chains_leaf;
 
     double monitor_time(std::chrono::steady_clock::time_point start);
 
@@ -349,22 +354,18 @@ private:
     /* initialize with components specified in 'comp_assign' */
     void assign_connected_components();
 
-    /* initialize with only one component and reduced graph accordingly */
+    /* initialize with only one component and reduced graph accordingly 
+     * NOTA: reverse edges are allocated and computed here */
     void single_connected_component();
 
     /* update connected components and count saturated ones;
+     * NOTA: reverse edges are allocated and computed here
      * NOTA: saturation per component is not updated until merge step */
     void compute_connected_components();
 
-    /* allocate and compute reduced graph structure */
+    /* allocate and compute reduced graph structure
+     * NOTA: reverse edges are used and deallocated here */
     void compute_reduced_graph();
-
-    /* during the merging step, merged components are stored as chains */
-    comp_t *merge_chains_root, *merge_chains_next, *merge_chains_leaf;
-
-    /* arcs' residual capacities and edge activation; indexed in the same order
-     * as adjacent vertices in forward-star representation */
-    real_t* arc_status;
 
     /**  type resolution for base template class members  **/
     using Flow_node = typename Maxflow<index_t, real_t>::Flow_node;
@@ -377,34 +378,46 @@ private:
 /***  inline methods in relation with main graph  ***/
 
 TPL inline index_t CP::arc_to_edge(index_t a)
-{ return a < E ? a : reverse_arc[a]; }
+{ return a > E ? reverse_arc[a] : a; }
 
 TPL inline bool CP::is_active(index_t a)
-{ return arc_status[a] == ACTIVE_EDGE; }
+{ return is_cut(arc_to_edge(a)); }
+
+TPL inline bool CP::is_cut(index_t e)
+{ return arc_status[e] == ACTIVE_EDGE; }
 
 TPL inline bool CP::is_par_sep(index_t e)
 { return arc_status[e] == PAR_SEP_EDGE; }
 
-TPL inline bool CP::is_free(index_t e)
-{ return arc_status[e] >= 0.0; }
+TPL inline bool CP::is_bind(index_t e)
+{ return arc_status[e] >= (real_t) 0.0; }
 
-TPL inline void CP::set_active(index_t e)
-{
-    arc_status[e] = ACTIVE_EDGE;
-    arc_status[reverse_arc[e]] = ACTIVE_EDGE;
-}
+TPL inline void CP::cut(index_t e)
+{ arc_status[e] = arc_status[reverse_arc[e]] = ACTIVE_EDGE; }
 
 TPL inline void CP::set_par_sep(index_t e)
-{
-    arc_status[e] = PAR_SEP_EDGE;
-    arc_status[reverse_arc[e]] = PAR_SEP_EDGE;
-}
+{ arc_status[e] = arc_status[reverse_arc[e]] = PAR_SEP_EDGE; }
 
-TPL inline void CP::set_inactive(index_t e)
-{
-    arc_status[e] = 0.0;
-    arc_status[reverse_arc[e]] = 0.0;
-}
+TPL inline void CP::bind(index_t e)
+{ arc_status[e] = arc_status[reverse_arc[e]] = (real_t) 0.0; }
+
+/* TPL inline bool CP::is_cut(index_t e)
+{ return edge_status[e] == CUT; }
+
+TPL inline bool CP::is_par_sep(index_t e)
+{ return edge_status[e] == PAR_SEP; }
+
+TPL inline bool CP::is_bind(index_t e)
+{ return edge_status[e] == BIND; }
+
+TPL inline void CP::cut(index_t e)
+{ edge_status[e] = CUT; }
+
+TPL inline void CP::par_sep(index_t e)
+{ edge_status[e] = PAR_SEP; }
+
+TPL inline void CP::bind(index_t e)
+{ arc_status[e] = BIND; } */
 
 TPL inline comp_t CP::get_merge_chain_root(comp_t rv)
 {

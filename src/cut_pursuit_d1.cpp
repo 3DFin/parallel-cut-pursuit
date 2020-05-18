@@ -47,9 +47,9 @@ TPL index_t CP_D1::remove_parallel_separations(comp_t rV_new)
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_par_sep(e)){
                     if (l == label_assign[adj_vertices[e]]){
-                        set_inactive(e);
+                        bind(e);
                     }else{
-                        set_active(e);
+                        cut(e);
                         activation++;
                     }
                 }
