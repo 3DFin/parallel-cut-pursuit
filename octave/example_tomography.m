@@ -10,7 +10,7 @@ cd(fileparts(which('example_tomography.m')));
 addpath('bin/');
 
 %%%  general parameters  %%%
-plot_results = true;
+plot_results = false;
 print_results = false; % requires color encapsulated postscript driver on your
                       % system
 

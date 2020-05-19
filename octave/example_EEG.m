@@ -44,7 +44,6 @@ options.low_bnd = 0.0;
 
 %%%  solve the optimization problem  %%%
 tic;
-options.max_num_threads = 1;
 [Comp, rX] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, adj_vertices, options);
 % [Comp, rX, it, Obj, Time] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, adj_vertices, options);
 time = toc;

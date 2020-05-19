@@ -4,7 +4,6 @@
 
 #define TPL template <typename index_t, typename flow_t>
 #define MXFL Maxflow<index_t, flow_t>
-
 /* constants of the correct type */
 #define ZERO ((flow_t) 0.0)
 /* special constants for nodes' parents;
@@ -54,6 +53,24 @@ TPL MXFL::~Maxflow()
 {
     if (owns_arc_res_cap){ free(arc_res_cap); }
     if (owns_nodes){ free(nodes); }
+}
+
+TPL inline flow_t& MXFL::terminal_capacity(index_t node)
+{ return nodes[node].term_cap; }
+
+TPL inline void MXFL::set_edge_capacities(index_t e, flow_t cap,
+    flow_t cap_rev)
+{
+    arc_res_cap[e] = cap;
+    arc_res_cap[reverse_arc[e]] = cap_rev;
+}
+
+TPL inline bool MXFL::is_sink(index_t node)
+{
+    // return nodes[node].cut_side == SINK;
+    /* without parent a node is considered in the source side;
+     * this is arbitrary but coherent */
+    return (nodes[node].parent && nodes[node].cut_side == SINK);
 }
 
 /*
@@ -312,7 +329,6 @@ TPL void MXFL::maxflow(index_t comp_size, const index_t* comp_nodes)
 			nodes[i].parent = NO_PARENT;
 		}
 	}
-
 
     index_t i = NO_NODE;
 

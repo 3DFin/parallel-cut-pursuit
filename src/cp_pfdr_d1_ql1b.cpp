@@ -503,7 +503,7 @@ TPL void CP_D1_QL1B::split_component(comp_t rv,
         return;
     }
        
-    } // end for cut
+    } // end for dir
 }
 
 TPL real_t CP_D1_QL1B::compute_evolution(bool compute_dif)

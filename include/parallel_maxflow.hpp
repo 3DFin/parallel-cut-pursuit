@@ -138,26 +138,3 @@ private:
     void push_flow(const Terminal side, index_t middle_arc, flow_t flow);
     void process_orphan(index_t node);
 };
-
-#define TPL template <typename index_t, typename flow_t>
-#define MXFL Maxflow<index_t, flow_t>
-
-TPL inline flow_t& MXFL::terminal_capacity(index_t node)
-{ return nodes[node].term_cap; }
-
-TPL inline void MXFL::set_edge_capacities(index_t e, flow_t cap,
-    flow_t cap_rev)
-{
-    arc_res_cap[e] = cap;
-    arc_res_cap[reverse_arc[e]] = cap_rev;
-}
-
-TPL inline bool MXFL::is_sink(index_t node)
-{
-    /* without parent a node is considered in the source side;
-     * this is arbitrary but coherent */
-    return (nodes[node].parent && nodes[node].cut_side == SINK);
-}
-
-#undef TPL
-#undef MXFL
