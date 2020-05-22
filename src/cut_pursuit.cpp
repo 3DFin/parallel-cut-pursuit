@@ -564,7 +564,7 @@ TPL void CP::initialize()
 }
 
 TPL uintmax_t CP::maxflow_complexity()
-{ return (uintmax_t) 2*E + V; }
+{ return (uintmax_t) 2*E + V; } // just for a graph cut; heuristic
 
 TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
         index_t*& first_vertex_big)
@@ -578,8 +578,8 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     index_t max_comp_size = (V - 1)/num_thrds + 1;
 
     /**  get number of components to split and of resulting new components  **/
-    rV_big = 0;
-    rV_new = 0;
+    rV_big = 0; // the number of components to split
+    rV_new = 0; // the number of resulting new components
     index_t comp_size = first_vertex[1] - first_vertex[0];
     while (comp_size > max_comp_size){
         rV_new += saturation(rV_big) ? 1 : (comp_size - 1)/max_comp_size + 1;
@@ -589,17 +589,18 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     }
 
     if (rV_new == rV_big){ return num_thrds; }
+    index_t rV_dif = rV_new - rV_big;
 
-    if ((size_t) rV + rV_new - rV_big > MAX_NUM_COMP){
+    if ((size_t) rV + rV_dif > MAX_NUM_COMP){
         cerr << "Cut-pursuit: number of balanced components (" <<
-            (size_t) rV + rV_new - rV_big << ") greater "
+            (size_t) rV + rV_dif << ") greater "
             << "than can be represented by comp_t (" << MAX_NUM_COMP << ")"
             << endl;
         exit(EXIT_FAILURE);
     }
 
     /**  split big components and create balanced component list  **/
-    comp_t rV_bal = rV + rV_new - rV_big;
+    comp_t rV_bal = rV + rV_dif;
     index_t* first_vertex_bal = (index_t*) malloc_check(sizeof(index_t)*
         ((size_t) rV_bal + 1));
     comp_t rv_new = 0;
@@ -618,7 +619,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     }
     /* add the small components */
     for (comp_t rv = rV_big; rv <= rV; rv++){
-        first_vertex_bal[rv + rV_new - rV_big] = first_vertex[rv];
+        first_vertex_bal[rv + rV_dif] = first_vertex[rv];
     }
 
     /**  set parallel cut separation on edges between new components  **/
@@ -648,18 +649,19 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     /**  duplicate component values accordingly  **/
     rX = (value_t*) realloc_check(rX, sizeof(value_t)*D*rV_bal);
     /* small components; in-place, start by the end */
-    for (comp_t rv = rV; rv > rV_big; rv--){
-        value_t* rXv = rX + D*(rv - 1);
-        value_t* rXv_bal = rXv + D*(rV_new - rV_big);
+    for (comp_t rv = rV - 1; rv >= rV_big; rv--){ // rVbig > 0
+        value_t* rXv = rX + D*rv;
+        value_t* rXv_bal = rX + D*(rv + rV_dif);
         for (size_t d = 0; d < D; d++){ rXv_bal[d] = rXv[d]; }
     }
     /* big components; in-place, slightly more complicated */
-    rv_new = rV_new;
-    for (comp_t rv = rV_big; rv > 0; rv--){
-        value_t* rXv = rX + D*(rv - 1);
-        for(; first_vertex_bal[rv_new] > first_vertex[rv - 1]; rv_new--){
-            value_t* rXv_bal = rX + D*(rv_new - 1);
+    rv_new = rV_new - 1;
+    for (comp_t rv = rV_big; rv --> 0; ){ // nice trick for unsigned comp_t
+        value_t* rXv = rX + D*rv;
+        while (rv_new != 0 && first_vertex_bal[rv_new] >= first_vertex[rv]){
+            value_t* rXv_bal = rX + D*rv_new;
             for (size_t d = 0; d < D; d++){ rXv_bal[d] = rXv[d]; }
+            rv_new--;
         }
     }
 
@@ -680,7 +682,8 @@ TPL index_t CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
     index_t activation = remove_parallel_separations(rV_new);
 
     index_t* first_vertex_bal = first_vertex; // make clear which one is which
-    comp_t rV_ini = rV - rV_new + rV_big;
+    comp_t rV_dif = rV_new - rV_big;
+    comp_t rV_ini = rV - rV_dif;
 
     /* each new component which has not been cut is declared saturated;
      * however, if any new component from the same original large component
@@ -710,7 +713,7 @@ TPL index_t CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
     /* small components */
     for (comp_t rv = rV_big; rv < rV_ini; rv++){
         value_t* rXv = rX + D*rv;
-        value_t* rXv_bal = rXv + D*(rV_new - rV_big);
+        value_t* rXv_bal = rX + D*(rv + rV_dif);
         for (size_t d = 0; d < D; d++){ rXv[d] = rXv_bal[d]; }
     }
     rX = (value_t*) realloc_check(rX, sizeof(value_t)*D*rV_ini);
@@ -722,7 +725,7 @@ TPL index_t CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
     }
     /* small components; in-place */
     for (comp_t rv = rV_big; rv <= rV; rv++){
-        first_vertex[rv] = first_vertex[rv + rV_new - rV_big];
+        first_vertex[rv] = first_vertex[rv + rV_dif];
     }
     first_vertex = (index_t*) realloc_check(first_vertex,
         sizeof(index_t)*rVp1);
