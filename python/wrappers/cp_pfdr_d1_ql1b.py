@@ -75,15 +75,15 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting 
             from the vertex (or, if there are none, starting from the next 
-            vertex); array of length V+1 (uint32), the last value is the total
-            number of edges;
-        for each edge, 'adj_vertices' indicates its ending vertex, array of 
-            length E (uint32)
-    edge_weights - array of length E or a scalar for homogeneous weights (real)
+            vertex); (uint32) array of length V + 1, the last value is the
+            total number of edges;
+        for each edge, 'adj_vertices' indicates its ending vertex, (uint32)
+            array of length E
+    edge_weights - (real) array of length E or a scalar for homogeneous weights
     Yl1 - offset for l1 penalty, (real) array of length V
-    l1_weights - array of length V or scalar for homogeneous weights (real)
-    low_bnd - array of length V or scalar (real)
-    upp_bnd - array of length V or scalar (real)
+    l1_weights - (real) array of length V or scalar for homogeneous weights
+    low_bnd - (real) array of length V or scalar
+    upp_bnd - (real) array of length V or scalar
     cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (in Euclidean norm) is less than dif_tol;
         1e-4 is a typical value; a lower one can give better precision
@@ -118,18 +118,18 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     OUTPUTS: Obj, Time, Dif are optional, set parameters compute_Obj,
         compute_Time, compute_Dif to True to request them
 
-    Comp - assignement of each vertex to a component, array of length V
-        (uint16)
-    rX - values of each component of the minimizer, array of length rV (real);
+    Comp - assignement of each vertex to a component, (uint16) array of
+        length V
+    rX - values of each component of the minimizer, (real) array of length rV;
         the actual minimizer is then reconstructed as X = rX[Comp];
     cp_it - actual number of cut-pursuit iterations performed
     Obj - if requested, the values of the objective functional along iterations
-        (array of length cp_it + 1); in the precomputed A^t A version, a
+          array of length cp_it + 1; in the precomputed A^t A version, a
         constant 1/2||Y||^2 in the quadratic part is omited
     Time - if requested, the elapsed time along iterations
-        (array of length cp_it + 1)
+           array of length cp_it + 1
     Dif  - if requested, the iterate evolution along iterations
-        (array of length cp_it)
+           array of length cp_it
 
     Parallel implementation with OpenMP API.
 

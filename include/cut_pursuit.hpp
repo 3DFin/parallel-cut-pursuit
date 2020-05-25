@@ -54,10 +54,9 @@ class Cp
 public:
     /**  constructor, destructor  **/
 
-    /* mandatory arguments constitutes the main graph structure, according to a
-     * two-ways forward-star graph structure, see corresponding members */
-    Cp(index_t V, index_t E, const index_t* first_edge,
-        const index_t* adj_vertces, size_t D = 1);
+    /* only creates flow graph structure */
+    Cp(index_t V, index_t E, const index_t* first_edge, 
+        const index_t* adj_vertices, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 

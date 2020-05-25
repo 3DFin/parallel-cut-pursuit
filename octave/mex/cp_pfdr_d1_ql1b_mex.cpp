@@ -4,9 +4,9 @@
  *
  * options is a struct with any of the following fields [with default values]:
  *
- *      edge_weights [1.0], Yl1 [none], l1_weights [0.0],
- *      low_bnd [-Inf], upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10],
- *      pfdr_rho [1.0], pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
+ *      edge_weights [1.0], Yl1 [none], l1_weights [0.0], low_bnd [-Inf],
+ *      upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
+ *      pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
  *      pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
  *      max_num_threads [none], balance_parallel_split [true],
  *      AtA_if_square [true]
@@ -20,10 +20,10 @@
 
 using namespace std;
 
-/* index_t must be able to represent twice the number of vertices plus one and
- * twice the number of edges plus one in the main graph;
+/* index_t must be able to represent the number of vertices and of (undirected)
+ * edges in the main graph;
  * comp_t must be able to represent the number of constant connected components
- * plus one in the reduced graph */
+ * in the reduced graph */
 typedef uint32_t index_t;
 #define mxINDEX_CLASS mxUINT32_CLASS
 #define INDEX_CLASS_NAME "uint32"

@@ -4,11 +4,10 @@
 #include "../include/cut_pursuit_d0.hpp"
 
 #define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define TWO ((real_t) 2.0)
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 /* special flag */
 #define MERGE_INIT MAX_NUM_COMP
+#define SPLIT_DAMP_RATIO ((real_t) 0.7)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
     typename value_t>
@@ -37,11 +36,10 @@ TPL void CP_D0::set_split_param(comp_t K, int split_iter_num)
         cerr << "Cut-pursuit d0: there must be at least two alternative values"
             "in the split (" << K << " specified)." << endl;
         exit(EXIT_FAILURE);
-    }else if (numeric_limits<comp_t>::max() < K){
-        cerr << "Cut-pursuit d0: comp_t must be able to represent the number"
-            " of alternative values in the split K (" << K << ")." << endl;
-        exit(EXIT_FAILURE);
     }
+
+    this->K = K;
+    this->split_iter_num = split_iter_num;
 }
 
 TPL real_t CP_D0::compute_graph_d0()
@@ -83,14 +81,20 @@ TPL uintmax_t CP_D0::split_complexity()
     return complexity*(V - saturated_vert)/V; // account saturation linearly
 }
 
-TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
+TPL void CP_D0::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
 {
     value_t* altX = (value_t*) malloc_check(sizeof(value_t)*D*K);
 
     index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
     const index_t* comp_list_rv = comp_list + first_vertex[rv];
 
+    real_t damping = 1.0;
     for (int split_it = 0; split_it < split_iter_num; split_it++){
+        damping *= SPLIT_DAMP_RATIO;
+    }
+
+    for (int split_it = 0; split_it < split_iter_num; split_it++){
+        damping /= SPLIT_DAMP_RATIO;
 
         if (split_it == 0){ init_split_values(rv, altX); }
         else{ update_split_values(rv, altX); }
@@ -110,8 +114,8 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
                 index_t v = comp_list_rv[i];
                 for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                     if (is_bind(e)){
-                        maxflow->set_edge_capacities(e_in_comp++,
-                            EDGE_WEIGHTS_(e), EDGE_WEIGHTS_(e));
+                        real_t cap = damping*EDGE_WEIGHTS_(e);
+                        maxflow->set_edge_capacities(e_in_comp++, cap, cap);
                     }
                 }
             }
@@ -172,16 +176,16 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
                      *            constant +      unary terms     + binary term
                      */
                     /* A = E(0,0) is the cost of the current assignment */
-                    real_t A = lu == lv ? ZERO : EDGE_WEIGHTS_(e);
+                    real_t A = lu == lv ? ZERO : damping*EDGE_WEIGHTS_(e);
                     /* B = E(0,1) is the cost of changing lv to k */
-                    real_t B = lu == k ? ZERO : EDGE_WEIGHTS_(e);
+                    real_t B = lu == k ? ZERO : damping*EDGE_WEIGHTS_(e);
                     /* C = E(1,0) is the cost of changing lu to k */
-                    real_t C = lv == k ? ZERO : EDGE_WEIGHTS_(e);
+                    real_t C = lv == k ? ZERO : damping*EDGE_WEIGHTS_(e);
                     /* D = E(1,1) = 0 is for changing both lu, lv to k */
                     /* set weights in accordance with orientation u -> v */
                     maxflow->terminal_capacity(i) += C - A;
                     maxflow->terminal_capacity(index_in_comp[v]) -= C;
-                    set_edge_capacities(e_in_comp++, B + C - A, ZERO);
+                    maxflow->set_edge_capacities(e_in_comp++, B + C - A, ZERO);
                 }
             }
 
@@ -227,7 +231,7 @@ TPL index_t CP_D0::remove_parallel_separations(comp_t rV_new)
     #pragma omp parallel for schedule(static) reduction(+:activation) \
         NUM_THREADS(first_vertex[rV_new], rV_new)
     for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
-        const bool saturation = is_saturated[rv_new];
+        // const bool saturation = is_saturated[rv_new];
         for (index_t i = first_vertex[rv_new]; i < first_vertex[rv_new + 1];
             i++){
             index_t v = comp_list[i];
@@ -236,9 +240,9 @@ TPL index_t CP_D0::remove_parallel_separations(comp_t rV_new)
                     bind(e);
                     /* if (saturation &&
                         is_saturated[comp_assign[adj_vertices[e]]]){
-                        set_inactive(e);
+                        bind(e);
                     }else{
-                        set_active(e);
+                        cut(e);
                         activation++;
                     } */
                 }

@@ -19,10 +19,10 @@
 
 using namespace std;
 
-/* index_t must be able to represent twice the number of vertices plus one and
- * twice the number of edges plus one in the main graph;
+/* index_t must be able to represent the number of vertices and of (undirected)
+ * edges in the main graph;
  * comp_t must be able to represent the number of constant connected components
- * plus one in the reduced graph, as well as the dimension D */
+ * in the reduced graph, as well as the dimension D */
 typedef uint32_t index_t;
 # define mxINDEX_CLASS mxUINT32_CLASS
 # define INDEX_CLASS_NAME "uint32"

@@ -69,9 +69,8 @@ protected:
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
     uintmax_t split_complexity() override;
-    /* type resolution for base template class members */
-    using typename Maxflow<index_t, real_t>;
-    void split_component(comp_t rv, Maxflow* maxflow) override;
+    void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
+        override;
 
     /* remove or activate separating edges used for balancing parallel
      * workload; see header `cut_pursuit.hpp` */
@@ -164,6 +163,7 @@ protected:
     using Cp<real_t, index_t, comp_t>::index_in_comp;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::reduced_edges;
+    // using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
     using Cp<real_t, index_t, comp_t>::merge_components;
@@ -181,7 +181,6 @@ private:
 
     /**  type resolution for base template class members  **/
     using Cp<real_t, index_t, comp_t>::maxflow_complexity;
-    using Cp<real_t, index_t, comp_t>::get_parallel_flow_graph;
     using Cp<real_t, index_t, comp_t>::is_cut;
     using Cp<real_t, index_t, comp_t>::is_par_sep;
     using Cp<real_t, index_t, comp_t>::is_bind;

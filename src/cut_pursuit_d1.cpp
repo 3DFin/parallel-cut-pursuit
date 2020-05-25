@@ -29,7 +29,7 @@ TPL index_t CP_D1::remove_parallel_separations(comp_t rV_new)
     index_t activation = 0;
 
     /* parallel separation edges must be activated if and only if the descent
-     * directions at its vertices are different; on directionnaly
+     * directions at its vertices are different; on directionnally
      * differentiable problems, descent directions only depend on the
      * components values, since they are the same on both sides of a parallel
      * separation, it is possible to implement split_component() so that the

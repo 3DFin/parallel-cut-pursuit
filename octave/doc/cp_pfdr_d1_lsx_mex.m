@@ -61,30 +61,15 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %         from a same vertex are consecutive;
 %     for each vertex, first_edge indicates the first edge starting from the
 %         vertex (or, if there are none, starting from the next vertex);
-%         array of length V + 1 (uint32), the first value is always zero and
+%         (uint32) array of length V + 1, the first value is always zero and
 %         the last value is always the total number of edges E;
-%     for each edge, adj_vertices indicates its ending vertex, array of 
-%         length E (uint32)
-%
-%     NOTA: if performing multiple calls to this function on the same graph
-%     structure, it might be worth precomputing the "two-ways forward-star
-%     graph representation" used by the cut-pursuit algorithm;
-%     this consists in specifying the reverse edges in the same fashion,
-%     contiguously to the above arrays, and, for each resulting oriented edge,
-%     the index of the oriented edge in the reverse direction; in that case,
-%     first_edge is of length 2V + 1, its last value is always twice the
-%     total number of edges 2E, adj_vertices is of length 2E, and the reverse
-%     arc table is an array of length 2E given in the dedicated option below;
-%     see also the function forward_star_to_reverse_mex
-%
+%     for each edge, adj_vertices indicates its ending vertex, (uint32) array
+%         of length E
 % options - structure with any of the following fields [with default values]:
 %     edge_weights [1.0], loss_weights [none], d1_coor_weights [none],
 %     cp_dif_tol [1e-3], cp_it_max [10], pfdr_rho [1.0], pfdr_cond_min [1e-2],
 %     pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4],
 %     verbose [1e2], max_num_threads [none], balance_parallel_split [true]
-% reverse_arc - in the "two-ways forward-star graph representation" (see
-%     first_edge parameter), (uint32) array of length 2E, giving, for each
-%     oriented edge, the index of its reverse edge
 % edge_weights - (real) array of length E, or scalar for homogeneous weights
 % loss_weights - weights on vertices; (real) array of length V
 % d1_coor_weights - for multidimensional data, weights the coordinates in the
@@ -120,8 +105,8 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %
 % OUTPUTS: indices are C-style (start at 0)
 %
-% Comp - assignement of each vertex to a component, array of length V (uint16)
-% rX - values of each component of the minimizer, array of length rV (real);
+% Comp - assignement of each vertex to a component, (uint16) array of length V
+% rX - values of each component of the minimizer, (real) array of length rV;
 %     the actual minimizer can be reconstructed with X = rX(Comp + 1)
 % cp_it - actual number of cut-pursuit iterations performed
 % Obj  - the values of the objective functional along iterations;

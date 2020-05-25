@@ -853,8 +853,6 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
 TPL void CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big, 
     index_t* first_vertex_big)
 {
-    if (rV_new == rV_big){ return 0; }
-
     index_t* first_vertex_bal = first_vertex; // make clear which one is which
     comp_t rV_dif = rV_new - rV_big;
     comp_t rV_ini = rV - rV_dif;
@@ -900,8 +898,6 @@ TPL void CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
         sizeof(index_t)*(rV + ONE));
     free(first_vertex_big);
     rV = rV_ini;
-
-    return activation;
 }
 
 TPL index_t CP::split()

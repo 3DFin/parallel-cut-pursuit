@@ -15,14 +15,13 @@
 #include <cstring>
 #include "mex.h"
 #include "../../include/cp_kmpp_d0_dist.hpp"
-#include "../../include/graph_tools.hpp"
 
 using namespace std;
 
-/* index_t must be able to represent twice the number of vertices plus one and
- * twice the number of edges plus one in the main graph;
+/* index_t must be able to represent the number of vertices and of (undirected)
+ * edges in the main graph;
  * comp_t must be able to represent the number of constant connected components
- * plus one in the reduced graph, as well as the dimension D */
+ * in the reduced graph */
 typedef uint32_t index_t;
 # define mxINDEX_CLASS mxUINT32_CLASS
 # define INDEX_CLASS_NAME "uint32"
@@ -160,7 +159,7 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     real_t GET_SCAL_OPT(cp_dif_tol, 1e-3);
     int GET_SCAL_OPT(cp_it_max, 10);
-    int GET_SCAL_OPT(K, 2);
+    comp_t GET_SCAL_OPT(K, 2);
     int GET_SCAL_OPT(split_iter_num, 2);
     int GET_SCAL_OPT(kmpp_init_num, 3);
     int GET_SCAL_OPT(kmpp_iter_num, 3);
