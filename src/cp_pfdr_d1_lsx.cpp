@@ -21,10 +21,9 @@
 using namespace std;
 
 TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const index_t* reverse_arc, size_t D,
-    const real_t* Y)
-    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices,
-        reverse_arc, D, D11), Y(Y)
+    const index_t* adj_vertices, size_t D, const real_t* Y)
+    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D, D11),
+      Y(Y)
 {
     if (numeric_limits<comp_t>::max() < D){
         cerr << "Cut-pursuit d1 loss simplex: comp_t must be able to represent"
@@ -189,7 +188,7 @@ TPL index_t CP_D1_LSX::split()
         real_t* rXv = rX + D*comp_assign[v];
         real_t* gradv = grad + D*v;
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_active(e)){
+            if (is_cut(e)){
                 index_t u = adj_vertices[e];
                 real_t* rXu = rX + D*comp_assign[u];
                 real_t* gradu = grad + D*u; 
@@ -225,6 +224,9 @@ TPL void CP_D1_LSX::split_component(comp_t rv,
      * against all alternative coordinates; an approximate solution is
      * searched with one alpha-expansion cycle  **/
 
+    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+    const index_t* comp_list_rv = comp_list + first_vertex[rv];
+
     /* find coordinate with maximum value */
     comp_t dmv = 0;
     real_t* rXv = rX + rv*D;
@@ -233,8 +235,8 @@ TPL void CP_D1_LSX::split_component(comp_t rv,
 
     /* initialize best ascent coordinate at the coordinate with maximum
      * value, corresponding to a null descent direction (1dmv - 1dmv) */
-    for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-        label_assign[comp_list[i]] = dmv;
+    for (index_t i = 0; i < comp_size; i++){
+        label_assign[comp_list_rv[i]] = dmv;
     }
 
     /* iterate over all D - 1 alternative ascent coordinates */
@@ -243,11 +245,11 @@ TPL void CP_D1_LSX::split_component(comp_t rv,
         comp_t d = d_alt == dmv ? 0 : d_alt;
 
         /* set the source/sink capacities */
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
             real_t* gradv = grad + v*D;
             /* unary cost for changing current dir_v to 1d - 1dmv */
-            maxflow->terminal_capacity(v) = gradv[d] - gradv[label_assign[v]];
+            maxflow->terminal_capacity(i) = gradv[d] - gradv[label_assign[v]];
         }
 
         /* set d1 edge capacities within each component;
@@ -258,10 +260,11 @@ TPL void CP_D1_LSX::split_component(comp_t rv,
          * more importantly max flows cannot be easily computed in parallel,
          * since the components would not be independent anymore;
          * we thus stick with the current heuristic for now */
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t u = comp_list[i];
+        index_t e_in_comp = 0;
+        for (index_t i = 0; i < comp_size; i++){
+            index_t u = comp_list_rv[i];
             for (index_t e = first_edge[u]; e < first_edge[u + 1]; e++){
-                if (!is_free(e)){ continue; }
+                if (!is_bind(e)){ continue; }
                 index_t v = adj_vertices[e];
                 /* horizontal and source/sink capacities are modified 
                  * according to Kolmogorov & Zabih (2004); in their
@@ -290,19 +293,18 @@ TPL void CP_D1_LSX::split_component(comp_t rv,
                     *(COOR_WEIGHTS_(dv) + COOR_WEIGHTS_(d));
                 /* D = E(1,1) = 0 is for changing both du and dv to d */
                 /* set weights in accordance with orientation u -> v */
-                maxflow->terminal_capacity(u) += C - A;
-                maxflow->terminal_capacity(v) -= C;
-                maxflow->set_edge_capacities(e, B + C - A, ZERO);
+                maxflow->terminal_capacity(i) += C - A;
+                maxflow->terminal_capacity(index_in_comp[v]) -= C;
+                maxflow->set_edge_capacities(e_in_comp++, B + C - A, ZERO);
             }
         }
 
         /* find min cut and update best ascent coordinates accordingly */
-        maxflow->maxflow(first_vertex[rv + 1] - first_vertex[rv],
-            comp_list + first_vertex[rv]);
+        maxflow->maxflow();
         
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
-            if (maxflow->is_sink(v)){ label_assign[v] = d; }
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
+            if (maxflow->is_sink(i)){ label_assign[v] = d; }
         }
     } // end for d_alt
 }

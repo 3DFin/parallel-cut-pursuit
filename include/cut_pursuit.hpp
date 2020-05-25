@@ -1,12 +1,6 @@
 /*=============================================================================
  * Base class for cut-pursuit algorithm
  * 
- * index_t must be able to represent twice the number of vertices in the main
- * graph plus one, as well as twice the number of edges in the main graph plus
- * one.
- * comp_t must be able to represent the number of constant connected 
- * components plus one and the number of reduced edges in the reduced graph.
- *
  * L. Landrieu, L. and G. Obozinski, Cut Pursuit: Fast Algorithms to Learn 
  * Piecewise Constant Functions on General Weighted Graphs, SIAM Journal on 
  * Imaging Sciences, 2017, 10, 1724-1766
@@ -33,23 +27,23 @@
 #include <limits>
 #include <iostream>
 #include "../include/omp_num_threads.hpp"
-#include "../include/parallel_maxflow.hpp"
+#include "../include/maxflow.hpp"
 
 /* flag an activated edge on residual capacity of its corresponding arcs */
 #define ACTIVE_EDGE ((real_t) -1.0) 
 #define PAR_SEP_EDGE ((real_t) -2.0) // for parallelization
 /* maximum number of components; no component can have this identifier */
-#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max() - 1)
+#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max())
 /* special values for merge step */
 #define CHAIN_ROOT MAX_NUM_COMP
 #define CHAIN_LEAF MAX_NUM_COMP
 
 /* real_t is the real numeric type, used for objective functional computation
  * and thus for edge weights and flow graph capacities;
- * index_t is an integer type, must be able to represent twice the number of
- * vertice plus one and the number of arcs plus one (twice the number of edges) * in the main graph;
- * comp_t is an integer type, must be able to represent the maximum number of
- * constant connected components in the reduced graph;
+ * index_t is an integer type able to hold the number of vertices and of edges
+ * in the main graph;
+ * comp_t is an integer type able to hold the maximum number of constant
+ * connected components in the reduced graph;
  * value_t is the type associated to the space to which the values belong, it
  * is usually real_t, and if multidimensional, this must be specified in the
  * parameter D (e.g. for R^3, specify value_t = real_t and D = 3) */
@@ -62,8 +56,8 @@ public:
 
     /* mandatory arguments constitutes the main graph structure, according to a
      * two-ways forward-star graph structure, see corresponding members */
-    Cp(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices, const index_t* reverse_arc, size_t D = 1);
+    Cp(index_t V, index_t E, const index_t* first_edge,
+        const index_t* adj_vertces, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -139,9 +133,8 @@ protected:
 
     const index_t V, E; // number of vertices, of edges
 
-    /**  two-ways forward-star graph representation  **/
-    /* simple forward-star representation:
-     * - edges (unoriented arc) are numeroted so that all vertices originating
+    /**  forward-star graph representation  **/
+    /* - edges (unoriented arc) are numeroted so that all vertices originating
      * from a same vertex are consecutive;
      * - for each vertex, 'first_edge' indicates the first edge starting
      * from the vertex (or, if there are none, starting from the next vertex);
@@ -149,14 +142,7 @@ protected:
      * value is always the total number of edges E
      * - for each edge, 'adj_vertices' indicates its ending vertex */
     const index_t *first_edge, *adj_vertices; 
-    /* now, there is need to scan all edges involving a given vertex in linear
-     * time, for computing connected components and reduced connectivity;
-     * reverse edges are also kept in a forward-star representation as above */
-    const index_t *first_rev_arc, *reverse_arc;
     
-    
-    // const index_t *first_edge_r, *adj_vertices_r;
-
     const real_t *edge_weights;
     real_t homo_edge_weight;
 
@@ -168,7 +154,7 @@ protected:
     value_t *rX, *last_rX; // reduced iterate (values of the components)
     index_t rE; // number of reduced edges
     /* assignment of each vertex to a component;
-     * last_ is used both for identifying saturated components
+     * last_[rV|rX] are used both for identifying saturated components
      * and computing iterate evolution */
     comp_t* comp_assign, *last_comp_assign;
     /* list the vertices of each components:
@@ -177,6 +163,9 @@ protected:
      * - for each component, 'first_vertex' indicates the index of its first
      * vertex in 'comp_list' */
     index_t *comp_list, *first_vertex;
+    /* reverse mapping of comp list: index of a given vertex within its
+     * components (useful for working within components in parallel) */
+    index_t *index_in_comp;
     /* components saturation */
     bool* is_saturated;
     comp_t saturated_comp; // number of saturated components
@@ -184,7 +173,7 @@ protected:
     comp_t* reduced_edges; // array with pair of vertices
     real_t* reduced_edge_weights;
 
-    /** parameters **/
+    /**  parameters  **/
 
     real_t dif_tol, eps; // eps gives a characteristic precision 
     /* with nonzero verbose information on the process will be printed;
@@ -195,44 +184,23 @@ protected:
     /* for stopping criterion or component saturation */
     bool monitor_evolution;
 
-    /**  methods for manipulating nodes and arcs in the directed graph  **/
-
-    index_t arc_to_edge(index_t a); // get corresponding edge identifier
-
-    bool is_active(index_t a); // check if arc a is active
-
-    bool is_cut(index_t e); // check if edge e is cut (active)
-
-    bool is_par_sep(index_t e); // check if edge e is a parallel cut separation
-
-    bool is_bind(index_t e); // check if edge e is binding (inactive)
-
-    void cut(index_t e); // flag a cut (active) edge
-
-    void set_par_sep(index_t e); // flag a parallel cut separation
-
-    void bind(index_t e); // flag an binding (inactive) edge
-
-    void set_edge_capacities(index_t e, real_t cap_uv, real_t cap_vu);
-
     /**  split components with graph cuts and activate edges, in parallel  **/
 
-    /* split large components for balancing parallel workload:
-     * components are split only by adding elements in the first_vertex list;
-     * comp_list remains unchanged; new component created this way will be 
-     * coherent, as the component list is computed with breadth-first search;
-     * rV_new is the number of components resulting from such split;
-     * rV_big is the number of large original components split this way;
-     * first_vertex_big holds the first vertices of components split this way;
-     * return the number of useful parallel threads */
-    int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
-        index_t*& first_vertex_big);
+    virtual index_t split();
 
-    /* revert the above process;
+    virtual void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
+        = 0;
+
+    /* methods for checking and setting edge status */
+    bool is_cut(index_t e); // check if edge e is cut (active)
+    bool is_bind(index_t e); // check if edge e is binding (inactive)
+    bool is_par_sep(index_t e); // check if edge e is a parallel cut separation
+    void cut(index_t e); // flag a cut (active) edge
+    void bind(index_t e); // flag a binding (inactive) edge
+
+    /* large components are split for balancing parallel workload;
      * parallel separation edges must be removed or activated */
     virtual index_t remove_parallel_separations(comp_t rV_new) = 0;
-    index_t revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
-        index_t* first_vertex_big); // return the number of activations
 
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
@@ -241,11 +209,6 @@ protected:
 
     /* prefered alternative value for each vertex */
     comp_t*& label_assign = comp_assign; // reuse the same storage
-
-    virtual void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
-        = 0;
-
-    virtual index_t split();
 
     /**  compute reduced values  **/
 
@@ -329,7 +292,6 @@ private:
     enum Edge_status : char // requires C++11 to ensure 1 byte
         {BIND, CUT, PAR_SEP};
     Edge_status* edge_status; // edge activation
-    real_t* arc_status; 
 
     /* parameters */
     int it_max; // maximum number of cut-pursuit iterations
@@ -354,21 +316,30 @@ private:
     /* initialize with components specified in 'comp_assign' */
     void assign_connected_components();
 
-    /* initialize with only one component and reduced graph accordingly 
-     * NOTA: reverse edges are allocated and computed here */
+    /* initialize with only one component and reduced graph accordingly */
     void single_connected_component();
 
     /* update connected components and count saturated ones;
-     * NOTA: reverse edges are allocated and computed here
      * NOTA: saturation per component is not updated until merge step */
     void compute_connected_components();
 
-    /* allocate and compute reduced graph structure
-     * NOTA: reverse edges are used and deallocated here */
+    /* allocate and compute reduced graph structure */
     void compute_reduced_graph();
 
-    /**  type resolution for base template class members  **/
-    using Flow_node = typename Maxflow<index_t, real_t>::Flow_node;
+    /* split large components for balancing parallel workload:
+     * components are split only by adding elements in the first_vertex list;
+     * comp_list remains unchanged; new component created this way will be 
+     * coherent, as the component list is computed with breadth-first search;
+     * rV_new is the number of components resulting from such split;
+     * rV_big is the number of large original components split this way;
+     * first_vertex_big holds the first vertices of components split this way;
+     * return the number of useful parallel threads */
+    int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
+        index_t*& first_vertex_big);
+
+    /* revert the above process */
+    void revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
+        index_t* first_vertex_big);
 };
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
@@ -376,32 +347,7 @@ private:
 #define CP Cp<real_t, index_t, comp_t, value_t>
 
 /***  inline methods in relation with main graph  ***/
-
-TPL inline index_t CP::arc_to_edge(index_t a)
-{ return a > E ? reverse_arc[a] : a; }
-
-TPL inline bool CP::is_active(index_t a)
-{ return is_cut(arc_to_edge(a)); }
-
 TPL inline bool CP::is_cut(index_t e)
-{ return arc_status[e] == ACTIVE_EDGE; }
-
-TPL inline bool CP::is_par_sep(index_t e)
-{ return arc_status[e] == PAR_SEP_EDGE; }
-
-TPL inline bool CP::is_bind(index_t e)
-{ return arc_status[e] >= (real_t) 0.0; }
-
-TPL inline void CP::cut(index_t e)
-{ arc_status[e] = arc_status[reverse_arc[e]] = ACTIVE_EDGE; }
-
-TPL inline void CP::set_par_sep(index_t e)
-{ arc_status[e] = arc_status[reverse_arc[e]] = PAR_SEP_EDGE; }
-
-TPL inline void CP::bind(index_t e)
-{ arc_status[e] = arc_status[reverse_arc[e]] = (real_t) 0.0; }
-
-/* TPL inline bool CP::is_cut(index_t e)
 { return edge_status[e] == CUT; }
 
 TPL inline bool CP::is_par_sep(index_t e)
@@ -413,11 +359,8 @@ TPL inline bool CP::is_bind(index_t e)
 TPL inline void CP::cut(index_t e)
 { edge_status[e] = CUT; }
 
-TPL inline void CP::par_sep(index_t e)
-{ edge_status[e] = PAR_SEP; }
-
 TPL inline void CP::bind(index_t e)
-{ arc_status[e] = BIND; } */
+{ edge_status[e] = BIND; }
 
 TPL inline comp_t CP::get_merge_chain_root(comp_t rv)
 {
@@ -431,6 +374,9 @@ TPL inline int CP::compute_num_threads(uintmax_t num_ops,
     int num_threads = ::compute_num_threads(num_ops, max_threads);
     return num_threads < max_num_threads ? num_threads : max_num_threads;
 }
+
+TPL inline uintmax_t CP::maxflow_complexity()
+{ return (uintmax_t) 2*E + V; } // just for a graph cut; heuristic
 
 #undef TPL
 #undef CP

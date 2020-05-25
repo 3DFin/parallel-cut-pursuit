@@ -44,8 +44,7 @@ public:
 
     /* only creates BK graph structure and assign Y, D */
     Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
-        const index_t* adj_vertices, const index_t* reverse_arc,
-        const real_t* Y, size_t D = 1);
+        const index_t* adj_vertices, const real_t* Y, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -179,43 +178,9 @@ private:
     using Cp<real_t, index_t, comp_t>::label_assign;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
+    using Cp<real_t, index_t, comp_t>::index_in_comp;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::verbose;
     using Cp<real_t, index_t, comp_t>::malloc_check;
 };
-
-#define TPL template <typename real_t, typename index_t, typename comp_t>
-#define CP_D0_DIST Cp_d0_dist<real_t, index_t, comp_t>
-
-TPL inline real_t CP_D0_DIST::distance(const real_t* Yv, const real_t* Xv)
-{
-    real_t dist = 0.0;
-    if (loss == QUADRATIC){
-        if (coor_weights){
-            for (size_t d = 0; d < D; d++){
-                dist += coor_weights[d]*(Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
-            }
-        }else{
-            for (size_t d = 0; d < D; d++){
-                dist += (Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
-            }
-        }
-    }else{ // smoothed Kullback-Leibler; just compute cross-entropy here
-        const real_t c = ((real_t) 1.0 - loss);
-        const real_t q = loss/D;
-        if (coor_weights){
-            for (size_t d = 0; d < D; d++){
-                dist -= coor_weights[d]*(q + c*Yv[d])*log(q + c*Xv[d]);
-            }
-        }else{
-            for (size_t d = 0; d < D; d++){
-                dist -= (q + c*Yv[d])*log(q + c*Xv[d]);
-            }
-        }
-    }
-    return dist;
-}
-
-#undef TPL 
-#undef CP_D0_DIST

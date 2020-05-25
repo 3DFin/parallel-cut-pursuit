@@ -16,10 +16,8 @@
 using namespace std;
 
 TPL CP_D0_DIST::Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const index_t* reverse_arc, const real_t* Y,
-    size_t D)
-    : Cp_d0<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices,
-        reverse_arc, D), Y(Y)
+    const index_t* adj_vertices, const real_t* Y, size_t D)
+    : Cp_d0<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D), Y(Y)
 {
     vert_weights = coor_weights = nullptr;
     comp_weights = nullptr; 
@@ -32,6 +30,35 @@ TPL CP_D0_DIST::Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
 }
 
 TPL CP_D0_DIST::~Cp_d0_dist(){ free(comp_weights); }
+
+TPL inline real_t CP_D0_DIST::distance(const real_t* Yv, const real_t* Xv)
+{
+    real_t dist = 0.0;
+    if (loss == QUADRATIC){
+        if (coor_weights){
+            for (size_t d = 0; d < D; d++){
+                dist += coor_weights[d]*(Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
+            }
+        }else{
+            for (size_t d = 0; d < D; d++){
+                dist += (Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
+            }
+        }
+    }else{ // smoothed Kullback-Leibler; just compute cross-entropy here
+        const real_t c = ((real_t) 1.0 - loss);
+        const real_t q = loss/D;
+        if (coor_weights){
+            for (size_t d = 0; d < D; d++){
+                dist -= coor_weights[d]*(q + c*Yv[d])*log(q + c*Xv[d]);
+            }
+        }else{
+            for (size_t d = 0; d < D; d++){
+                dist -= (q + c*Yv[d])*log(q + c*Xv[d]);
+            }
+        }
+    }
+    return dist;
+}
 
 TPL void CP_D0_DIST::set_loss(real_t loss, const real_t* Y,
     const real_t* vert_weights, const real_t* coor_weights)
@@ -108,6 +135,7 @@ TPL uintmax_t CP_D0_DIST::split_values_complexity()
 TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
 {
     index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+    const index_t* comp_list_rv = comp_list + first_vertex[rv];
 
     /* distance map and random device for k-means++ */
     real_t* nearest_dist = (real_t*) malloc_check(sizeof(real_t)*comp_size);
@@ -133,7 +161,7 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
                 rand_i = unif_distr(rand_gen);
             }else{
                 for (index_t i = 0; i < comp_size; i++){
-                    index_t v = comp_list[first_vertex[rv] + i];
+                    index_t v = comp_list_rv[i];
                     nearest_dist[i] = INF_REAL;
                     for (comp_t l = 0; l < k; l++){
                         real_t dist = distance(centroids + D*l, Y + D*v);
@@ -146,7 +174,7 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
                     nearest_dist + comp_size);
                 rand_i = dist_distr(rand_gen);
             }
-            index_t rand_v = comp_list[first_vertex[rv] + rand_i];
+            index_t rand_v = comp_list_rv[rand_i];
             const real_t* Yv = Y + D*rand_v;
             real_t* Ck = centroids + D*k;
             for (size_t d = 0; d < D; d++){ Ck[d] = Yv[d]; }
@@ -156,8 +184,8 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
         /**  k-means  **/
         for (int kmpp_iter = 0; kmpp_iter < kmpp_iter_num; kmpp_iter++){
             /* assign clusters to centroids */
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
                 real_t min_dist = INF_REAL;
                 for (comp_t k = 0; k < K; k++){
                     real_t dist = distance(centroids + D*k, Y + D*v);
@@ -173,8 +201,8 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
 
         /**  compare resulting sum of distances and keep the best one  **/
         real_t sum_dist = ZERO;
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
             comp_t k = label_assign[v];
             sum_dist += VERT_WEIGHTS_(v)*distance(centroids + D*k, Y + D*v);
         }
@@ -182,7 +210,7 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
             min_sum_dist = sum_dist;
             for (size_t dk = 0; dk < D*K; dk++){ altX[dk] = centroids[dk]; }
             for (index_t i = 0; i < comp_size; i++){
-                index_t v = comp_list[first_vertex[rv] + i];
+                index_t v = comp_list_rv[i];
                 best_assign[i] = label_assign[v];
             }
         }
@@ -195,7 +223,7 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
 
     /**  copy best label assignment  **/
     for (index_t i = 0; i < comp_size; i++){
-        index_t v = comp_list[first_vertex[rv] + i];
+        index_t v = comp_list_rv[i];
         label_assign[v] = best_assign[i];
     }
 

@@ -43,7 +43,7 @@ class Cp_d0 : public Cp<real_t, index_t, comp_t, value_t>
 {
 public:
     Cp_d0(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices, const index_t* reverse_arc, size_t D = 1);
+        const index_t* adj_vertices, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -161,9 +161,9 @@ protected:
     using Cp<real_t, index_t, comp_t>::label_assign;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
+    using Cp<real_t, index_t, comp_t>::index_in_comp;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::reduced_edges;
-    using Cp<real_t, index_t, comp_t>::saturation;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
     using Cp<real_t, index_t, comp_t>::merge_components;
@@ -182,12 +182,9 @@ private:
     /**  type resolution for base template class members  **/
     using Cp<real_t, index_t, comp_t>::maxflow_complexity;
     using Cp<real_t, index_t, comp_t>::get_parallel_flow_graph;
-    using Cp<real_t, index_t, comp_t>::is_active;
+    using Cp<real_t, index_t, comp_t>::is_cut;
     using Cp<real_t, index_t, comp_t>::is_par_sep;
-    using Cp<real_t, index_t, comp_t>::is_free;
-    using Cp<real_t, index_t, comp_t>::set_active;
-    using Cp<real_t, index_t, comp_t>::set_inactive;
-    using Cp<real_t, index_t, comp_t>::is_sink;
-    using Cp<real_t, index_t, comp_t>::set_edge_capacities;
-    using Cp<real_t, index_t, comp_t>::term_capacities;
+    using Cp<real_t, index_t, comp_t>::is_bind;
+    using Cp<real_t, index_t, comp_t>::cut;
+    using Cp<real_t, index_t, comp_t>::bind;
 };

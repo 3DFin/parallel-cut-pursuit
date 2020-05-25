@@ -4,8 +4,9 @@
 #include <algorithm>
 #include "../include/cut_pursuit.hpp"
 
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
+#define ZERO ((real_t) 0.0) // avoid conversions
+#define ONE ((size_t) 1) // avoid overflows
+#define TWO ((size_t) 2) // avoid overflows
 #define INF_REAL (std::numeric_limits<real_t>::infinity())
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 /* specific flags */
@@ -13,8 +14,10 @@
 #define ASSIGNED_ROOT ((comp_t) 0)
 #define ASSIGNED ((comp_t) 1)
 #define NOT_SATURATED ((comp_t) 0)
-/* use maximum number of arcs; no edge can have this identifier */
+/* use maximum number of edges; no edge can have this identifier */
 #define NO_EDGE (std::numeric_limits<index_t>::max())
+#define NOT_ISOLATED NO_EDGE
+#define ISOLATED ((index_t) 0)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
     typename value_t>
@@ -23,18 +26,15 @@
 using namespace std; 
 
 TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const index_t* reverse_arc, size_t D)
-    : V(V), E(E), first_edge(first_edge), adj_vertices(adj_vertices),
-      first_rev_arc(first_edge + V), reverse_arc(reverse_arc), D(D)
+    const index_t* adj_vertices, size_t D)
+    : V(V), E(E), first_edge(first_edge), adj_vertices(adj_vertices), D(D)
 {
     /* real type with infinity is handy */
     static_assert(numeric_limits<real_t>::has_infinity,
         "Cut-pursuit: real_t must be able to represent infinity.");
 
     /* edge activation */
-    // edge_status = (Edge_status*) malloc_check(sizeof(real_t)*E);
-    // for (index_t e = 0; e < E; e++){ bind(e); }
-    arc_status = (real_t*) malloc_check(sizeof(real_t)*2*E);
+    edge_status = (Edge_status*) malloc_check(sizeof(Edge_status)*E);
     for (index_t e = 0; e < E; e++){ bind(e); }
 
     /* reduced graph **/
@@ -43,9 +43,9 @@ TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
     saturated_comp = 0;
     saturated_vert = 0;
     edge_weights = nullptr;
-    homo_edge_weight = ONE;
+    homo_edge_weight = 1.0;
     comp_assign = last_comp_assign = nullptr;
-    comp_list = first_vertex = nullptr;
+    comp_list = first_vertex = index_in_comp = nullptr;
     reduced_edge_weights = nullptr;
     reduced_edges = nullptr;
     elapsed_time = nullptr;
@@ -64,9 +64,9 @@ TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
 
 TPL CP::~Cp()
 {
-    free(arc_status);
+    free(edge_status);
     free(comp_assign); free(last_comp_assign);
-    free(first_vertex); free(comp_list);
+    free(first_vertex); free(comp_list); free(index_in_comp);
     free(is_saturated);
     free(reduced_edges); free(reduced_edge_weights);
     free(rX); free(last_rX); 
@@ -278,7 +278,7 @@ TPL void CP::single_connected_component()
 
         /* build list of reverse edges */
         index_t* first_edge_r = (index_t*)
-            malloc_check(sizeof(index_t)*(V + 1));
+            malloc_check(sizeof(index_t)*(V + ONE));
         /* count reverse edges for each vertex (index shift by one) */
         for (index_t v = 0; v <= V; v++){ first_edge_r[v] = 0; }
         for (index_t e = 0; e < E; e++){ first_edge_r[adj_vertices[e] + 1]++; }
@@ -347,9 +347,9 @@ TPL void CP::assign_connected_components()
 
     /* translate 'comp_assign' into dual representation 'comp_list' */
     free(first_vertex);
-    first_vertex = (index_t*) malloc_check(sizeof(index_t)*(rV + 1));
-    for (comp_t rv = 0; rv < rV + 1; rv++){ first_vertex[rv] = 0; }
-    for (index_t v = 0; v < V; v++){ first_vertex[comp_assign[v] + 1]++; }
+    first_vertex = (index_t*) malloc_check(sizeof(index_t)*(rV + ONE));
+    for (comp_t rv = 0; rv < rV + ONE; rv++){ first_vertex[rv] = 0; }
+    for (index_t v = 0; v < V; v++){ first_vertex[comp_assign[v] + ONE]++; }
     for (comp_t rv = 1; rv < rV - 1; rv++){
         first_vertex[rv + 1] += first_vertex[rv];
     }
@@ -387,7 +387,7 @@ TPL void CP::compute_connected_components()
     /* there is need to scan all edges involving a given vertex in linear time,
      * so, we create the list of reverse edges within each component; to
      * facilitate this, we keep the index of each vertex within components */
-    index_t* index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
+    index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
 
     #pragma omp parallel for schedule(dynamic) NUM_THREADS(2*E, rV) \
         reduction(+:tmp_rV, saturated_comp_par, saturated_vert_par)
@@ -412,7 +412,7 @@ TPL void CP::compute_connected_components()
         /**  build list of binding reverse edges  **/
         const index_t* comp_list_rv = comp_list + first_vertex[rv];
         index_t* first_edge_r = (index_t*)
-            malloc_check(sizeof(index_t)*(comp_size + 1));
+            malloc_check(sizeof(index_t)*(comp_size + ONE));
         /* set index of each vertex in the component */
         for (index_t i = 0; i < comp_size; i++){
             index_in_comp[comp_list_rv[i]] = i;
@@ -423,7 +423,7 @@ TPL void CP::compute_connected_components()
             index_t v = comp_list_rv[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_bind(e)){ /* keep only binding edges */
-                    first_edge_r[index_in_comp[adj_vertices[e]] + 1]++;
+                    first_edge_r[index_in_comp[adj_vertices[e]] + ONE]++;
                 }
             }
         }
@@ -484,40 +484,12 @@ TPL void CP::compute_connected_components()
                     }
                     e++;
                 }
-
-                #if 0
-                index_t e = first_edge[v];
-                index_t l = index_in_comp[v];
-                bool forward_edge = true;
-                while (true){
-                    index_t w;
-                    if (forward_edges){
-                        if (e == first_edge[v + 1]){
-                            e = first_edge_r[l];
-                            forward_edges = false;
-                        }else if (is_bind(e)){
-                            w = adj_vertices[e];
-                        }else{
-                            e++; continue;
-                        }
-                    }
-                    if (!forward_edges){
-                        if (e == first_edge_r[l + 1]){ break; }
-                        w = adj_vertices_r[e];
-                    }
-                    if (comp_assign[w] == NOT_ASSIGNED){
-                        comp_assign[w] = ASSIGNED;
-                        tmp_comp_list[j++] = w;
-                    }
-                    e++;
-                }
-                #endif
             } /* the current connected component is complete */
             tmp_rV++;
         }
         free(first_edge_r); free(adj_vertices_r);
     }
-    free(index_in_comp);
+    free(index_in_comp); index_in_comp = nullptr;
     saturated_comp = saturated_comp_par;
     saturated_vert = saturated_vert_par;
 
@@ -535,7 +507,7 @@ TPL void CP::compute_connected_components()
 
     rV = tmp_rV;
     free(first_vertex);
-    first_vertex = (index_t*) malloc_check(sizeof(index_t)*(rV + 1));
+    first_vertex = (index_t*) malloc_check(sizeof(index_t)*(rV + ONE));
 
     #ifdef _OPENMP /* sort components by decreasing size for parallelization */
     if (max_num_threads > 1){
@@ -616,21 +588,31 @@ TPL void CP::compute_reduced_graph()
         return; 
     }
 
+    /* to avoid allocating rV*(rV - 1)/2, we work component by component;
+     * when dealing with component ru, reduced_edge_to[rv] is the number of
+     * the reduced edge ru -> rv, or NO_EDGE if the edge is not created yet */
+    index_t* reduced_edge_to = (index_t*) malloc_check(sizeof(index_t)*rV);
+    /* this will also be used to indicate isolated vertices */
+    index_t* is_isolated = reduced_edge_to;
+    for (comp_t rv = 0; rv < rV; rv++){ is_isolated[rv] = ISOLATED; }
+
     /**  get all active (cut) edges linking a component to another  **/
     index_t* first_active_edge = (index_t*)
-        malloc_check(sizeof(index_t)*(rV + 1));
+        malloc_check(sizeof(index_t)*(rV + ONE));
     /* count the number of such edges for each component (ind shift by one) */
     for (comp_t rv = 0; rv <= rV; rv++){ first_active_edge[rv] = 0; }
     for (index_t v = 0; v < V; v++){
         comp_t ru = comp_assign[v];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_cut(e)){ 
+            if (is_cut(e) && EDGE_WEIGHTS_(e) > ZERO){ 
                 comp_t rv = comp_assign[adj_vertices[e]];
                 if (ru < rv){ // count only undirected edges
                     first_active_edge[ru + 1]++;
                 }else if (rv < ru){
                     first_active_edge[rv + 1]++;
                 }
+                /* a nonzero edge involving ru and rv exists */
+                is_isolated[ru] = is_isolated[rv] = NOT_ISOLATED;
             }
         }
     }
@@ -647,7 +629,7 @@ TPL void CP::compute_reduced_graph()
     for (index_t v = 0; v < V; v++){
         comp_t ru = comp_assign[v];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_cut(e)){
+            if (is_cut(e) && EDGE_WEIGHTS_(e) > ZERO){
                 comp_t rv = comp_assign[adj_vertices[e]];
                 index_t ae = NO_EDGE;
                 if (ru < rv){ // count only undirected edges
@@ -669,113 +651,70 @@ TPL void CP::compute_reduced_graph()
     }
     first_active_edge[0] = 0;
 
-    /* to avoid allocating rV*(rV - 1)/2, we work component by component;
-     * when dealing with component ru, reduced_edge_to[rv] is the number of
-     * the reduced edge ru -> rv, or NO_EDGE if the edge is not created yet */
-    index_t* reduced_edge_to = (index_t*) malloc_check(sizeof(index_t)*rV);
-    for (comp_t rv = 0; rv < rV; rv++){ reduced_edge_to[rv] = NO_EDGE; }
-
     /* temporary buffer size */
-    index_t rEtmp = rE > rV * (double) E/V ? rE : rV * (double) E/V;
+    size_t bufsize = rE > rV * (double) E/V ? rE : rV * (double) E/V;
 
-    reduced_edges = (comp_t*) malloc_check(sizeof(comp_t)*2*rEtmp);
-    reduced_edge_weights = (real_t*) malloc_check(sizeof(real_t)*rEtmp);
+    reduced_edges = (comp_t*) malloc_check(sizeof(comp_t)*2*bufsize);
+    reduced_edge_weights = (real_t*) malloc_check(sizeof(real_t)*bufsize);
 
     rE = 0; // current number of reduced edges
     index_t last_rE = 0; // keep track of number of processed edges
     for (comp_t ru = 0; ru < rV; ru++){ /* iterate over the components */
-        bool isolated = true; // flag isolated components
 
-        #if 0
+        if (is_isolated[ru] == ISOLATED){ /* this is only useful for solving
+            * reduced problems with certain implementations where isolated
+            * vertices must be linked to themselves */
+            if (rE == bufsize){ // reach buffer size
+                bufsize += bufsize/2 + 1;
+                reduced_edges = (comp_t*) realloc_check(reduced_edges,
+                    sizeof(comp_t)*2*bufsize);
+                reduced_edge_weights = (real_t*) realloc_check(
+                    reduced_edge_weights, sizeof(real_t)*bufsize);
+            }
+            reduced_edges[TWO*rE] = reduced_edges[TWO*rE + 1] = ru;
+            reduced_edge_weights[rE++] = eps;
+            continue;
+        }
+
         for (index_t ae = first_active_edge[ru];
              ae < first_active_edge[ru + 1]; ae++){
             real_t edge_weight = edge_weights ? active_edge_weights[ae]
                                               : homo_edge_weight;
             if (edge_weight == ZERO){ continue; }
-            isolated = false; // a nonzero edge involving ru exists
             comp_t rv = adj_components[ae];
             index_t re = reduced_edge_to[rv];
             if (re == NO_EDGE){ // a new edge must be created
-                if (rE == rEtmp){ // reach buffer size
-                    rEtmp += rEtmp;
+                if (rE == bufsize){ // reach buffer size
+                    bufsize += bufsize/2 + 1;
                     reduced_edges = (comp_t*) realloc_check(reduced_edges,
-                        sizeof(comp_t)*2*rEtmp);
+                        sizeof(comp_t)*2*bufsize);
                     reduced_edge_weights = (real_t*) realloc_check(
-                        reduced_edge_weights, sizeof(real_t)*rEtmp);
+                        reduced_edge_weights, sizeof(real_t)*bufsize);
                 }
-                reduced_edges[2*rE] = ru;
-                reduced_edges[2*rE + 1] = rv;
+                reduced_edges[TWO*rE] = ru;
+                reduced_edges[TWO*rE + 1] = rv;
                 reduced_edge_weights[rE] = edge_weight;
                 reduced_edge_to[rv] = rE++;
             }else{ /* edge already exists */
                 reduced_edge_weights[re] += edge_weight;
             }
         }
-        #endif
-        
-        // #if 0
-        /* run along the component ru */
-        for (index_t i = first_vertex[ru]; i < first_vertex[ru + 1]; i++){
-            index_t v = comp_list[i];
-            for (index_t a = first_edge[v]; a < first_rev_arc[v + 1]; a++){
-                if (a == first_edge[v + 1]){ // switch to reverse edges
-                    a = first_rev_arc[v];
-                    if (a == first_rev_arc[v + 1]){ break; }
-                }
-                if (!is_active(a)){ continue; }
-                real_t edge_weight = EDGE_WEIGHTS_(arc_to_edge(a));
-                if (edge_weight == ZERO){ continue; }
-                isolated = false; // a nonzero edge involving ru exists
-                comp_t rv = comp_assign[adj_vertices[a]];
-                if (rv < ru){ continue; } // count only undirected edges
-                index_t re = reduced_edge_to[rv];
-                if (re == NO_EDGE){ // a new edge must be created
-                    if (rE == rEtmp){ // reach buffer size
-                        rEtmp += rEtmp;
-                        reduced_edges = (comp_t*) realloc_check(reduced_edges,
-                            sizeof(comp_t)*2*rEtmp);
-                        reduced_edge_weights = (real_t*) realloc_check(
-                            reduced_edge_weights, sizeof(real_t)*rEtmp);
-                    }
-                    reduced_edges[2*rE] = ru;
-                    reduced_edges[2*rE + 1] = rv;
-                    reduced_edge_weights[rE] = edge_weight;
-                    reduced_edge_to[rv] = rE++;
-                }else{ /* edge already exists */
-                    reduced_edge_weights[re] += edge_weight;
-                }
-            }
-        }
-        // #endif
 
-        if (isolated){ /* this is only useful for solving reduced problems
-        * with certain implementations where isolated vertices must be linked
-        * to themselves */
-            if (rE == rEtmp){ // reach buffer size
-                rEtmp += rEtmp;
-                reduced_edges = (comp_t*) realloc_check(reduced_edges,
-                    sizeof(comp_t)*2*rEtmp);
-                reduced_edge_weights = (real_t*) realloc_check(
-                    reduced_edge_weights, sizeof(real_t)*rEtmp);
-            }
-            reduced_edges[2*rE] = reduced_edges[2*rE + 1] = ru;
-            reduced_edge_weights[rE++] = eps;
-        }else{ /* reset reduced_edge_to */
-            for (; last_rE < rE; last_rE++){
-                reduced_edge_to[reduced_edges[2*last_rE + 1]] = NO_EDGE;
-            }
+        /* reset reduced_edge_to */
+        for (; last_rE < rE; last_rE++){
+            reduced_edge_to[reduced_edges[TWO*last_rE + 1]] = NO_EDGE;
         }
 
     }
 
-    free(reduced_edge_to);
-    free(first_active_edge);
     free(adj_components);
     free(active_edge_weights);
+    free(first_active_edge);
+    free(reduced_edge_to);
 
-    if (rEtmp > rE){
+    if (bufsize > rE){
         reduced_edges = (comp_t*) realloc_check(reduced_edges,
-            sizeof(comp_t)*2*rE);
+            sizeof(comp_t)*TWO*rE);
         reduced_edge_weights = (real_t*) realloc_check(reduced_edge_weights,
             sizeof(real_t)*rE);
     }
@@ -802,9 +741,6 @@ TPL void CP::initialize()
     merge();
 }
 
-TPL uintmax_t CP::maxflow_complexity()
-{ return (uintmax_t) 2*E + V; } // just for a graph cut; heuristic
-
 TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
         index_t*& first_vertex_big)
 {
@@ -828,17 +764,18 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     }
 
     if (rV_new == rV_big){ return num_thrds; }
+    comp_t rV_dif = rV_new - rV_big;
 
-    if ((index_t) rV + rV_new - rV_big > MAX_NUM_COMP){
+    if ((index_t) rV + rV_dif > MAX_NUM_COMP){
         cerr << "Cut-pursuit: number of balanced components (" <<
-            (index_t) rV + rV_new - rV_big << ") greater "
+            (index_t) rV + rV_dif << ") greater "
             << "than can be represented by comp_t (" << MAX_NUM_COMP << ")"
             << endl;
         exit(EXIT_FAILURE);
     }
 
     /**  split big components and create balanced component list  **/
-    comp_t rV_bal = rV + rV_new - rV_big;
+    comp_t rV_bal = rV + rV_dif;
     index_t* first_vertex_bal = (index_t*) malloc_check(sizeof(index_t)*
         (rV_bal + 1));
     comp_t rv_new = 0;
@@ -855,7 +792,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     }
     /* add the small components */
     for (comp_t rv = rV_big; rv <= rV; rv++){
-        first_vertex_bal[rv + rV_new - rV_big] = first_vertex[rv];
+        first_vertex_bal[rv + rV_dif] = first_vertex[rv];
     }
 
     /**  set parallel cut separation on edges between new components  **/
@@ -876,7 +813,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
             index_t v = comp_list[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_bind(e) && rv_new != comp_assign[adj_vertices[e]]){
-                    set_par_sep(e);
+                    edge_status[e] = PAR_SEP;
                 }
             }
         }
@@ -888,15 +825,15 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     /* small components; in-place, start by the end */
     for (comp_t rv = rV - 1; rv >= rV_big; rv--){ // rVbig > 0
         value_t* rXv = rX + D*rv;
-        value_t* rXv_bal = rX + D*(rv + rV_new - rV_big);
+        value_t* rXv_bal = rX + D*(rv + rV_dif);
         for (size_t d = 0; d < D; d++){ rXv_bal[d] = rXv[d]; }
-        is_saturated[rv + rV_new - rV_big] = is_saturated[rv];
+        is_saturated[rv + rV_dif] = is_saturated[rv];
     }
     /* big components; in-place, slightly more complicated */
     rv_new = rV_new - 1;
     for (comp_t rv = rV_big; rv --> 0; ){ // nice trick for unsigned comp_t
         value_t* rXv = rX + D*rv;
-        while (first_vertex_bal[rv_new] > first_vertex[rv]){
+        while (rv_new != 0 && first_vertex_bal[rv_new] >= first_vertex[rv]){
             value_t* rXv_bal = rX + D*rv_new;
             for (size_t d = 0; d < D; d++){ rXv_bal[d] = rXv[d]; }
             is_saturated[rv_new] = is_saturated[rv];
@@ -913,15 +850,14 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     return num_thrds;
 }
 
-TPL index_t CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big, 
+TPL void CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big, 
     index_t* first_vertex_big)
 {
     if (rV_new == rV_big){ return 0; }
 
-    index_t activation = remove_parallel_separations(rV_new);
-
     index_t* first_vertex_bal = first_vertex; // make clear which one is which
-    comp_t rV_ini = rV - rV_new + rV_big;
+    comp_t rV_dif = rV_new - rV_big;
+    comp_t rV_ini = rV - rV_dif;
 
     /**  remove duplicated component values and aggregate saturation **/
     /* big components */
@@ -936,7 +872,7 @@ TPL index_t CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
          * has been cut, the original large component should not be */
         bool saturation = true;
         while (first_vertex_bal[rv_new] < first_vertex_big[rv + 1]){
-            if (!is_saturated[rv_new]){ saturation = false; }
+            saturation = saturation && is_saturated[rv_new];
             rv_new++;
         }
         is_saturated[rv] = saturation;
@@ -944,9 +880,9 @@ TPL index_t CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
     /* small components */
     for (comp_t rv = rV_big; rv < rV_ini; rv++){
         value_t* rXv = rX + D*rv;
-        value_t* rXv_bal = rX + D*(rv + rV_new - rV_big);
+        value_t* rXv_bal = rX + D*(rv + rV_dif);
         for (size_t d = 0; d < D; d++){ rXv[d] = rXv_bal[d]; }
-        is_saturated[rv] = is_saturated[rv + rV_new - rV_big];
+        is_saturated[rv] = is_saturated[rv + rV_dif];
     }
     rX = (value_t*) realloc_check(rX, sizeof(value_t)*D*rV_ini);
     is_saturated = (bool*) realloc_check(is_saturated, sizeof(bool)*rV_ini);
@@ -958,10 +894,10 @@ TPL index_t CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
     }
     /* small components; in-place */
     for (comp_t rv = rV_big; rv <= rV; rv++){
-        first_vertex[rv] = first_vertex[rv + rV_new - rV_big];
+        first_vertex[rv] = first_vertex[rv + rV_dif];
     }
     first_vertex = (index_t*) realloc_check(first_vertex,
-        sizeof(index_t)*(rV + 1));
+        sizeof(index_t)*(rV + ONE));
     free(first_vertex_big);
     rV = rV_ini;
 
@@ -976,44 +912,68 @@ TPL index_t CP::split()
     index_t* first_vertex_big;
     int num_thrds = balance_parallel_split(rV_new, rV_big, first_vertex_big);
 
-    Flow_node* flow_nodes = (Flow_node*) malloc_check(sizeof(Flow_node)*V);
+    /* components are processed in parallel but graph structure specifies edges
+     * ends with global indexing; the following table enables constant time
+     * conversion to indexing within components */
+    index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
 
-    #pragma omp parallel num_threads(num_thrds) reduction(+:activation)
-    {
-        Maxflow<index_t, real_t>* maxflow_par = new Maxflow<index_t, real_t>
-            (V, 2*E, first_edge, adj_vertices, reverse_arc, arc_status,
-            flow_nodes);
+    #pragma omp parallel for schedule(dynamic) num_threads(num_thrds) \
+        reduction(+:activation)
+    for (comp_t rv = 0; rv < rV; rv++){
+        if (is_saturated[rv]){ continue; }
 
-        #pragma omp for schedule(dynamic)
-        for (comp_t rv = 0; rv < rV; rv++){
-            if (is_saturated[rv]){ continue; }
+        /**  build flow graph structure  **/
+        /* set indexing within component and get number of binding edge */
+        index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+        const index_t* comp_list_rv = comp_list + first_vertex[rv];
+        index_t number_of_edges = 0;
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
+            index_in_comp[v] = i;
+            for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                if (is_bind(e)){ number_of_edges++; }
+            }
+        }
+        /* build flow graph structure and set edges */
+        Maxflow<index_t, real_t>* maxflow = new Maxflow<index_t, real_t>
+            (comp_size, number_of_edges);
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
+            for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                index_t j = index_in_comp[adj_vertices[e]];
+                if (is_bind(e)){ maxflow->add_edge(i, j); }
+            }
+        }
+        
+        /**  set capacities and compute maximum flow  **/
+        split_component(rv, maxflow);
 
-            split_component(rv, maxflow_par);
-
-            index_t rv_activation = 0;
-            /* activate edges accordingly */
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
-                comp_t l = label_assign[v];
-                for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                    if (is_bind(e) && l != label_assign[adj_vertices[e]]){
-                        cut(e);
-                        rv_activation++;
-                    }
+        /**  activate edges accordingly  **/
+        index_t rv_activation = 0;
+        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
+            index_t v = comp_list[i];
+            comp_t l = label_assign[v];
+            for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                if (is_bind(e) && l != label_assign[adj_vertices[e]]){
+                    cut(e);
+                    rv_activation++;
                 }
             }
-
-            is_saturated[rv] = rv_activation == 0;
-            activation += rv_activation;
         }
 
-        delete maxflow_par;
-    } // end parallel region
+        is_saturated[rv] = rv_activation == 0;
+        activation += rv_activation;
 
-    free(flow_nodes);
+        delete maxflow;
+    }
 
-    activation += revert_balance_parallel_split(rV_new, rV_big,
-        first_vertex_big);
+    free(index_in_comp); index_in_comp = nullptr;
+
+    if (rV_new != rV_big){
+        activation += remove_parallel_separations(rV_new);
+
+        revert_balance_parallel_split(rV_new, rV_big, first_vertex_big);
+    }
 
     /* reconstruct components assignment */
     #pragma omp parallel for schedule(static) NUM_THREADS(V, rV)
@@ -1154,7 +1114,7 @@ TPL index_t CP::merge()
     /* finalize and shrink arrays to fit the reduced number of components */
     first_vertex[rV = rn] = V;
     first_vertex = (index_t*) realloc_check(first_vertex,
-        sizeof(index_t)*(rV + 1));
+        sizeof(index_t)*(rV + ONE));
     rX = (value_t*) realloc_check(rX, sizeof(value_t)*D*rV);
     is_saturated = (bool*) realloc_check(is_saturated, sizeof(bool)*rV); 
     /* update components assignments */
@@ -1171,11 +1131,11 @@ TPL index_t CP::merge()
      * note that rE is thus an upper bound of the actual number of edges */
     index_t final_re = 0;
     for (index_t re = 0; re < rE; re++){
-        comp_t final_ru = final_comp[reduced_edges[2*re]];
-        comp_t final_rv = final_comp[reduced_edges[2*re + 1]];
+        comp_t final_ru = final_comp[reduced_edges[TWO*re]];
+        comp_t final_rv = final_comp[reduced_edges[TWO*re + 1]];
         if (final_ru != final_rv){
-            reduced_edges[2*final_re] = final_ru;
-            reduced_edges[2*final_re + 1] = final_rv;
+            reduced_edges[TWO*final_re] = final_ru;
+            reduced_edges[TWO*final_re + 1] = final_rv;
             reduced_edge_weights[final_re] = reduced_edge_weights[re];
             final_re++;
         }

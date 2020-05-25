@@ -4,10 +4,10 @@
  *
  * options is a struct with any of the following fields [with default values]:
  *
- *      reverse_arc [none], edge_weights [1.0], vert_weights [none],
- *      coor_weights [none], cp_dif_tol [1e-3], cp_it_max [10], K [2],
- *      split_iter_num [2], kmpp_init_num [3], kmpp_iter_num [3],
- *      verbose [true], max_num_threads [none], balance_parallel_split [true]
+ *      edge_weights [1.0], vert_weights [none], coor_weights [none],
+ *      cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
+ *      kmpp_init_num [3], kmpp_iter_num [3], verbose [true],
+ *      max_num_threads [none], balance_parallel_split [true]
  * 
  *  Hugo Raguet 2019, 2020
  *===========================================================================*/
@@ -44,10 +44,10 @@ static void check_opts(const mxArray* options)
             mxGetClassName(options));
     }
 
-    const int num_allow_opts = 13;
-    const char* opts_names[] = {"reverse_arc", "edge_weights", "vert_weights",
-        "coor_weights", "cp_dif_tol", "cp_it_max", "K", "split_iter_num",
-        "kmpp_init_num", "kmpp_iter_num", "verbose", "max_num_threads",
+    const int num_allow_opts = 12;
+    const char* opts_names[] = {"edge_weights", "vert_weights", "coor_weights",
+        "cp_dif_tol", "cp_it_max", "K", "split_iter_num", "kmpp_init_num",
+        "kmpp_iter_num", "verbose", "max_num_threads",
         "balance_parallel_split"};
 
     const int num_given_opts = mxGetNumberOfFields(options);
@@ -121,45 +121,14 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     const index_t *first_edge = (index_t*) mxGetData(prhs[2]);
     const index_t *adj_vertices = (index_t*) mxGetData(prhs[3]);
-    const index_t first_edge_length = mxGetNumberOfElements(prhs[2]);
-    const index_t adj_vertices_length = mxGetNumberOfElements(prhs[3]);
+    index_t E = mxGetNumberOfElements(prhs[3]);
 
-    index_t E;
-    const index_t* reverse_arc;
-
-    if (nrhs < 5 || !mxGetField(prhs[4], 0, "reverse_arc")){
-        if (first_edge_length != (V + 1)){
-            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
-                "third parameter 'first_edge' should contain |V| + 1 = %d "
-                "elements (%d given).", (V + 1), first_edge_length);
-        }
-        E = adj_vertices_length;
-
-        /* compute and store two-ways forward-star graph structure */
-        index_t* first_edge_rev = (index_t*)
-            mxMalloc(sizeof(index_t)*(2*V + 1));
-        index_t* adj_vertices_rev = (index_t*) mxMalloc(sizeof(index_t)*2*E);
-        index_t* rev_arc = (index_t*) mxMalloc(sizeof(index_t)*2*E);
-
-        forward_star_to_reverse<index_t, index_t>(V, E, first_edge, 
-            adj_vertices, first_edge_rev, adj_vertices_rev, rev_arc);
-
-        first_edge = first_edge_rev;
-        adj_vertices = adj_vertices_rev;
-        reverse_arc = rev_arc;
-    }else{
-        if (first_edge_length != (2*V + 1)){
-            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
-                "when option 'reverse_arc' is provided, third parameter"
-                "'first_edge' should contain 2|V| + 1 = %d elements "
-                "(%d given).", (2*V + 1), first_edge_length);
-        }
-        E = adj_vertices_length/2;
-
-        reverse_arc = (index_t*) mxGetData(mxGetField(prhs[4], 0,
-            "reverse_arc"));
+    size_t first_edge_length = mxGetNumberOfElements(prhs[2]);
+    if (first_edge_length != (size_t) V + 1){
+        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
+            "third parameter 'first_edge' should contain |V| + 1 = %d "
+            "elements (%d given).", (size_t) V + 1, first_edge_length);
     }
-
 
     /**  optional parameters  **/
 
@@ -217,7 +186,7 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     Cp_d0_dist<real_t, index_t, comp_t> *cp =
         new Cp_d0_dist<real_t, index_t, comp_t>
-            (V, E, first_edge, adj_vertices, reverse_arc, Y, D);
+            (V, E, first_edge, adj_vertices, Y, D);
 
     cp->set_loss(loss, Y, vert_weights, coor_weights);
     cp->set_edge_weights(edge_weights, homo_edge_weight);

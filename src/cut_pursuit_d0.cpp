@@ -17,9 +17,9 @@
 using namespace std;
 
 TPL CP_D0::Cp_d0(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const index_t* reverse_arc, size_t D)
-    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, reverse_arc,
-        D), no_merge_info(&reserved_merge_info)
+    const index_t* adj_vertices, size_t D)
+    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D),
+      no_merge_info(&reserved_merge_info)
 {
     K = 2;
     split_iter_num = 2;
@@ -87,6 +87,9 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
 {
     value_t* altX = (value_t*) malloc_check(sizeof(value_t)*D*K);
 
+    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+    const index_t* comp_list_rv = comp_list + first_vertex[rv];
+
     for (int split_it = 0; split_it < split_iter_num; split_it++){
 
         if (split_it == 0){ init_split_values(rv, altX); }
@@ -95,31 +98,31 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
         bool no_reassignment = true;
 
         if (K == 2){ /* one graph cut is enough */
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
                 /* unary cost for choosing the second alternative */
-                maxflow->terminal_capacity(v) = fv(v, altX + D) - fv(v, altX);
+                maxflow->terminal_capacity(i) = fv(v, altX + D) - fv(v, altX);
             }
 
             /* set d0 edge capacities within each component */
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
+            index_t e_in_comp = 0;
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
                 for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                    if (is_free(e)){
-                        set_edge_capacities(e, EDGE_WEIGHTS_(e),
-                            EDGE_WEIGHTS_(e));
+                    if (is_bind(e)){
+                        maxflow->set_edge_capacities(e_in_comp++,
+                            EDGE_WEIGHTS_(e), EDGE_WEIGHTS_(e));
                     }
                 }
             }
 
             /* find min cut and set assignment accordingly */
-            maxflow->maxflow(first_vertex[rv + 1] - first_vertex[rv],
-                comp_list + first_vertex[rv]);
+            maxflow->maxflow();
 
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
-                if (maxflow->is_sink(v) != label_assign[v]){
-                    label_assign[v] = maxflow->is_sink(v);
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                if (maxflow->is_sink(i) != label_assign[v]){
+                    label_assign[v] = maxflow->is_sink(i);
                     no_reassignment = false;
                 }
             }
@@ -132,14 +135,14 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
 
             /* set the source/sink capacities */
             bool all_assigned_k = true;
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
                 comp_t l = label_assign[v];
                 /* unary cost for changing current value to k-th value */
                 if (l == k){
-                    maxflow->terminal_capacity(v) = ZERO;
+                    maxflow->terminal_capacity(i) = ZERO;
                 }else{
-                    maxflow->terminal_capacity(v) = fv(v, altX + D*k) -
+                    maxflow->terminal_capacity(i) = fv(v, altX + D*k) -
                         fv(v, altX + D*l);
                     all_assigned_k = false;
                 }
@@ -147,11 +150,12 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
             if (all_assigned_k){ continue; }
 
             /* set d0 edge capacities within each component */
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t u = comp_list[i];
+            index_t e_in_comp = 0;
+            for (index_t i = 0; i < comp_size; i++){
+                index_t u = comp_list_rv[i];
                 comp_t lu = label_assign[u];
                 for (index_t e = first_edge[u]; e < first_edge[u + 1]; e++){
-                    if (!is_free(e)){ continue; }
+                    if (!is_bind(e)){ continue; }
                     index_t v = adj_vertices[e];
                     comp_t lv = label_assign[v];
                     /* horizontal and source/sink capacities are modified 
@@ -175,19 +179,18 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow* maxflow)
                     real_t C = lv == k ? ZERO : EDGE_WEIGHTS_(e);
                     /* D = E(1,1) = 0 is for changing both lu, lv to k */
                     /* set weights in accordance with orientation u -> v */
-                    maxflow->terminal_capacity(u) += C - A;
-                    maxflow->terminal_capacity(v) -= C;
-                    set_edge_capacities(e, B + C - A, ZERO);
+                    maxflow->terminal_capacity(i) += C - A;
+                    maxflow->terminal_capacity(index_in_comp[v]) -= C;
+                    set_edge_capacities(e_in_comp++, B + C - A, ZERO);
                 }
             }
 
             /* find min cut and update assignment accordingly */
-            maxflow->maxflow(first_vertex[rv + 1] - first_vertex[rv],
-                comp_list + first_vertex[rv]);
+            maxflow->maxflow();
 
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
-                if (maxflow->is_sink(v) && label_assign[v] != k){
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                if (maxflow->is_sink(i) && label_assign[v] != k){
                     label_assign[v] = k;
                     no_reassignment = false;
                 }
@@ -230,7 +233,7 @@ TPL index_t CP_D0::remove_parallel_separations(comp_t rV_new)
             index_t v = comp_list[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_par_sep(e)){
-                    set_inactive(e);
+                    bind(e);
                     /* if (saturation &&
                         is_saturated[comp_assign[adj_vertices[e]]]){
                         set_inactive(e);

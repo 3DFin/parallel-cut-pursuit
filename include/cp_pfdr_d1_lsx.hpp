@@ -51,8 +51,7 @@ public:
 
     /* only creates BK graph structure and assign Y, D */
     Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
-        const index_t* adj_vertices, const index_t* reverse_arc, size_t D,
-        const real_t* Y);
+        const index_t* adj_vertices, size_t D, const real_t* Y);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -147,8 +146,8 @@ private:
     using Cp<real_t, index_t, comp_t>::saturated_comp;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::monitor_evolution;
-    using Cp<real_t, index_t, comp_t>::is_active;
-    using Cp<real_t, index_t, comp_t>::is_free;
+    using Cp<real_t, index_t, comp_t>::is_cut;
+    using Cp<real_t, index_t, comp_t>::is_bind;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;
     using Cp<real_t, index_t, comp_t>::maxflow_complexity;
@@ -165,6 +164,7 @@ private:
     using Cp<real_t, index_t, comp_t>::label_assign;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
+    using Cp<real_t, index_t, comp_t>::index_in_comp;
     using Cp<real_t, index_t, comp_t>::reduced_edges;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::verbose;

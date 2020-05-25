@@ -7,9 +7,8 @@
 #include "../include/pfdr_d1_ql1b.hpp"
 #include "../include/wth_element.hpp"
 
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define HALF ((real_t) 0.5)
+#define ZERO ((real_t) 0.0) // avoid conversions
+#define HALF ((real_t) 0.5) // avoid conversions
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 #define L1_WEIGHTS_(v) (l1_weights ? l1_weights[(v)] : homo_l1_weight)
 #define Y_(n) (Y ? Y[(n)] : (real_t) 0.0)
@@ -21,16 +20,15 @@
 using namespace std;
 
 TPL CP_D1_QL1B::Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const index_t* reverse_arc)
-    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices,
-        reverse_arc)
+    const index_t* adj_vertices)
+    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices)
 {
     /* ensure handling of infinite values (negation, comparisons) is safe */
     static_assert(numeric_limits<real_t>::is_iec559,
         "Cut-pursuit d1 quadratic l1 bounds: real_t must satisfy IEEE 754.");
     Y = Yl1 = A = R = nullptr;
     N = DIAG_ATA;
-    a = ONE;
+    a = 1.0;
     l1_weights = nullptr; homo_l1_weight = ZERO;
     low_bnd = nullptr; homo_low_bnd = -INF_REAL;
     upp_bnd = nullptr; homo_upp_bnd = INF_REAL;
@@ -209,7 +207,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
         #pragma omp parallel for schedule(dynamic) NUM_THREADS(rV*rV/2, rV)
         for (comp_t ru = 0; ru < rV - 1; ru++){
             real_t *rAAu = rAA + (size_t) rV*ru;
-            size_t i = rV + (size_t) (rV + 1)*ru;
+            size_t i = rV + ((size_t) rV + 1)*ru;
             for (comp_t rv = ru + 1; rv < rV; rv++){
                 rAAu[rv] = rAA[i];
                 i += rV;
@@ -426,46 +424,49 @@ TPL void CP_D1_QL1B::split_component(comp_t rv,
     }
 
     /**  first cut +1 versus 0; second cut -1 versus 0  **/
+    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+    const index_t* comp_list_rv = comp_list + first_vertex[rv];
+
     for (comp_t dir = 1; dir <= 2; dir++){
 
     /* set gradient terminal capacities */
     if (dir == 1){
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
-            maxflow->terminal_capacity(v) = grad[v];
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
+            maxflow->terminal_capacity(i) = grad[v];
         }
     }else{
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
-            maxflow->terminal_capacity(v) = -grad[v];
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
+            maxflow->terminal_capacity(i) = -grad[v];
         }
     }
 
     /* l1 contribution */
     if (l1_weights || homo_l1_weight){ 
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
             if (rX[rv] == Yl1_(v)){
-                maxflow->terminal_capacity(v) += L1_WEIGHTS_(v);
+                maxflow->terminal_capacity(i) += L1_WEIGHTS_(v);
             }
         }
     }
 
     /* box constraint contribution is infinite at the boundary */
     if (dir == 1 && upp_bnd){
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
             if (rX[rv] == upp_bnd[v]){
-                maxflow->terminal_capacity(v) = INF_REAL;
+                maxflow->terminal_capacity(i) = INF_REAL;
             }
         }
     }else if (dir == 1 && homo_upp_bnd < INF_REAL && rX[rv] == homo_upp_bnd){
         continue; // no value can increase
     }else if (dir == 2 && low_bnd){
-        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-            index_t v = comp_list[i];
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
             if (rX[rv] == low_bnd[v]){
-                maxflow->terminal_capacity(v) = INF_REAL;
+                maxflow->terminal_capacity(i) = INF_REAL;
             }
         }
     }else if (dir == 2 && homo_low_bnd > -INF_REAL && rX[rv] == homo_low_bnd){
@@ -473,29 +474,30 @@ TPL void CP_D1_QL1B::split_component(comp_t rv,
     }
 
     /* set the d1 edge capacities */
-    for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-        index_t v = comp_list[i];
+    index_t e_in_comp = 0;
+    for (index_t i = 0; i < comp_size; i++){
+        index_t v = comp_list_rv[i];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
             if (is_bind(e)){
-                maxflow->set_edge_capacities(e, EDGE_WEIGHTS_(e),
+                maxflow->set_edge_capacities(e_in_comp++, EDGE_WEIGHTS_(e),
                     EDGE_WEIGHTS_(e));
-            } /* with high probability, both sides of a parallel separation
-               * prefer the same descent direction, no additional capacity */
+            } /* in most cases, both sides of a parallel separation
+               * prefer the same descent direction, no additional capacity;
+               * this favors cutting, usually not detrimental to optimality */
             /* else if (is_par_sep(e)){
-                maxflow->term_capacity(v) += EDGE_WEIGHTS_(e);
+                maxflow->terminal_capacity(i) += EDGE_WEIGHTS_(e);
             } */
         }
     }
 
     /* find min cut and assign label accordingly */
-    maxflow->maxflow(first_vertex[rv + 1] - first_vertex[rv],
-        comp_list + first_vertex[rv]);
+    maxflow->maxflow();
 
-    for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-        index_t v = comp_list[i];
-        if (maxflow->is_sink(v)){ label_assign[v] = dir; }
+    for (index_t i = 0; i < comp_size; i++){
+        index_t v = comp_list_rv[i];
+        if (maxflow->is_sink(i)){ label_assign[v] = dir; }
     }
-    
+
     /* when no nondifferentiable part exists besides the total variation, 
      * only one cut is required (+1 vs -1), equivalent to the first one */
     if (!l1_weights && !homo_l1_weight && !low_bnd && !upp_bnd &&

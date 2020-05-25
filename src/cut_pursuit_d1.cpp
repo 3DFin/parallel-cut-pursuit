@@ -4,9 +4,7 @@
 #include <cmath>
 #include "../include/cut_pursuit_d1.hpp"
 
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : ONE)
+#define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : (real_t) 1.0)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
 #define CP_D1 Cp_d1<real_t, index_t, comp_t>
@@ -14,9 +12,8 @@
 using namespace std;
 
 TPL CP_D1::Cp_d1(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const index_t* reverse_arc, size_t D, D1p d1p)
-    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, reverse_arc,
-        D), d1p(d1p)
+    const index_t* adj_vertices, size_t D, D1p d1p)
+    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D), d1p(d1p)
 { coor_weights = nullptr; }
 
 TPL void CP_D1::set_edge_weights(const real_t* edge_weights,
@@ -62,7 +59,7 @@ TPL index_t CP_D1::remove_parallel_separations(comp_t rV_new)
 
 TPL bool CP_D1::is_almost_equal(comp_t ru, comp_t rv)
 {
-    real_t dif = ZERO, ampu = ZERO, ampv = ZERO;
+    real_t dif = 0.0, ampu = 0.0, ampv = 0.0;
     real_t *rXu = rX + ru*D;
     real_t *rXv = rX + rv*D;
     for (size_t d = 0; d < D; d++){
@@ -101,13 +98,13 @@ TPL comp_t CP_D1::compute_merge_chains()
 
 TPL real_t CP_D1::compute_graph_d1()
 {
-    real_t tv = ZERO;
+    real_t tv = 0.0;
     #pragma omp parallel for schedule(static) NUM_THREADS(2*rE*D, rE) \
         reduction(+:tv)
     for (size_t re = 0; re < rE; re++){
         real_t *rXu = rX + reduced_edges[2*re]*D;
         real_t *rXv = rX + reduced_edges[2*re + 1]*D;
-        real_t dif = ZERO;
+        real_t dif = 0.0;
         for (size_t d = 0; d < D; d++){
             if (d1p == D11){
                 dif += abs(rXu[d] - rXv[d])*COOR_WEIGHTS_(d);

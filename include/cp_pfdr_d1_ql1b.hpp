@@ -62,7 +62,7 @@ public:
 
     /* only creates BK graph structure and assign Y, A, N */
     Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
-        const index_t* adj_vertices, const index_t* reverse_arc);
+        const index_t* adj_vertices);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -184,7 +184,6 @@ private:
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::saturated_comp;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
-    using Cp<real_t, index_t, comp_t>::set_edge_capacities;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;
     using Cp<real_t, index_t, comp_t>::maxflow_complexity;
     using Cp<real_t, index_t, comp_t>::V;
