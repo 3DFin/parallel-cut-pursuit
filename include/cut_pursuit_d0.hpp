@@ -52,11 +52,15 @@ public:
      * getting the corresponding pointer member and setting it to null
      * beforehand */
 
-    void set_split_param(comp_t K = 2, int split_iter_num = 2);
+    void set_split_param(comp_t K = 2, int split_iter_num = 2,
+        real_t split_damp_ratio = 1.0);
 
 protected:
     /* compute the functional f at a single vertex */
     virtual real_t fv(index_t v, const value_t* Xv) = 0; 
+
+    // /* estimate dissimilarity of functional f between two given vertices */
+    // virtual real_t fuv(index_t u, index_t v) = 0; 
 
     /* compute graph contour length; use reduced edges and reduced weights */
     real_t compute_graph_d0();
@@ -72,12 +76,9 @@ protected:
     void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
         override;
 
-    /* remove or activate separating edges used for balancing parallel
-     * workload; see header `cut_pursuit.hpp` */
-    index_t remove_parallel_separations(comp_t rV_new) override;
-
     comp_t K; // number of alternative values in the split
     int split_iter_num; // number of partition-and-update iterations
+    real_t split_damp_ratio; // split damping along iterations
 
     /* manage alternative values for a given component;
      * altX is a D-by-K array containing alternatives;
@@ -163,7 +164,7 @@ protected:
     using Cp<real_t, index_t, comp_t>::index_in_comp;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::reduced_edges;
-    // using Cp<real_t, index_t, comp_t>::is_saturated;
+    using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
     using Cp<real_t, index_t, comp_t>::merge_components;
@@ -171,6 +172,11 @@ protected:
     using Cp<real_t, index_t, comp_t>::realloc_check;
 
 private:
+
+    /* remove or activate separating edges used for balancing parallel
+     * workload; see header `cut_pursuit.hpp` */
+    index_t remove_parallel_separations(comp_t rV_new) override;
+
     /* compute the merge chains and return the number of effective merges */
     comp_t compute_merge_chains() override;
     /* auxiliary functions for merge */

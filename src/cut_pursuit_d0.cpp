@@ -3,11 +3,13 @@
  *===========================================================================*/
 #include "../include/cut_pursuit_d0.hpp"
 
+#define INF_REAL (std::numeric_limits<real_t>::infinity())
 #define ZERO ((real_t) 0.0)
+#define ONE ((real_t) 1.0)
+// #define ONEi ((size_t) 1) // avoid overflows
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 /* special flag */
 #define MERGE_INIT MAX_NUM_COMP
-#define SPLIT_DAMP_RATIO ((real_t) 0.7)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
     typename value_t>
@@ -22,9 +24,11 @@ TPL CP_D0::Cp_d0(index_t V, index_t E, const index_t* first_edge,
 {
     K = 2;
     split_iter_num = 2;
+    split_damp_ratio = ONE;
 }
 
-TPL void CP_D0::set_split_param(comp_t K, int split_iter_num)
+TPL void CP_D0::set_split_param(comp_t K, int split_iter_num,
+    real_t split_damp_ratio)
 {
     if (split_iter_num < 1){
         cerr << "Cut-pursuit d0: there must be at least one iteration in the "
@@ -38,8 +42,16 @@ TPL void CP_D0::set_split_param(comp_t K, int split_iter_num)
         exit(EXIT_FAILURE);
     }
 
+    if (split_damp_ratio <= 0 || split_damp_ratio > ONE){
+        cerr << "Cut-pursuit d0: split damping ratio must be between zero "
+            "excluded and one included (" << split_damp_ratio << " specified)."
+            << endl;
+        exit(EXIT_FAILURE);
+    }
+
     this->K = K;
     this->split_iter_num = split_iter_num;
+    this->split_damp_ratio = split_damp_ratio;
 }
 
 TPL real_t CP_D0::compute_graph_d0()
@@ -88,13 +100,9 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
     index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
     const index_t* comp_list_rv = comp_list + first_vertex[rv];
 
-    real_t damping = 1.0;
+    real_t damping = split_damp_ratio;
     for (int split_it = 0; split_it < split_iter_num; split_it++){
-        damping *= SPLIT_DAMP_RATIO;
-    }
-
-    for (int split_it = 0; split_it < split_iter_num; split_it++){
-        damping /= SPLIT_DAMP_RATIO;
+        damping += (ONE - split_damp_ratio)/split_iter_num;
 
         if (split_it == 0){ init_split_values(rv, altX); }
         else{ update_split_values(rv, altX); }
@@ -210,19 +218,10 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
     free(altX);
 }
 
+
 TPL index_t CP_D0::remove_parallel_separations(comp_t rV_new)
 {
     index_t activation = 0;
-
-    /* reconstruct component assignment (only on new components) */
-    #pragma omp parallel for schedule(static) \
-        NUM_THREADS(first_vertex[rV_new], rV_new)
-    for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
-        for (index_t i = first_vertex[rv_new]; i < first_vertex[rv_new + 1];
-            i++){
-            comp_assign[comp_list[i]] = rv_new;
-        }
-    }
 
     /* parallel separation edges are activated if at least one end vertex
      * belongs to a nonsaturated component;
@@ -231,21 +230,11 @@ TPL index_t CP_D0::remove_parallel_separations(comp_t rV_new)
     #pragma omp parallel for schedule(static) reduction(+:activation) \
         NUM_THREADS(first_vertex[rV_new], rV_new)
     for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
-        // const bool saturation = is_saturated[rv_new];
         for (index_t i = first_vertex[rv_new]; i < first_vertex[rv_new + 1];
             i++){
             index_t v = comp_list[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                if (is_par_sep(e)){
-                    bind(e);
-                    /* if (saturation &&
-                        is_saturated[comp_assign[adj_vertices[e]]]){
-                        bind(e);
-                    }else{
-                        cut(e);
-                        activation++;
-                    } */
-                }
+                if (is_par_sep(e)){ bind(e); }
             }
         }
     }
@@ -341,7 +330,7 @@ TPL comp_t CP_D0::compute_merge_chains()
             }
         } // end for candidates in parallel
 
-        /**  select best candidate  **/
+        /**  select best candidate among parallel threads  **/
         real_t best_gain = best_par_gains[0];
         size_t best_edge = best_par_edges[0];
         for (int thrd_num = 1; thrd_num < num_par_thrds; thrd_num++){

@@ -22,6 +22,7 @@ using namespace std;
  * comp_t must be able to represent the number of constant connected components
  * in the reduced graph, as well as the dimension D */
 typedef uint32_t index_t;
+/* comment the following if more than 65535 components are expected */
 typedef uint16_t comp_t;
 #define NPY_COMP_CLASS NPY_UINT16
 /* uncomment the following if more than 65535 components are expected */
@@ -34,9 +35,10 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_first_edge, PyArrayObject* py_adj_vertices,
     PyArrayObject* py_edge_weights, PyArrayObject* py_vert_weights,
     PyArrayObject* py_coor_weights, real_t cp_dif_tol, int cp_it_max,
-    int K, int split_iter_num, int kmpp_init_num, int kmpp_iter_num,
-    int verbose, int max_num_threads, int balance_parallel_split, 
-    int compute_Obj, int compute_Time, int compute_Dif)
+    int K, int split_iter_num, real_t split_damp_ratio, int kmpp_init_num,
+    int kmpp_iter_num, int verbose, int max_num_threads,
+    int balance_parallel_split, int compute_Obj, int compute_Time,
+    int compute_Dif)
 {
     /**  get inputs  **/
 
@@ -116,7 +118,7 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     cp->set_monitoring_arrays(Obj, Time, Dif);
     cp->set_components(0, Comp);
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
-    cp->set_split_param(K, split_iter_num);
+    cp->set_split_param(K, split_iter_num, split_damp_ratio);
     cp->set_kmpp_param(kmpp_init_num, kmpp_iter_num);
     cp->set_parallel_param(max_num_threads, balance_parallel_split);
 
@@ -143,22 +145,22 @@ static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
     /* INPUT */
     PyArrayObject *py_Y, *py_first_edge, *py_adj_vertices, *py_edge_weights,
         *py_vert_weights, *py_coor_weights;
-    double loss, cp_dif_tol;  
+    double loss, cp_dif_tol, split_damp_ratio;  
     int cp_it_max, K, split_iter_num, kmpp_init_num, kmpp_iter_num, verbose, 
         max_num_threads, balance_parallel_split, real_is_double, compute_Obj, 
         compute_Time, compute_Dif;
 
     /* parse the input, from Python Object to C PyArray, double, or int type */
 #if PY_MAJOR_VERSION >= 3
-    if(!PyArg_ParseTuple(args, "dOOOOOOdiiiiipippppp", &loss, &py_Y,
+    if(!PyArg_ParseTuple(args, "dOOOOOOdiiidiipippppp", &loss, &py_Y,
 #else // python 2 does not accept the 'p' format specifier
-    if(!PyArg_ParseTuple(args, "dOOOOOOdiiiiiiiiiiii", &loss, &py_Y,
+    if(!PyArg_ParseTuple(args, "dOOOOOOdiiidiiiiiiiii", &loss, &py_Y,
 #endif
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_vert_weights,
         &py_coor_weights, &cp_dif_tol, &cp_it_max, &K, &split_iter_num, 
-        &kmpp_init_num, &kmpp_iter_num, &verbose, &max_num_threads, 
-        &balance_parallel_split, &real_is_double, &compute_Obj, &compute_Time, 
-        &compute_Dif)){
+        &split_damp_ratio, &kmpp_init_num, &kmpp_iter_num, &verbose,
+        &max_num_threads, &balance_parallel_split, &real_is_double,
+        &compute_Obj, &compute_Time, &compute_Dif)){
         return NULL;
     }
 
@@ -166,15 +168,17 @@ static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
         PyObject* PyReturn = cp_kmpp_d0_dist<double, NPY_FLOAT64>(loss, py_Y,
             py_first_edge, py_adj_vertices, py_edge_weights, py_vert_weights,
             py_coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
-            kmpp_init_num, kmpp_iter_num, verbose, max_num_threads, 
-            balance_parallel_split, compute_Obj, compute_Time, compute_Dif);
+            split_damp_ratio, kmpp_init_num, kmpp_iter_num, verbose,
+            max_num_threads, balance_parallel_split, compute_Obj, compute_Time,
+            compute_Dif);
         return PyReturn;
     }else{ /* real_t type is float */
         PyObject* PyReturn = cp_kmpp_d0_dist<float, NPY_FLOAT32>(loss, py_Y,
             py_first_edge, py_adj_vertices, py_edge_weights, py_vert_weights,
             py_coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
-            kmpp_init_num, kmpp_iter_num, verbose, max_num_threads, 
-            balance_parallel_split, compute_Obj, compute_Time, compute_Dif);
+            split_damp_ratio, kmpp_init_num, kmpp_iter_num, verbose,
+            max_num_threads, balance_parallel_split, compute_Obj, compute_Time,
+            compute_Dif);
         return PyReturn;
     }
 }

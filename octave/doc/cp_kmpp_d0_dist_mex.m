@@ -21,7 +21,7 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % Available data-fidelity loss include:
 %
 % quadratic:
-%      f(x) = 1/2 ||y - x||_{l2,W}^2 ,
+%      f(x) = ||y - x||_{l2,W}^2 ,
 % where W is a diagonal metric (separable product along ℝ^V and ℝ^D),
 % that is ||y - x||_{l2,W}^2 = sum_{v in V} w_v ||x_v - y_v||_{l2,M}^2
 %                            = sum_{v in V} w_v sum_d m_d (x_vd - y_vd)^2;
@@ -66,8 +66,8 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % options - structure with any of the following fields [with default values]:
 %     edge_weights [1.0], vert_weights [none], coor_weights [none],
 %     cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
-%     kmpp_init_num [3], kmpp_iter_num [3], verbose [true],
-%     max_num_threads [none], balance_parallel_split [true]
+%     split_damp_ratio [1.0], kmpp_init_num [3], kmpp_iter_num [3],
+%     verbose [true], max_num_threads [none], balance_parallel_split [true]
 % edge_weights - (real) array of length E or scalar for homogeneous weights
 % vert_weights - weights on vertices (w_v above); (real) array of length V
 % coor_weights - weights on coordinates (m_d above); (real) array of length D
@@ -79,6 +79,10 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 %     10 cuts solve accurately most problems
 % K - number of alternative values considered in the split step
 % split_iter_num - number of partition-and-update iterations in the split step
+% split_damp_ratio - edge weights damping for favoring splitting; edge
+%     weights increase in linear progression along partition-and-update
+%     iterations, from this ratio up to original value; real scalar between 0
+%     and 1, the latter meaning no damping
 % kmpp_init_num - number of random k-means initializations in the split step
 % kmpp_iter_num - number of k-means iterations in the split step
 % verbose - if nonzero, display information on the progress

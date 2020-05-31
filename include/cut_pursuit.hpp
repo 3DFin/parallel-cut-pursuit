@@ -197,6 +197,21 @@ protected:
     void cut(index_t e); // flag a cut (active) edge
     void bind(index_t e); // flag a binding (inactive) edge
 
+    /* split large components for balancing parallel workload:
+     * components are split only by adding elements in the first_vertex list;
+     * comp_list remains unchanged; new component created this way will be 
+     * coherent, as the component list is computed with breadth-first search;
+     * rV_new is the number of components resulting from such split;
+     * rV_big is the number of large original components split this way;
+     * first_vertex_big holds the first vertices of components split this way;
+     * return the number of useful parallel threads */
+    virtual int balance_parallel_split(comp_t& rv_new, comp_t& rv_big, 
+        index_t*& first_vertex_big);
+
+    /* revert the above process */
+    virtual void revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
+        index_t* first_vertex_big);
+
     /* large components are split for balancing parallel workload;
      * parallel separation edges must be removed or activated */
     virtual index_t remove_parallel_separations(comp_t rV_new) = 0;
@@ -324,21 +339,6 @@ private:
 
     /* allocate and compute reduced graph structure */
     void compute_reduced_graph();
-
-    /* split large components for balancing parallel workload:
-     * components are split only by adding elements in the first_vertex list;
-     * comp_list remains unchanged; new component created this way will be 
-     * coherent, as the component list is computed with breadth-first search;
-     * rV_new is the number of components resulting from such split;
-     * rV_big is the number of large original components split this way;
-     * first_vertex_big holds the first vertices of components split this way;
-     * return the number of useful parallel threads */
-    int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
-        index_t*& first_vertex_big);
-
-    /* revert the above process */
-    void revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
-        index_t* first_vertex_big);
 };
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \

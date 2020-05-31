@@ -59,7 +59,8 @@ TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
     monitor_evolution = false;
 
     max_num_threads = omp_get_max_threads();
-    balance_par_split = max_num_threads > 1;
+    balance_par_split = max_num_threads > 1 &&
+        compute_num_threads(maxflow_complexity()) > 1;
 }
 
 TPL CP::~Cp()
@@ -115,7 +116,8 @@ TPL void CP::set_parallel_param(int max_num_threads, bool balance_par_split)
 {
     if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
     this->max_num_threads = max_num_threads;
-    this->balance_par_split = max_num_threads > 1 && balance_par_split;
+    this->balance_par_split = balance_par_split && max_num_threads > 1
+        && compute_num_threads(split_complexity()) > 1;
 }
 
 TPL comp_t CP::get_components(comp_t** comp_assign, index_t** first_vertex,
@@ -269,7 +271,7 @@ TPL void CP::single_connected_component()
     first_vertex = (index_t*) malloc_check(sizeof(index_t)*2);
     first_vertex[0] = 0; first_vertex[1] = V;
     rV = 1;
-    if (!balance_par_split || compute_num_threads(split_complexity()) == 1){
+    if (!balance_par_split){
         for (index_t v = 0; v < V; v++){ comp_assign[v] = 0; }
         for (index_t v = 0; v < V; v++){ comp_list[v] = v; }
     }else{
@@ -363,9 +365,7 @@ TPL void CP::assign_connected_components()
 
     /* ensure that any prefix of each component list is connected
      * by ordering the vertices by breadth-first search */
-    if (balance_par_split && compute_num_threads(split_complexity()) > 1){
-        compute_connected_components(); 
-    }
+    if (balance_par_split){ compute_connected_components(); }
 }
 
 TPL void CP::compute_connected_components()
@@ -384,8 +384,8 @@ TPL void CP::compute_connected_components()
     index_t saturated_vert_par = 0;
     index_t tmp_rV = 0; // identify and count components, prevent overflow
 
-    /* there is need to scan all edges involving a given vertex in linear time,
-     * so, we create the list of reverse edges within each component; to
+    /* there is need to scan all edges involving a given vertex in constant
+     * time, so we create the list of reverse edges within each component; to
      * facilitate this, we keep the index of each vertex within components */
     index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
 
@@ -393,7 +393,7 @@ TPL void CP::compute_connected_components()
         reduction(+:tmp_rV, saturated_comp_par, saturated_vert_par)
     for (comp_t rv = 0; rv < rV; rv++){
         index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
-        if (is_saturated[rv]){ // component stays the same
+        if (is_saturated && is_saturated[rv]){ /* component stays the same */
             index_t i = first_vertex[rv];
             index_t v = comp_list[i];
             comp_assign[v] = ASSIGNED_ROOT; // flag the component's root
@@ -451,7 +451,12 @@ TPL void CP::compute_connected_components()
         }
         first_edge_r[0] = 0;
 
-        /**  compute the connected components  **/
+        /**  compute the connected components;
+         **  breadth-first search is necessary for the parallelization of
+         **  the split step;
+         **  TODO: reinitialize breadth-first search when maximum parallel
+         **  component size is reached, to ensure better coherence of parallel
+         **  components with respect to the graph  **/
         index_t i, j, k;
         for (i = j = k = first_vertex[rv]; k < first_vertex[rv + 1]; k++){
             index_t u = comp_list[k];
@@ -461,9 +466,7 @@ TPL void CP::compute_connected_components()
             tmp_comp_list[j++] = u;
             while (i < j){
                 index_t v = tmp_comp_list[i++];
-                /* add neighbors to the connected component list;
-                 * breadth-first search is necessary for the parallelization of
-                 * the split step */     
+                /* add neighbors to the connected component list */
                 index_t e = first_edge[v];
                 index_t l = index_in_comp[v];
                 const index_t* adj_vert = adj_vertices;
@@ -605,14 +608,16 @@ TPL void CP::compute_reduced_graph()
         comp_t ru = comp_assign[v];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
             if (is_cut(e) && EDGE_WEIGHTS_(e) > ZERO){ 
-                comp_t rv = comp_assign[adj_vertices[e]];
-                if (ru < rv){ // count only undirected edges
-                    first_active_edge[ru + 1]++;
-                }else if (rv < ru){
-                    first_active_edge[rv + 1]++;
+                comp_t rv = comp_assign[adj_vertices[e]]; 
+                if (ru != rv){
+                    /* a nonzero edge involving ru and rv exists */
+                    is_isolated[ru] = is_isolated[rv] = NOT_ISOLATED;
+                    if (ru < rv){ // count only undirected edges
+                        first_active_edge[ru + 1]++;
+                    }else{
+                        first_active_edge[rv + 1]++;
+                    }
                 }
-                /* a nonzero edge involving ru and rv exists */
-                is_isolated[ru] = is_isolated[rv] = NOT_ISOLATED;
             }
         }
     }
@@ -680,7 +685,6 @@ TPL void CP::compute_reduced_graph()
              ae < first_active_edge[ru + 1]; ae++){
             real_t edge_weight = edge_weights ? active_edge_weights[ae]
                                               : homo_edge_weight;
-            if (edge_weight == ZERO){ continue; }
             comp_t rv = adj_components[ae];
             index_t re = reduced_edge_to[rv];
             if (re == NO_EDGE){ // a new edge must be created
@@ -873,7 +877,8 @@ TPL void CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
             saturation = saturation && is_saturated[rv_new];
             rv_new++;
         }
-        is_saturated[rv] = saturation;
+        // is_saturated[rv] = saturation;
+        is_saturated[rv] = false;
     }
     /* small components */
     for (comp_t rv = rV_big; rv < rV_ini; rv++){
@@ -1047,10 +1052,10 @@ TPL index_t CP::merge()
             }
         }
         /* resulting saturation for each final component */
-        for (comp_t ru = 0; ru < rV; ru++){
-            if (merge_chains_root[ru] != CHAIN_ROOT){ continue; }
-            comp_t last_ru = last_comp_assign[comp_list[first_vertex[ru]]];
-            is_saturated[ru] = saturation_flag[last_ru] != NOT_SATURATED;
+        for (comp_t rv = 0; rv < rV; rv++){
+            if (merge_chains_root[rv] != CHAIN_ROOT){ continue; }
+            comp_t last_rv = last_comp_assign[comp_list[first_vertex[rv]]];
+            is_saturated[rv] = saturation_flag[last_rv] != NOT_SATURATED;
         }
     }
     free(merge_chains_leaf);
@@ -1113,6 +1118,25 @@ TPL index_t CP::merge()
         sizeof(index_t)*(rV + ONE));
     rX = (value_t*) realloc_check(rX, sizeof(value_t)*D*rV);
     is_saturated = (bool*) realloc_check(is_saturated, sizeof(bool)*rV); 
+
+    /* deactivate edges between fused components */
+    index_t deactivation = 0;
+    #pragma omp parallel for schedule(static) NUM_THREADS(E, V)
+    for (index_t u = 0; u < V; u++){
+        comp_t ru = comp_assign[u];
+        comp_t final_ru = final_comp[comp_assign[u]];
+        for (index_t e = first_edge[u]; e < first_edge[u + 1]; e++){
+            if (is_cut(e)){
+                comp_t rv = comp_assign[adj_vertices[e]];
+                comp_t final_rv = final_comp[rv];
+                if (final_ru == final_rv && ru != rv){
+                    bind(e);
+                    deactivation++;
+                }
+            }
+        }
+    }
+
     /* update components assignments */
     for (index_t v = 0; v < V; v++){ 
         comp_list[v] = tmp_comp_list[v];
@@ -1146,18 +1170,6 @@ TPL index_t CP::merge()
     free(merge_chains_root);
     free(merge_chains_next);
 
-    /* deactivate corresponding edges */
-    index_t deactivation = 0;
-    #pragma omp parallel for schedule(static) NUM_THREADS(E, V)
-    for (index_t v = 0; v < V; v++){ /* will run along all edges */
-        comp_t rv = comp_assign[v];
-        for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_cut(e) && rv == comp_assign[adj_vertices[e]]){
-                bind(e);
-                deactivation++;
-            }
-        }
-    }
 
     return deactivation;
 }

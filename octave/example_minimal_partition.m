@@ -23,10 +23,10 @@ options = struct; % reinitialize
 
 % %{
 %%%  initialize data  %%%
-V = 1e6;
+V = 1e3;
 E = 10*V;
-knn = 5;
-edges_method = 'random'; % 'knn' | 'delaunay' | 'random'
+knn = 3;
+edges_method = 'knn'; % 'knn' | 'delaunay' | 'random'
 
 % embedding on the plane and connectivity
 % space_coor = rand(V, 2);
@@ -56,7 +56,7 @@ Eu = Euv(:,1); Ev = Euv(:,2); clear Euv;
 E = size(Eu, 1);
 
 % options.edge_weights = []; % set edge weights uniformly equal to one
-options.edge_weights = 100; % set edge weights homogeneous
+options.edge_weights = 1; % set edge weights homogeneous
 % options.edge_weights = rand(2*E,1); % set edge weights at random
 
 options.vert_weights = []; % set vertex weights uniformly equal to one
@@ -67,7 +67,8 @@ Y = 100*rand(1, V);
 % Y = 1:V;
 
 % convert adjacency to forward star representation
-[first_edge, reindex] = graph_adjacency_to_forward_star_mex(V, Eu);
+% [first_edge, reindex] = adjacency_to_forward_star_mex(V, Eu);
+[first_edge, reindex] = graph_adjacency_to_forward_star(V, Eu);
 adj_vertices = Ev(reindex); clear Ev;
 if numel(options.edge_weights) > 1
     options.edge_weights = options.edge_weights(reindex);

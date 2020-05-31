@@ -22,21 +22,22 @@ classId = uint8(1:6)';
 %%%  parameters; see octave/doc/cp_pfdr_d1_lsx_mex.m  %%%
 options = struct; % reinitialize
 % options.cp_dif_tol = 1e-3;
-% options.cp_it_max = 10;
-% options.K = 2;
+options.cp_it_max = 10;
+options.K = 2;
 % options.split_iter_num = 2;
 % options.kmpp_init_num = 3;
 % options.kmpp_iter_num = 3;
 % options.verbose = true;
-% options.max_num_threads = 8;
-% options.balance_parallel_split = true;
+options.split_damp_ratio = 1;
+options.max_num_threads = 8;
+options.balance_parallel_split = true;
 
 %%%  initialize data  %%%
 % For details on the data and parameters, see H. Raguet, A Note on the
-% Forward-Douglas--Rachford Splitting for Monotone Inclusion and Convex
+% Forward-Douglas-Rachford Splitting for Monotone Inclusion and Convex
 % Optimization Optimization Letters, 2018, 1-24
 load('../data/labeling_3D.mat')
-% penalization adjusted for d0 norm by trial-and-error
+% penalization for d0 norm was adjusted by trial-and-error
 options.edge_weights = 3*homo_d1_weight; 
 
 % compute prediction performance of random forest
@@ -52,7 +53,8 @@ clear predk truek
 
 %%%  solve the optimization problem  %%%
 tic;
-[Comp, rX] = cp_kmpp_d0_dist_mex(loss, y, first_edge, adj_vertices, options);
+% [Comp, rX, it, Obj, Time, Dif]
+[Comp, rX, it, Obj] = cp_kmpp_d0_dist_mex(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;
