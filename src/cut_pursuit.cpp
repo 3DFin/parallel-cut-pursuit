@@ -877,8 +877,7 @@ TPL void CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
             saturation = saturation && is_saturated[rv_new];
             rv_new++;
         }
-        // is_saturated[rv] = saturation;
-        is_saturated[rv] = false;
+        is_saturated[rv] = saturation;
     }
     /* small components */
     for (comp_t rv = rV_big; rv < rV_ini; rv++){

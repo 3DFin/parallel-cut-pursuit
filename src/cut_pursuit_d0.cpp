@@ -3,10 +3,8 @@
  *===========================================================================*/
 #include "../include/cut_pursuit_d0.hpp"
 
-#define INF_REAL (std::numeric_limits<real_t>::infinity())
 #define ZERO ((real_t) 0.0)
 #define ONE ((real_t) 1.0)
-// #define ONEi ((size_t) 1) // avoid overflows
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 /* special flag */
 #define MERGE_INIT MAX_NUM_COMP

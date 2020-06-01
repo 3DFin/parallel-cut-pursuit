@@ -205,7 +205,7 @@ protected:
      * rV_big is the number of large original components split this way;
      * first_vertex_big holds the first vertices of components split this way;
      * return the number of useful parallel threads */
-    virtual int balance_parallel_split(comp_t& rv_new, comp_t& rv_big, 
+    virtual int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
         index_t*& first_vertex_big);
 
     /* revert the above process */
