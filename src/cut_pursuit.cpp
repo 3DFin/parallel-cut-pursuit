@@ -1089,7 +1089,7 @@ TPL index_t CP::merge()
         const value_t* rXu = rX + D*ru;
         value_t* rXn = rX + D*rn;
         for (size_t d = 0; d < D; d++){ rXn[d] = rXu[d]; }
-        if (is_saturated[rn] = is_saturated[ru]){ saturated_comp++; }
+        if ((is_saturated[rn] = is_saturated[ru])){ saturated_comp++; }
         /* run along the merge chain */
         index_t first = i; // holds index of first vertex of the component
         comp_t rv = ru;

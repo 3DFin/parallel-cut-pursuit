@@ -21,8 +21,8 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 from cp_pfdr_d1_ql1b import cp_pfdr_d1_ql1b 
 
 ###  general parameters  ###
-plot_results = True
-print_results = True
+plot_results = False
+print_results = False
 
 ###  parameters; see documentation of cp_pfdr_d1_ql1b  ###
 # cp_dif_tol = 1e-4

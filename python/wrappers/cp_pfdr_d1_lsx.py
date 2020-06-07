@@ -155,27 +155,28 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     elif Y.size > 0 and Y.dtype == "float32":
         real_t = "float32" 
     else:
-        raise TypeError("argument 'Y' must be a nonempty numpy array of type "
-                        "float32 or float64") 
+        raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be a "
+                        "nonempty numpy array of type float32 or float64.") 
     
-    # Convert in numpy array scalar entry: Y, first_edge, adj_vertices, 
-    # edge_weights, loss_weights, d1_coor_weights and define float numpy array
-    # argument with the right float type, if empty:
+    # Check numpy arrays: Y, first_edge, adj_vertices, edge_weights,
+    # loss_weights, d1_coor_weights and define float numpy array argument with
+    # the right float type if necessary
     if type(Y) != np.ndarray:
-        raise TypeError("argument 'Y' must be a numpy array")
+        raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be a "
+                        "numpy array.")
 
     if type(first_edge) != np.ndarray or first_edge.dtype != "uint32":
-        raise TypeError("argument 'first_edge' must be a numpy array of type"
-                        "uint32")
+        raise TypeError("Cut-pursuit d1 loss simplex: argument 'first_edge' "
+                        "must be a numpy array of type uint32.")
 
     if type(adj_vertices) != np.ndarray or adj_vertices.dtype != "uint32":
-        raise TypeError("argument 'adj_vertices' must be a numpy array of "
-                        "type uint32")
+        raise TypeError("Cut-pursuit d1 loss simplex: argument 'adj_vertices' "
+                        "must be a numpy array of type uint32.")
 
     if type(edge_weights) != np.ndarray:
         if type(edge_weights) == list:
-            raise TypeError("argument 'edge_weights' must be a scalar or a "
-                            "numpy array")
+            raise TypeError("Cut-pursuit d1 loss simplex: argument "
+                            "'edge_weights' must be a scalar or a numpy array")
         elif edge_weights != None:
             edge_weights = np.array([edge_weights], dtype=real_t)
         else:
@@ -183,8 +184,8 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
         
     if type(loss_weights) != np.ndarray:
         if type(loss_weights) == list:
-            raise TypeError("argument 'loss_weights' must be a scalar or a "
-                            "numpy array")
+            raise TypeError("Cut-pursuit d1 loss simplex: argument "
+                            "'loss_weights' must be a scalar or a numpy array")
         elif loss_weights != None:
             loss_weights = np.array([loss_weights], dtype=real_t)
         else:
@@ -192,8 +193,9 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     if type(d1_coor_weights) != np.ndarray:
         if type(d1_coor_weights) == list:
-            raise TypeError("argument 'd1_coor_weights' must be a scalar or a"
-                            " numpy array")
+            raise TypeError("Cut-pursuit d1 loss simplex: argument "
+                            "'d1_coor_weights' must be a scalar or a numpy "
+                            "array.")
         elif d1_coor_weights != None:
             d1_coor_weights = np.array([d1_coor_weights], dtype=real_t)
         else:
@@ -201,23 +203,23 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     # Check graph structure 
     if first_edge.size != Y.shape[1] + 1 :
-        raise ValueError("Cut-pursuit d1 quadratic l1 bounds: argument "
-                         "'first_edge' should contain |V| + 1 = {0} elements, "
-                         "but {1} are given".format(Y.shape[1]+1, 
-                          first_edge.size))
+        raise ValueError("Cut-pursuit d1 loss simplex: argument 'first_edge'"
+                         "should contain |V| + 1 = {0} elements, but {1} are "
+                         "given".format(Y.shape[1] + 1, first_edge.size))
  
     # Check type of all numpy.array arguments of type float (Y, edge_weights,
     # loss_weights, d1_coor_weights) 
     for name, ar_args in zip(
             ["Y", "edge_weights", "loss_weights", "d1_coor_weights"],
-            [Y, edge_weights, loss_weights, d1_coor_weights]):
+            [ Y ,  edge_weights ,  loss_weights ,  d1_coor_weights ]):
         if ar_args.dtype != real_t:
-            raise TypeError("argument '{0}' must be of type '{1}'"
-                            .format(name, real_t))
+            raise TypeError("Cut-pursuit d1 loss simplex: argument '{0}' must "
+                            "be of type '{1}'".format(name, real_t))
 
     # Check fortran continuity of all multidimensional numpy.array arguments
     if not(Y.flags["F_CONTIGUOUS"]):
-        raise TypeError("argument 'Y' must be F_CONTIGUOUS")
+        raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be "
+                        "F_CONTIGUOUS.")
 
     # Convert in float64 all float arguments if needed (cp_dif_tol, pfdr_rho,
     # pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol) 
@@ -241,9 +243,11 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     for name, b_args in zip(
         ["balance_parallel_split", "compute_Obj", "compute_Time", 
          "compute_Dif"],
-        [balance_parallel_split, compute_Obj, compute_Time, compute_Dif]):
+        [ balance_parallel_split ,  compute_Obj ,  compute_Time , 
+          compute_Dif ]):
         if type(b_args) != bool:
-            raise TypeError("argument '{0}' must be boolean".format(name))
+            raise TypeError("Cut-pursuit d1 loss simplex: argument '{0}' must "
+                            "be boolean".format(name))
 
     # Call wrapper python in C  
     Comp, rX, it, Obj, Time, Dif = cp_pfdr_d1_lsx_cpy(

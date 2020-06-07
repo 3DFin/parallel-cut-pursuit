@@ -58,8 +58,8 @@ F1 = np.zeros(len(classNames),)
 for k in range(1,len(classNames) + 1):
     predk = np.array(ML == classId[k-1], dtype="int")
     truek = np.array(ground_truth == classId[k-1], dtype="int")
-    F1[k-1] = 2*np.array((predk + truek) == 2, dtype = "int").sum()
-              /(predk.sum() + truek.sum())
+    F1[k-1] = (2*np.array((predk + truek) == 2, dtype = "int").sum()
+               /(predk.sum() + truek.sum()))
 print("\naverage F1 of random forest prediction: {:.2f}\n\n".format(F1.mean()))
 del predk, truek
 
@@ -78,8 +78,8 @@ F1 = np.zeros(len(classNames),)
 for k in range(1,len(classNames) + 1):
     predk = np.array(ML == classId[k-1], dtype="int")
     truek = np.array(ground_truth == classId[k-1], dtype="int")
-    F1[k-1] = 2*np.array((predk + truek) == 2).sum()
-              /(predk.sum() + truek.sum())
+    F1[k-1] = (2*np.array((predk + truek) == 2).sum()
+               /(predk.sum() + truek.sum()))
 print(("\naverage F1 of spatially regularized prediction: "
        "{:.2f}\n\n").format(F1.mean()))
 del predk, truek

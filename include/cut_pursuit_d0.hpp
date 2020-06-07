@@ -59,9 +59,6 @@ protected:
     /* compute the functional f at a single vertex */
     virtual real_t fv(index_t v, const value_t* Xv) = 0; 
 
-    // /* estimate dissimilarity of functional f between two given vertices */
-    // virtual real_t fuv(index_t u, index_t v) = 0; 
-
     /* compute graph contour length; use reduced edges and reduced weights */
     real_t compute_graph_d0();
 

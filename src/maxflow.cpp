@@ -17,8 +17,8 @@
 using namespace std;
 
 TPL MXFL::Maxflow(index_t node_num, index_t edge_num)
-	: nodeptr_block(nullptr),
-      terminal(&reserved_terminal_arc), orphan(&reserved_orphan_arc)
+	: terminal(&reserved_terminal_arc), orphan(&reserved_orphan_arc),
+      nodeptr_block(nullptr)
 {
 	nodes = (node*) malloc(sizeof(node)*node_num);
 	arcs = (arc*) malloc(sizeof(arc)*2*edge_num);
@@ -162,17 +162,7 @@ TPL void MXFL::maxflow_init()
 		{
 			i -> parent = nullptr;
 		}
-        // cout << i - nodes << " " << i->tr_cap << " " << i->first - arcs << endl;
 	}
-
-    // for (arc* a=arcs; a<arc_last; a++)
-    // {
-        // if (a -> next){
-        // cout << a - arcs << " " << a->r_cap << " " << a->head - nodes << " " << a->sister - arcs << " " << a -> next - arcs << endl;
-        // }else{
-        // cout << a - arcs << " " << a->r_cap << " " << a->head - nodes << " " << a->sister - arcs << " " << "null" << endl;
-        // }
-    // }
 }
 
 TPL void MXFL::augment(arc *middle_arc)
@@ -293,7 +283,7 @@ TPL void MXFL::process_source_orphan(node *i)
 		}
 	}
 
-	if (i->parent = a0_min)
+	if ((i->parent = a0_min))
 	{
 		i -> TS = TIME;
 		i -> DIST = d_min + 1;
@@ -366,7 +356,7 @@ TPL void MXFL::process_sink_orphan(node *i)
 		}
 	}
 
-	if (i->parent = a0_min)
+	if ((i->parent = a0_min))
 	{
 		i -> TS = TIME;
 		i -> DIST = d_min + 1;
@@ -416,8 +406,6 @@ TPL void MXFL::maxflow()
 		{
 			if (!(i = next_active())) break;
 		}
-
-        // cout << i - nodes << endl;
 
 		/* growth */
 		if (!i->is_sink)
@@ -481,40 +469,23 @@ TPL void MXFL::maxflow()
             exit(EXIT_FAILURE);
         }
 
-        // if (a)
-        // {
-            // cout << "found " << a - arcs << endl;
-        // }else{
-// 
-            // cout << "not found" << a << endl;
-        // }
-
 		if (a)
 		{
 			i -> next = i; /* set active flag */
 			current_node = i;
 
-            // cout << "augment" << endl;
-
 			/* augmentation */
 			augment(a);
 			/* augmentation end */
 
-            // cout << "augment end" << endl;
-
 			/* adoption */
 			while ((np=orphan_first))
 			{
-                // cout << np->ptr - nodes << endl;
-
 				np_next = np -> next;
 				np -> next = nullptr;
 
 				while ((np=orphan_first))
 				{
-
-                    // cout << "inner " << np->ptr - nodes << endl;
-
 					orphan_first = np -> next;
 					i = np -> ptr;
 					nodeptr_block -> Delete(np);
@@ -526,7 +497,6 @@ TPL void MXFL::maxflow()
 				orphan_first = np_next;
 			}
 			/* adoption end */
-            // cout << "adoption end" << endl;
 		}
 		else current_node = nullptr;
 	}

@@ -139,8 +139,13 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
 }
 
 /* actual python interface */
-static PyObject* cp_pfdr_d1_lsx_cpy(PyObject* self, PyObject* args)
+#if PY_VERSION_HEX >= 0x03040000 // Py_UNUSED suppress warning from 3.4
+static PyObject* cp_pfdr_d1_lsx_cpy(PyObject* Py_UNUSED(self), PyObject* args)
 { 
+#else
+static PyObject* cp_pfdr_d1_lsx_cpy(PyObject* self, PyObject* args)
+{   (void) self; // suppress unused parameter warning
+#endif
     /* INPUT */
     PyArrayObject *py_Y, *py_first_edge, *py_adj_vertices, *py_edge_weights,
         *py_loss_weights, *py_d1_coor_weights;
@@ -176,7 +181,7 @@ static PyObject* cp_pfdr_d1_lsx_cpy(PyObject* self, PyObject* args)
             py_first_edge, py_adj_vertices, py_edge_weights, py_loss_weights,
             py_d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho,
             pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
-            verbose, max_num_threads, balance_parallel_split, compute_Obj, 
+            verbose, max_num_threads, balance_parallel_split, compute_Obj,
             compute_Time, compute_Dif);
         return PyReturn;
     }

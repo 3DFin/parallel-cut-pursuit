@@ -149,7 +149,8 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
     /**  cut-pursuit with preconditioned forward-Douglas-Rachford  **/
 
     Cp_d1_ql1b<real_t, index_t, comp_t> *cp =
-       new Cp_d1_ql1b<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices);
+        new Cp_d1_ql1b<real_t, index_t, comp_t>
+            (V, E, first_edge, adj_vertices);
 
     cp->set_edge_weights(edge_weights, homo_edge_weight);
     cp->set_quadratic(Y, N, A, a);
@@ -180,8 +181,14 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
 }
 
 /* actual interface */
-static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
+#if PY_VERSION_HEX >= 0x03040000 // Py_UNUSED suppress warning from 3.4
+static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * Py_UNUSED(self),
+    PyObject * args)
 { 
+#else
+static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
+{   (void) self; // suppress unused parameter warning
+#endif
     /* INPUT */ 
     PyArrayObject *py_Y, *py_A, *py_first_edge, *py_adj_vertices,
         *py_edge_weights, *py_Yl1, *py_l1_weights, *py_low_bnd, *py_upp_bnd; 

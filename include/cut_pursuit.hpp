@@ -126,8 +126,6 @@ public:
     int cut_pursuit(bool init = true);
 
 protected:
-    const size_t D; // dimension of the data; total size is V*D
-
     /**  main graph  **/
 
     const index_t V, E; // number of vertices, of edges
@@ -146,6 +144,9 @@ protected:
     real_t homo_edge_weight;
 
     comp_t saturated_vert; // number of vertices within saturated components
+
+    /* dimension of the data; total size signal is V*D */
+    const size_t D;
 
     /**  reduced graph  **/
 
@@ -205,11 +206,11 @@ protected:
      * rV_big is the number of large original components split this way;
      * first_vertex_big holds the first vertices of components split this way;
      * return the number of useful parallel threads */
-    virtual int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
+    int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
         index_t*& first_vertex_big);
 
     /* revert the above process */
-    virtual void revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
+    void revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
         index_t* first_vertex_big);
 
     /* large components are split for balancing parallel workload;

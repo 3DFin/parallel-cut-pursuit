@@ -64,7 +64,7 @@ if name in to_compile:
             # list source files
             ["cpython/cp_pfdr_d1_ql1b_cpy.cpp", "../src/cp_pfdr_d1_ql1b.cpp",
              "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
-             "../src/cp_graph.cpp", "../src/pfdr_d1_ql1b.cpp",
+             "../src/maxflow.cpp", "../src/pfdr_d1_ql1b.cpp",
              "../src/matrix_tools.cpp", "../src/pfdr_graph_d1.cpp", 
              "../src/pcd_fwd_doug_rach.cpp", "../src/pcd_prox_split.cpp"],
             include_dirs=include_dirs,
@@ -80,7 +80,7 @@ if name in to_compile:
             # list source files
             ["cpython/cp_pfdr_d1_lsx_cpy.cpp", "../src/cp_pfdr_d1_lsx.cpp",
              "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
-             "../src/cp_graph.cpp", "../src/pfdr_d1_lsx.cpp",
+             "../src/maxflow.cpp", "../src/pfdr_d1_lsx.cpp",
              "../src/proj_simplex.cpp", "../src/pfdr_graph_d1.cpp",
              "../src/pcd_fwd_doug_rach.cpp", "../src/pcd_prox_split.cpp"], 
             include_dirs=include_dirs,
@@ -96,7 +96,7 @@ if name in to_compile:
             # list source files
             ["cpython/cp_kmpp_d0_dist_cpy.cpp", "../src/cp_kmpp_d0_dist.cpp",
              "../src/cut_pursuit_d0.cpp", "../src/cut_pursuit.cpp",
-             "../src/cp_graph.cpp"], 
+             "../src/maxflow.cpp"], 
             include_dirs=include_dirs,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)

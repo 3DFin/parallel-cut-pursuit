@@ -2,9 +2,9 @@
  * Comp, rX, it, Obj, Time, Dif = cp_kmpp_d0_dist_cpy(
  *          loss, Y, first_edge, adj_vertices, edge_weights, vert_weights, 
  *          coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
- *          kmpp_init_num, kmpp_iter_num, verbose, max_num_threads,
- *          balance_parallel_split, real_is_double, compute_Obj, compute_Time, 
- *          compute_Dif)
+ *          split_damp_ratio kmpp_init_num, kmpp_iter_num, verbose,
+ *          max_num_threads, balance_parallel_split, real_is_double,
+ *          compute_Obj, compute_Time, compute_Dif)
  * 
  *  Baudoin Camille 2019
  *===========================================================================*/
@@ -140,8 +140,13 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
 }
 
 /* actual interface */
-static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
+#if PY_VERSION_HEX >= 0x03040000 // Py_UNUSED suppress warning from 3.4
+static PyObject* cp_kmpp_d0_dist_cpy(PyObject* Py_UNUSED(self), PyObject* args)
 { 
+#else
+static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
+{   (void) self; // suppress unused parameter warning
+#endif
     /* INPUT */
     PyArrayObject *py_Y, *py_first_edge, *py_adj_vertices, *py_edge_weights,
         *py_vert_weights, *py_coor_weights;
