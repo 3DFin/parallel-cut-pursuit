@@ -34,7 +34,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 % expected (recompilation is necessary)
 % 
 % INPUTS: real numeric type is either single or double, not both;
-%         indices are C-style (start at 0) of type uint32
+%         indices start at 0, type uint32
 %
 % Y - observations, (real) array of length N (direct matricial case), or
 %                          array of length V (left-premult. by A^t), or
@@ -49,7 +49,10 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %     if N = V in a direct matricial case, set the last option 'AtA_if_square'
 %     to false
 % first_edge, adj_vertices - forward-star graph representation:
-%     edges are numeroted (C-style indexing) so that all vertices originating
+%     vertices are numeroted (start at 0) in the order they are given in Y or A
+%         (careful to the internal memory representation of multidimensional
+%          arrays, usually Octave and Matlab use column-major format)
+%     edges are numeroted (start at 0) so that all vertices originating
 %         from a same vertex are consecutive;
 %     for each vertex, first_edge indicates the first edge starting from the
 %         vertex (or, if there are none, starting from the next vertex);
@@ -98,7 +101,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %     is balanced; WARNING: this might trade off speed against optimality
 % AtA_if_square - if A is square, set this to false for direct matricial case
 %
-% OUTPUTS: indices are C-style (start at 0)
+% OUTPUTS: indices start at 0
 %
 % Comp - assignement of each vertex to a component, (uint16) array of length V
 % rX - values of eachcomponents of the minimizer, (real) array of length rV;

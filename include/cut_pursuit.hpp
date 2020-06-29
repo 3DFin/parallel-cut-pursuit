@@ -131,8 +131,8 @@ protected:
     const index_t V, E; // number of vertices, of edges
 
     /**  forward-star graph representation  **/
-    /* - edges (unoriented arc) are numeroted so that all vertices originating
-     * from a same vertex are consecutive;
+    /* - edges are numeroted so that all edges originating from a same vertex
+     * are consecutive;
      * - for each vertex, 'first_edge' indicates the first edge starting
      * from the vertex (or, if there are none, starting from the next vertex);
      * array of length V + 1, the first value is always zero and the last

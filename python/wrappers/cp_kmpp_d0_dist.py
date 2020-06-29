@@ -71,16 +71,19 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     components are expected (recompilation is necessary)
 
     loss - 1 for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler
-    Y - observations, (real) D-by-V array, column-major format (for
-        Kullback-Leibler loss, observation at each vertex is supposed to lie on
-        the probability simplex); 
-    first_edge, adj_vertices - graph forward-star representation:
-        edges are numeroted (C-style indexing) so that all vertices originating
+    Y - observations, (real) D-by-V array, column-major format;
+        for Kullback-Leibler loss, the value at each vertex must lie on the
+        probability simplex
+    first_edge, adj_vertices - forward-star graph representation:
+        vertices are numeroted (start at 0) in the order they are given in Y
+            (careful to the internal memory representation of multidimensional
+            arrays, usually Python uses row-major format)
+        edges are numeroted (start at 0) so that all edges originating
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting from 
-          the vertex (or, if there are none, starting from the next vertex);
-          (uint32) array of length V+1, the last value is the total number of
-          edges;
+            the vertex (or, if there are none, starting from the next vertex);
+            (uint32) array of length V+1, the last value is the total number of
+            edges;
         for each edge, 'adj_vertices' indicates its ending vertex, (uint32)
           array of length E
     edge_weights - (real) array of length E or scalar for homogeneous weights

@@ -71,8 +71,11 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         if N = V in a direct matricial case, the last argument 'AtA_if_square'
         must be set to false
     first_edge, adj_vertices - graph forward-star representation:
-        edges are numeroted (C-style indexing) so that all vertices originating
-        from a same vertex are consecutive;
+        vertices are numeroted (start at 0) in the order given in Y or A
+            (careful to the internal memory representation of multidimensional
+            arrays, usually Python uses row-major format)
+        edges are numeroted (start at 0) so that all edges originating
+            from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting 
             from the vertex (or, if there are none, starting from the next 
             vertex); (uint32) array of length V + 1, the last value is the

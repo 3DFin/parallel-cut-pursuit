@@ -48,14 +48,17 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % expected (recompilation is necessary)
 %
 % INPUTS: real numeric type is either single or double, not both;
-%         indices are C-style (start at 0) of type uint32
+%         indices start at 0, type uint32
 %
 % loss - 1 for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler
 % Y - observations, (real) D-by-V array, column-major format;
-%     for Kullback-Leibler loss, the value at each vertex is supposed to lie on
-%     the probability simplex 
+%     for Kullback-Leibler loss, the value at each vertex must lie on the
+%     probability simplex 
 % first_edge, adj_vertices - forward-star graph representation:
-%     edges are numeroted (C-style indexing) so that all vertices originating
+%     vertices are numeroted (start at 0) in the order they are given in Y
+%         (careful to the internal memory representation of multidimensional
+%         arrays, usually Octave and Matlab use column-major format)
+%     edges are numeroted (start at 0) so that all vertices originating
 %         from a same vertex are consecutive;
 %     for each vertex, first_edge indicates the first edge starting from the
 %         vertex (or, if there are none, starting from the next vertex);
@@ -91,7 +94,7 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % balance_parallel_split - if true, the parallel workload of the split step 
 %     is balanced; WARNING: this might trade off speed against optimality
 %
-% OUTPUTS: indices are C-style (start at 0)
+% OUTPUTS: indices start at 0
 %
 % Comp - assignement of each vertex to a component, (uint16) array of length V
 % rX - values of each component of the minimizer, (real) array of length rV;
