@@ -5,6 +5,7 @@ import sys
 sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
                                               "../bin"))
 
+import cp_kmpp_d0_dist_cpy
 from cp_kmpp_d0_dist_cpy import cp_kmpp_d0_dist_cpy
 
 def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 

@@ -199,9 +199,9 @@ protected:
     void bind(index_t e); // flag a binding (inactive) edge
 
     /* split large components for balancing parallel workload:
-     * components are split only by adding elements in the first_vertex list;
-     * comp_list remains unchanged; new component created this way will be 
-     * coherent, as the component list is computed with breadth-first search;
+     * new components are computed by breadth-first search, restarting when a
+     * maximum size is reached;
+     * reorder comp_list and populate first vertex accordingly;
      * rV_new is the number of components resulting from such split;
      * rV_big is the number of large original components split this way;
      * first_vertex_big holds the first vertices of components split this way;
@@ -209,13 +209,17 @@ protected:
     int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
         index_t*& first_vertex_big);
 
-    /* revert the above process */
+    /* large components are split for balancing parallel workload,
+     * parallel separation edges might be removed or activated;
+     * when called, first_vertex contains additional components;
+     * NOTA: separation edges which are not removed or activated delimit
+     * temporarily components that will be merged during merge step */
+    virtual index_t remove_parallel_separations(comp_t rV_new) = 0;
+
+    /* revert the above process;
+     * no change to comp_list, only suppress elements from first_vertex */
     void revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
         index_t* first_vertex_big);
-
-    /* large components are split for balancing parallel workload;
-     * parallel separation edges must be removed or activated */
-    virtual index_t remove_parallel_separations(comp_t rV_new) = 0;
 
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
@@ -258,8 +262,7 @@ protected:
      * O(rE^2), but is expected to be much less in practice */
     virtual comp_t compute_merge_chains() = 0;
 
-    /* main routine using the above to perform the merge step
-     * NOTA: saturation per component is updated here */
+    /* main routine using the above to perform the merge step */
     virtual index_t merge();
 
     /**  monitoring evolution; set monitor_evolution to true  **/
@@ -334,11 +337,16 @@ private:
     /* initialize with only one component and reduced graph accordingly */
     void single_connected_component();
 
-    /* update connected components and count saturated ones;
-     * NOTA: saturation per component is not updated until merge step */
+    /* compute binding reverse edge forward star graph structure */
+    void get_bind_reverse_edges(comp_t rv, index_t*& first_edge_r,
+        index_t*& adj_vertices_r);
+
+    /* update connected components and count saturated ones */
     void compute_connected_components();
 
-    /* allocate and compute reduced graph structure */
+    /* allocate and compute reduced graph structure; 
+     * NOTA: parallel separation edges contribute to infinite reduced edge
+     * weights, so that they will be removed during merge step */
     void compute_reduced_graph();
 };
 
