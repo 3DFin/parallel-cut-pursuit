@@ -665,7 +665,8 @@ TPL void CP::initialize()
 TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
         index_t*& first_vertex_big)
 {
-    if (max_num_threads > 1){ /**  sort components by decreasing size  **/
+    /**  sort components by decreasing size  **/
+    if (max_num_threads > 1){ // sort even if no balancing is required
         /* get component sizes */
         index_t* comp_sizes = (index_t*) malloc_check(sizeof(index_t)*rV);
         for (comp_t rv = 0; rv < rV; rv++){
@@ -822,8 +823,6 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     free(index_in_comp); index_in_comp = nullptr;
 
     comp_t rV_dif = rV_new - rV_big;
-
-    cout << rV_new << " " << rV_big << " " << rV_dif << endl;
 
     if ((index_t) rV + rV_dif > MAX_NUM_COMP){
         cerr << "Cut-pursuit: number of balanced components (" <<
@@ -1012,18 +1011,11 @@ TPL index_t CP::split()
 
     free(index_in_comp); index_in_comp = nullptr;
 
-    cout << "à l'eau" << endl;
-
     if (rV_new != rV_big){
         activation += remove_parallel_separations(rV_new);
 
-        cout << "à l'huile" << endl;
-
         revert_balance_parallel_split(rV_new, rV_big, first_vertex_big);
     }
-
-    cout << "au chocolat" << endl;
-
 
     /* reconstruct components assignment */
     #pragma omp parallel for schedule(static) NUM_THREADS(V, rV)
