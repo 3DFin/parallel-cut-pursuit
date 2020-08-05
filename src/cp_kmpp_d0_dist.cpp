@@ -344,8 +344,17 @@ TPL real_t CP_D0_DIST::compute_evolution(bool compute_dif)
     return amp > eps ? dif/amp : dif/eps;
 }
 
-/* instantiate for compilation */
-template class Cp_d0_dist<float, uint32_t, uint16_t>;
-template class Cp_d0_dist<double, uint32_t, uint16_t>;
-template class Cp_d0_dist<float, uint32_t, uint32_t>;
-template class Cp_d0_dist<double, uint32_t, uint32_t>;
+/**  instantiate for compilation  **/
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+    template class Cp_d0_dist<float, int32_t, int16_t>;
+    template class Cp_d0_dist<double, int32_t, int16_t>;
+    template class Cp_d0_dist<float, int32_t, int32_t>;
+    template class Cp_d0_dist<double, int32_t, int32_t>;
+#else
+    template class Cp_d0_dist<float, uint32_t, uint16_t>;
+    template class Cp_d0_dist<double, uint32_t, uint16_t>;
+    template class Cp_d0_dist<float, uint32_t, uint32_t>;
+    template class Cp_d0_dist<double, uint32_t, uint32_t>;
+#endif

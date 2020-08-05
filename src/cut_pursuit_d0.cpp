@@ -376,7 +376,16 @@ TPL comp_t CP_D0::compute_merge_chains()
 }
 
 /**  instantiate for compilation  **/
-template class Cp_d0<float, uint32_t, uint16_t>;
-template class Cp_d0<double, uint32_t, uint16_t>;
-template class Cp_d0<float, uint32_t, uint32_t>;
-template class Cp_d0<double, uint32_t, uint32_t>;
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+    template class Cp_d0<float, int32_t, int16_t>;
+    template class Cp_d0<double, int32_t, int16_t>;
+    template class Cp_d0<float, int32_t, int32_t>;
+    template class Cp_d0<double, int32_t, int32_t>;
+#else
+    template class Cp_d0<float, uint32_t, uint16_t>;
+    template class Cp_d0<double, uint32_t, uint16_t>;
+    template class Cp_d0<float, uint32_t, uint32_t>;
+    template class Cp_d0<double, uint32_t, uint32_t>;
+#endif
