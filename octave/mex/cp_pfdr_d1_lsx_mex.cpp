@@ -15,7 +15,7 @@
 #include <cstdint>
 #include <cstring>
 #include "mex.h"
-#include "../../include/cp_pfdr_d1_lsx.hpp"
+#include "cp_pfdr_d1_lsx.hpp"
 
 using namespace std;
 
@@ -23,15 +23,29 @@ using namespace std;
  * edges in the main graph;
  * comp_t must be able to represent the number of constant connected components
  * in the reduced graph, as well as the dimension D */
-typedef uint32_t index_t;
-# define mxINDEX_CLASS mxUINT32_CLASS
-# define INDEX_CLASS_NAME "uint32"
-/* comment the following if more than 65535 components are expected */
-typedef uint16_t comp_t;
-# define mxCOMP_CLASS mxUINT16_CLASS
-/* uncomment the following if more than 65535 components are expected */
-// typedef uint32_t comp_t;
-// #define mxCOMP_CLASS mxUINT32_CLASS
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+    typedef int32_t index_t;
+    # define mxINDEX_CLASS mxINT32_CLASS
+    # define INDEX_CLASS_NAME "int32"
+    /* comment the following if more than 32767 components are expected */
+    typedef int16_t comp_t;
+    # define mxCOMP_CLASS mxINT16_CLASS
+    /* uncomment the following if more than 32767 components are expected */
+    // typedef int32_t comp_t;
+    // #define mxCOMP_CLASS mxINT32_CLASS
+#else
+    typedef uint32_t index_t;
+    # define mxINDEX_CLASS mxUINT32_CLASS
+    # define INDEX_CLASS_NAME "uint32"
+    /* comment the following if more than 65535 components are expected */
+    typedef uint16_t comp_t;
+    # define mxCOMP_CLASS mxUINT16_CLASS
+    /* uncomment the following if more than 65535 components are expected */
+    // typedef uint32_t comp_t;
+    // #define mxCOMP_CLASS mxUINT32_CLASS
+#endif
 
 /* function for checking optional parameters */
 static void check_opts(const mxArray* options)
@@ -177,7 +191,7 @@ static void cp_pfdr_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
     double* Time = nlhs > 4 ?
         (double*) mxMalloc(sizeof(double)*(cp_it_max + 1)) : nullptr;
     real_t *Dif = nlhs > 5 ?
-        (real_t*) mxMalloc(sizeof(double)*cp_it_max) : nullptr;
+        (real_t*) mxMalloc(sizeof(real_t)*cp_it_max) : nullptr;
 
     /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
 
@@ -200,7 +214,7 @@ static void cp_pfdr_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
     /* copy reduced values */
     comp_t rV = cp->get_components();
     real_t* cp_rX = cp->get_reduced_values();
-    plhs[1] = mxCreateNumericMatrix(D, rV, mxGetClassID(prhs[1]), mxREAL);
+    plhs[1] = mxCreateNumericMatrix(D, rV, mxREAL_CLASS, mxREAL);
     real_t* rX = (real_t*) mxGetData(plhs[1]);
     for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
     

@@ -2,15 +2,14 @@
  * Hugo Raguet 2018
  *===========================================================================*/
 #include <cmath>
-#include "../include/cp_pfdr_d1_lsx.hpp"
-#include "../include/omp_num_threads.hpp"
-#include "../include/matrix_tools.hpp"
-#include "../include/pfdr_d1_lsx.hpp"
+#include "cp_pfdr_d1_lsx.hpp"
+#include "omp_num_threads.hpp"
+#include "matrix_tools.hpp"
+#include "pfdr_d1_lsx.hpp"
 
 #define ZERO ((real_t) 0.0)
 #define ONE ((real_t) 1.0)
 #define HALF ((real_t) 0.5)
-#define INF_REAL (std::numeric_limits<real_t>::infinity())
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 #define LOSS_WEIGHTS_(v) (loss_weights ? loss_weights[(v)] : ONE)
 #define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : ONE)
@@ -31,7 +30,7 @@ TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
         exit(EXIT_FAILURE);
     }
 
-    loss = LINEAR;
+    loss = linear_loss();
     loss_weights = nullptr;
 
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
@@ -70,7 +69,10 @@ TPL void CP_D1_LSX::solve_reduced_problem()
     if (rV == 1){ /**  single connected component  **/
 
         #pragma omp parallel for schedule(static) NUM_THREADS(D*V, D)
-        for (size_t d = 0; d < D; d++){
+        /* unsigned loop counter is allowed since OpenMP 3.0 (2008)
+         * but MSVC compiler still does not support it as of 2020;
+         * comp_t has been checked to be able to represent D anyway */
+        for (comp_t d = 0; d < (comp_t) D; d++){
             rX[d] = ZERO;
             size_t vd = d;
             for (index_t v = 0; v < V; v++){
@@ -79,7 +81,7 @@ TPL void CP_D1_LSX::solve_reduced_problem()
             }
         }
 
-        if (loss == LINEAR){ /* optimum at simplex corner */
+        if (loss == linear_loss()){ /* optimum at simplex corner */
             size_t idx = 0;
             real_t max = rX[idx];
             for (size_t d = 1; d < D; d++){
@@ -158,7 +160,8 @@ TPL index_t CP_D1_LSX::split()
     const real_t c = (ONE - loss), q = loss/D, r = q/c; // useful for KLs
 
     uintmax_t Vns = V - saturated_vert;
-    uintmax_t num_ops = D*Vns*(loss == LINEAR || loss == QUADRATIC ? 1 : 3);
+    uintmax_t num_ops = D*Vns*
+        (loss == linear_loss() || loss == quadratic_loss() ? 1 : 3);
     // num_ops += E*Vns/V;
 
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
@@ -172,9 +175,9 @@ TPL index_t CP_D1_LSX::split()
         /**  gradient of differentiable loss term  **/
         const real_t* Yv = Y + D*v;
         for (size_t d = 0; d < D; d++){
-            if (loss == LINEAR){ /* linear loss, grad = - w Y */
+            if (loss == linear_loss()){ /* grad = - w Y */
                 gradv[d] = -LOSS_WEIGHTS_(v)*Yv[d];
-            }else if (loss == QUADRATIC){ /* quadratic loss, grad = w(X - Y) */
+            }else if (loss == quadratic_loss()){ /* grad = w(X - Y) */
                 gradv[d] = LOSS_WEIGHTS_(v)*(rXv[d] - Yv[d]);
             }else{ /* dKLs/dx_k = -(1-s)(s/D + (1-s)y_k)/(s/D + (1-s)x_k) */
                 gradv[d] = -LOSS_WEIGHTS_(v)*(q + c*Yv[d])/(r + rXv[d]);
@@ -343,7 +346,7 @@ TPL real_t CP_D1_LSX::compute_evolution(bool compute_dif)
     }
     saturated_comp = saturated_comp_par;
     saturated_vert = saturated_vert_par;
-    return compute_dif ? dif/V : INF_REAL;
+    return compute_dif ? dif/V : real_inf();
 }
 
 TPL real_t CP_D1_LSX::compute_objective()
@@ -352,7 +355,7 @@ TPL real_t CP_D1_LSX::compute_objective()
 {
     real_t obj = ZERO;
 
-    if (loss == LINEAR){
+    if (loss == linear_loss()){
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:obj)
         for (index_t v = 0; v < V; v++){
@@ -362,7 +365,7 @@ TPL real_t CP_D1_LSX::compute_objective()
             for (size_t d = 0; d < D; d++){ prod += rXv[d]*Yv[d]; }
             obj -= LOSS_WEIGHTS_(v)*prod;
         }
-    }else if (loss == QUADRATIC){
+    }else if (loss == quadratic_loss()){
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:obj)
         for (index_t v = 0; v < V; v++){
@@ -397,8 +400,17 @@ TPL real_t CP_D1_LSX::compute_objective()
     return obj;
 }
 
-/* instantiate for compilation */
+/**  instantiate for compilation  **/
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+template class Cp_d1_lsx<float, int32_t, int16_t>;
+template class Cp_d1_lsx<double, int32_t, int16_t>;
+template class Cp_d1_lsx<float, int32_t, int32_t>;
+template class Cp_d1_lsx<double, int32_t, int32_t>;
+#else
 template class Cp_d1_lsx<float, uint32_t, uint16_t>;
 template class Cp_d1_lsx<double, uint32_t, uint16_t>;
 template class Cp_d1_lsx<float, uint32_t, uint32_t>;
 template class Cp_d1_lsx<double, uint32_t, uint32_t>;
+#endif

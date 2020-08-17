@@ -2,8 +2,9 @@
  * Hugo Raguet 2018
  *===========================================================================*/
 #include <cmath>
-#include "../include/cut_pursuit_d1.hpp"
+#include "cut_pursuit_d1.hpp"
 
+#define TWO ((size_t) 2) // avoid overflows
 #define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : (real_t) 1.0)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
@@ -82,9 +83,9 @@ TPL bool CP_D1::is_almost_equal(comp_t ru, comp_t rv)
 TPL comp_t CP_D1::compute_merge_chains()
 {
     comp_t merge_count = 0;
-    for (size_t re = 0; re < rE; re++){
-        comp_t ru = reduced_edges[2*re];
-        comp_t rv = reduced_edges[2*re + 1];
+    for (index_t re = 0; re < rE; re++){
+        comp_t ru = reduced_edges[TWO*re];
+        comp_t rv = reduced_edges[TWO*re + 1];
         /* get the root of each component's chain */
         ru = get_merge_chain_root(ru);
         rv = get_merge_chain_root(rv);
@@ -101,9 +102,9 @@ TPL real_t CP_D1::compute_graph_d1()
     real_t tv = 0.0;
     #pragma omp parallel for schedule(static) NUM_THREADS(2*rE*D, rE) \
         reduction(+:tv)
-    for (size_t re = 0; re < rE; re++){
-        real_t *rXu = rX + reduced_edges[2*re]*D;
-        real_t *rXv = rX + reduced_edges[2*re + 1]*D;
+    for (index_t re = 0; re < rE; re++){
+        real_t *rXu = rX + reduced_edges[TWO*re]*D;
+        real_t *rXv = rX + reduced_edges[TWO*re + 1]*D;
         real_t dif = 0.0;
         for (size_t d = 0; d < D; d++){
             if (d1p == D11){
@@ -119,7 +120,16 @@ TPL real_t CP_D1::compute_graph_d1()
 }
 
 /**  instantiate for compilation  **/
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+template class Cp_d1<float, int32_t, int16_t>;
+template class Cp_d1<double, int32_t, int16_t>;
+template class Cp_d1<float, int32_t, int32_t>;
+template class Cp_d1<double, int32_t, int32_t>;
+#else
 template class Cp_d1<float, uint32_t, uint16_t>;
 template class Cp_d1<double, uint32_t, uint16_t>;
 template class Cp_d1<float, uint32_t, uint32_t>;
 template class Cp_d1<double, uint32_t, uint32_t>;
+#endif

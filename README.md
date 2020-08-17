@@ -183,7 +183,7 @@ An example with the smoothed Kullback–Leibler is provided with [GNU Octave or 
 
 ### C++ documentation
 Requires `C++11`.  
-Be sure to have OpenMP enabled with your compiler to enjoy parallelization. Note that, as of 2020, MSVC still does not support OpenMP 3.0 (published in 2008), consider switching to a decent compiler.  
+Be sure to have OpenMP enabled with your compiler to enjoy parallelization. Note that, as of 2020, MSVC still does not support OpenMP 3.0 (published in 2008); consider switching to a decent compiler.  
 
 The number of parallel threads used in parallel regions is crucial for good performance; it is roughly controlled by a macro `MIN_OPS_PER_THREAD` which can be set by usual `D` compilation flag. A rule of thumb is to set it to `10000` on personnal computers with a handful of cores, and up to `100000` for large computer clusters with tens of cores.  
 

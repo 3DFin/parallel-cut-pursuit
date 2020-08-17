@@ -2,16 +2,17 @@
  * Hugo Raguet 2018
  *===========================================================================*/
 #include <algorithm>
-#include "../include/cut_pursuit.hpp"
+#include "cut_pursuit.hpp"
 
 #define ZERO ((real_t) 0.0) // avoid conversions
 #define ONE ((size_t) 1) // avoid overflows
 #define TWO ((size_t) 2) // avoid overflows
-#define INF_REAL (std::numeric_limits<real_t>::infinity())
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
+
 /** specific flags **/
-/* use maximum number of components; no edge can have this identifier */
-#define NOT_ASSIGNED (std::numeric_limits<comp_t>::max())
+#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max())
+/* use maximum number of components; no component can have this identifier */
+#define NOT_ASSIGNED MAX_NUM_COMP
 #define ASSIGNED ((comp_t) 0)
 #define ASSIGNED_ROOT ((comp_t) 1) // must differ from ASSIGNED
 #define ASSIGNED_ROOT_SAT ((comp_t) 2) // must differ from ASSIGNED_ROOT
@@ -154,7 +155,7 @@ TPL int CP::cut_pursuit(bool init)
 {
     int it = 0;
     double timer = 0.0;
-    real_t dif = INF_REAL;
+    real_t dif = real_inf();
 
     chrono::steady_clock::time_point start;
     if (elapsed_time){ start = chrono::steady_clock::now(); }
@@ -554,7 +555,7 @@ TPL void CP::compute_reduced_graph()
                 }
                 if (active_edge_weights && ae != NO_EDGE){
                     /* infinite weights to parallel sepation ensure merge */
-                    active_edge_weights[ae] = is_par_sep(e) ? INF_REAL :
+                    active_edge_weights[ae] = is_par_sep(e) ? real_inf() :
                         EDGE_WEIGHTS_(e);
                 }
             }
@@ -1046,8 +1047,8 @@ TPL index_t CP::merge()
     merge_chains_next = (comp_t*) malloc_check(sizeof(comp_t)*rV);
     merge_chains_leaf = (comp_t*) malloc_check(sizeof(comp_t)*rV);
     for (comp_t rv = 0; rv < rV; rv++){
-        merge_chains_root[rv] = CHAIN_ROOT;
-        merge_chains_next[rv] = CHAIN_LEAF;
+        merge_chains_root[rv] = chain_end();
+        merge_chains_next[rv] = chain_end();
         merge_chains_leaf[rv] = rv;
     }
     comp_t merge_count = compute_merge_chains();
@@ -1071,7 +1072,7 @@ TPL index_t CP::merge()
         }
         /* run along each final component, from their root */
         for (comp_t ru = 0; ru < rV; ru++){
-            if (merge_chains_root[ru] != CHAIN_ROOT){ continue; }
+            if (merge_chains_root[ru] != chain_end()){ continue; }
             comp_t last_ru = last_comp_assign[comp_list[first_vertex[ru]]];
             if (saturation_flag[last_ru] == NOT_ASSIGNED){
                 saturation_flag[last_ru] = ASSIGNED;
@@ -1080,7 +1081,7 @@ TPL index_t CP::merge()
             }
             /* run along the merge chain */
             comp_t rv = ru; 
-            while (rv != CHAIN_LEAF){
+            while (rv != chain_end()){
                 comp_t last_rv = last_comp_assign[comp_list[first_vertex[rv]]];
                 if (last_ru != last_rv){ /* previous components do not agree */
                     saturation_flag[last_ru] = saturation_flag[last_rv] =
@@ -1091,7 +1092,7 @@ TPL index_t CP::merge()
         }
         /* resulting saturation for each final component */
         for (comp_t rv = 0; rv < rV; rv++){
-            if (merge_chains_root[rv] != CHAIN_ROOT){ continue; }
+            if (merge_chains_root[rv] != chain_end()){ continue; }
             comp_t last_rv = last_comp_assign[comp_list[first_vertex[rv]]];
             is_saturated[rv] = saturation_flag[last_rv] != NOT_SATURATED;
         }
@@ -1121,7 +1122,7 @@ TPL index_t CP::merge()
      * and roots are processed before getting assigned a final component */
     comp_t* final_comp = merge_chains_root;
     for (comp_t ru = 0; ru < rV; ru++){
-        if (merge_chains_root[ru] != CHAIN_ROOT){ continue; }
+        if (merge_chains_root[ru] != chain_end()){ continue; }
         /**  ru is a root, create the corresponding final component  **/
         /* copy component value and saturation;
          * can be done in-place because rn <= ru guaranteed */
@@ -1132,7 +1133,7 @@ TPL index_t CP::merge()
         /* run along the merge chain */
         index_t first = i; // holds index of first vertex of the component
         comp_t rv = ru;
-        while (rv != CHAIN_LEAF){
+        while (rv != chain_end()){
             final_comp[rv] = rn;
             /* assign all vertices to final component */ 
             for (index_t j = first_vertex[rv]; j < first_vertex[rv + 1]; j++){
@@ -1235,15 +1236,15 @@ TPL index_t CP::merge()
 
 /**  instantiate for compilation  **/
 #if defined _OPENMP && _OPENMP < 200805
-/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
  * although published in 2008, MSVC still does not support it as of 2020 */
-    template class Cp<float, int32_t, int16_t>;
-    template class Cp<double, int32_t, int16_t>;
-    template class Cp<float, int32_t, int32_t>;
-    template class Cp<double, int32_t, int32_t>;
+template class Cp<float, int32_t, int16_t>;
+template class Cp<double, int32_t, int16_t>;
+template class Cp<float, int32_t, int32_t>;
+template class Cp<double, int32_t, int32_t>;
 #else
-    template class Cp<float, uint32_t, uint16_t>;
-    template class Cp<double, uint32_t, uint16_t>;
-    template class Cp<float, uint32_t, uint32_t>;
-    template class Cp<double, uint32_t, uint32_t>;
+template class Cp<float, uint32_t, uint16_t>;
+template class Cp<double, uint32_t, uint16_t>;
+template class Cp<float, uint32_t, uint32_t>;
+template class Cp<double, uint32_t, uint32_t>;
 #endif

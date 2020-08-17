@@ -26,17 +26,8 @@
 #include <chrono>
 #include <limits>
 #include <iostream>
-#include "../include/omp_num_threads.hpp"
-#include "../include/maxflow.hpp"
-
-/* flag an activated edge on residual capacity of its corresponding arcs */
-#define ACTIVE_EDGE ((real_t) -1.0) 
-#define PAR_SEP_EDGE ((real_t) -2.0) // for parallelization
-/* maximum number of components; no component can have this identifier */
-#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max())
-/* special values for merge step */
-#define CHAIN_ROOT MAX_NUM_COMP
-#define CHAIN_LEAF MAX_NUM_COMP
+#include "omp_num_threads.hpp"
+#include "maxflow.hpp"
 
 /* real_t is the real numeric type, used for objective functional computation
  * and thus for edge weights and flow graph capacities;
@@ -239,12 +230,12 @@ protected:
      * represented by arrays of length rV 'merge_chains_root', '_next' and
      * '_leaf'; merge chain involving component rv follows the scheme
      *   root[rv] -> ... -> rv -> next[rv] -> ... -> leaf[rv] ;
-     * NOTA: macros CHAIN_ROOT and CHAIN_LEAF are special values, and:
+     * NOTA: chain_end() is a special values, and:
      * - only next[rv] is always up-to-date;
-     * - root[rv] is always a preceding component in its chain, or CHAIN_ROOT
+     * - root[rv] is always a preceding component in its chain, or chain_end()
      *   if rv is a root;
      * - leaf[rv] is up-to-date if rv is a root;
-     * - rv is the leaf of its chain if, and only if next[rv] = CHAIN_LEAF;
+     * - rv is the leaf of its chain if, and only if next[rv] == chain_end();
      * an additional requirement is that the root of each chain should be the
      * component in the chain with lowest index */
     comp_t get_merge_chain_root(comp_t rv);
@@ -306,6 +297,9 @@ protected:
     int compute_num_threads(uintmax_t num_ops)
     { return compute_num_threads(num_ops, num_ops); }
 
+    /* representing infinite values (has_infinity checked by constructor) */
+    static real_t real_inf(){ return std::numeric_limits<real_t>::infinity(); }
+
 private:
     enum Edge_status : char // requires C++11 to ensure 1 byte
         {BIND, CUT, PAR_SEP};
@@ -322,6 +316,9 @@ private:
 
     /* during the merging step, merged components are stored as chains */
     comp_t *merge_chains_root, *merge_chains_next, *merge_chains_leaf;
+
+    /* special value: no component can have this identifier */
+    static comp_t chain_end() { return std::numeric_limits<comp_t>::max(); }
 
     double monitor_time(std::chrono::steady_clock::time_point start);
 
@@ -372,7 +369,7 @@ TPL inline void CP::bind(index_t e)
 
 TPL inline comp_t CP::get_merge_chain_root(comp_t rv)
 {
-    while (merge_chains_root[rv] != CHAIN_ROOT){ rv = merge_chains_root[rv]; }
+    while (merge_chains_root[rv] != chain_end()){ rv = merge_chains_root[rv]; }
     return rv;
 }
 

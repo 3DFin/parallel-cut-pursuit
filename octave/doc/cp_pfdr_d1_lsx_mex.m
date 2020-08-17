@@ -78,7 +78,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 % loss_weights - weights on vertices; (real) array of length V
 % d1_coor_weights - for multidimensional data, weights the coordinates in the
 %     l1 norms of finite differences; (real) array of length D;
-%     all weights must be strictly positive, it is advised to normalize the
+%     all weights must be strictly positive, and it is advised to normalize the
 %     weights so that the first value is unity
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (in Euclidean norm) is less than dif_tol;
@@ -96,7 +96,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %     below dif_rcd; WARNING: reconditioning might temporarily draw minimizer
 %     away from solution, and give bad subproblem solutions
 % pfdr_dif_tol - stopping criterion on iterate evolution; algorithm stops if
-%     relative changes (in Euclidean norm) is less than dif_tol;
+%     relative changes (in l1 norm) is less than dif_tol;
 %     1e-3*cp_dif_tol is a conservative value
 % pfdr_it_max - maximum number of iterations;
 %     1e4 iterations provides enough precision for most subproblems

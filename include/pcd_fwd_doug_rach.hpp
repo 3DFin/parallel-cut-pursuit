@@ -19,16 +19,19 @@
  * Inclusion and Convex Optimization, Optimization Letters, 2018, 1-24
  *
  * Hugo Raguet 2016, 2018
- *============================================================================*/
+ *===========================================================================*/
 #pragma once
 #include "pcd_prox_split.hpp"
 
-/* index_t is an integer type able to represent the size of the problem
- * (without taking into account the dimension D) */
-template <typename real_t, typename index_t>
+/* var_index_t is an integer type able to represent the size of the problem
+ * without taking into account the dimension D */
+template <typename real_t, typename var_index_t>
 class Pfdr : public Pcd_prox<real_t>
 {
 public:
+
+    using typename Pcd_prox<real_t>::index_t;
+
     /* shape of conditioning operators;
      * SCALAR for a scalar operator (upright shape);
      * MONODIM for a diagonal operator, constant along coordinates in case of
@@ -39,11 +42,11 @@ public:
 
     /**  constructor, destructor  **/
 
-    Pfdr(index_t size, size_t aux_size, const index_t* aux_idx, size_t D,
-        Condshape gashape = MULTIDIM, Condshape wshape = MULTIDIM);
+    Pfdr(var_index_t size, index_t aux_size, const var_index_t* aux_idx,
+        index_t D, Condshape gashape = MULTIDIM, Condshape wshape = MULTIDIM);
 
     /* delegation for monodimensional setting */
-    Pfdr(index_t size, size_t aux_size, const index_t* aux_idx,
+    Pfdr(var_index_t size, index_t aux_size, const var_index_t* aux_idx,
         Condshape gashape = MONODIM, Condshape wshape = MONODIM) : 
         Pfdr(size, aux_size, aux_idx, 1, gashape, wshape){};
 
@@ -86,13 +89,13 @@ public:
 protected:
     /**  structure  **/
 
-    const index_t size; // number of data points; total dimension is D*size
-    const size_t aux_size; // size of auxiliary variables
-    const size_t D; // dimension of each data point
+    const var_index_t size; // number of data points; total dimension is D*size
+    const index_t aux_size; // size of auxiliary variables
+    const index_t D; // dimension of each data point
     /* auxiliary variable i corresponds to main coordinate aux_idx[i];
      * set to null for aux_idx[i] = i % size, in which case usually aux_size is
      * a multiple of size, and wshape is SCALAR */
-    const index_t* const aux_idx; 
+    const var_index_t* const aux_idx; 
 
     /**  smooth functional f  **/
 

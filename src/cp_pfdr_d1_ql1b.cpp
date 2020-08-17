@@ -2,10 +2,9 @@
  * Hugo Raguet 2018
  *===========================================================================*/
 #include <cmath>
-#include "../include/cp_pfdr_d1_ql1b.hpp"
-#include "../include/matrix_tools.hpp"
-#include "../include/pfdr_d1_ql1b.hpp"
-#include "../include/wth_element.hpp"
+#include "cp_pfdr_d1_ql1b.hpp"
+#include "pfdr_d1_ql1b.hpp"
+#include "wth_element.hpp"
 
 #define ZERO ((real_t) 0.0) // avoid conversions
 #define HALF ((real_t) 0.5) // avoid conversions
@@ -16,6 +15,7 @@
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
 #define CP_D1_QL1B Cp_d1_ql1b<real_t, index_t, comp_t>
+#define PFDR Pfdr_d1_ql1b<real_t, comp_t>
 
 using namespace std;
 
@@ -27,11 +27,11 @@ TPL CP_D1_QL1B::Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
     static_assert(numeric_limits<real_t>::is_iec559,
         "Cut-pursuit d1 quadratic l1 bounds: real_t must satisfy IEEE 754.");
     Y = Yl1 = A = R = nullptr;
-    N = DIAG_ATA;
+    N = Gram_diag();
     a = 1.0;
     l1_weights = nullptr; homo_l1_weight = ZERO;
-    low_bnd = nullptr; homo_low_bnd = -INF_REAL;
-    upp_bnd = nullptr; homo_upp_bnd = INF_REAL;
+    low_bnd = nullptr; homo_low_bnd = -real_inf();
+    upp_bnd = nullptr; homo_upp_bnd = real_inf();
 
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
     pfdr_dif_tol = 1e-3*dif_tol; pfdr_it = pfdr_it_max = 1e4;
@@ -44,12 +44,12 @@ TPL CP_D1_QL1B::Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
 
 TPL CP_D1_QL1B::~Cp_d1_ql1b(){ free(R); }
 
-TPL void CP_D1_QL1B::set_quadratic(const real_t* Y, size_t N, const real_t* A,
-    real_t a)
+TPL void CP_D1_QL1B::set_quadratic(const real_t* Y, matrix_index_t N,
+    const real_t* A, real_t a)
 {
-    if (!A && a == ZERO){ N = DIAG_ATA; } // no quadratic part !
+    if (!A){ N = Gram_diag(); } // ensure is_Gram
     free(R);
-    R = IS_ATA(N) ? nullptr : (real_t*) malloc_check(sizeof(real_t)*N);
+    R = is_Gram(N) ? nullptr : (real_t*) malloc_check(sizeof(real_t)*N);
     this->Y = Y; this->N = N; this->A = A; this->a = a;
 }
 
@@ -102,35 +102,36 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
      * without premultiplication: 2 N rV i operations
      *     + two matrix-vector mult. per PFDR iter. : 2 N rV i
      * with premultiplication: N rV^2 + rV^2 i operations
-     *     + compute symmetrized reduced matrix: N rV^2
+     *     + compute Gram reduced matrix: N rV^2
      *     + one matrix-vector mult. per pfdr iter. : rV^2 i
      * conclusion: premultiplication if rV < (2 N i)/(N + i) */
-    size_t rN = !IS_ATA(N) && rV < (2*N*pfdr_it)/(N + pfdr_it) ? FULL_ATA : N;
+    typename PFDR::index_t rN = N == Gram_full() ? PFDR::Gram_full() :
+                                N == Gram_diag() ? PFDR::Gram_diag() :
+                rV < (2*N*pfdr_it)/(N + pfdr_it) ? PFDR::Gram_full() : N;
 
-    if (IS_ATA(rN)){ /* reduced problem premultiplied by rA^t */
+    if (PFDR::is_Gram(rN)){ /* reduced problem premultiplied by rA^t */
         if (Y){ rY = (real_t*) malloc_check(sizeof(real_t)*rV); }
         if (A || a){
-            if (N == DIAG_ATA){
+            if (rN == PFDR::Gram_diag()){
                 rAA = (real_t*) malloc_check(sizeof(real_t)*rV);
-            }else{ // FULL_ATA or direct matricial case with premultiplication
+            }else{ // full Gram or direct matricial case with premultiplication
                 rAA = (real_t*) malloc_check(sizeof(real_t)*rV*rV);
-                rN = FULL_ATA;
             }
         }
     }
-    if (!IS_ATA(N)){ /* direct matricial main problem */
+    if (!is_Gram(N)){ /* main problem is direct matricial case */
         rA = (real_t*) malloc_check(sizeof(real_t)*N*rV);
-        for (size_t i = 0; i < N*rV; i++){ rA[i] = ZERO; }
+        for (matrix_index_t i = 0; i < N*rV; i++){ rA[i] = ZERO; }
         #pragma omp parallel for schedule(dynamic) NUM_THREADS(N*V, rV)
         for (comp_t rv = 0; rv < rV; rv++){
             real_t *rAv = rA + N*rv; // rv-th column of rA
             /* run along the component rv */
             for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
                 const real_t *Av = A + N*comp_list[i];
-                for (size_t n = 0; n < N; n++){ rAv[n] += Av[n]; }
+                for (matrix_index_t n = 0; n < N; n++){ rAv[n] += Av[n]; }
             }
         }
-        if (rN == FULL_ATA){
+        if (rN == PFDR::Gram_full()){
             /* fill upper triangular part of rA^t rA */
             #pragma omp parallel for schedule(dynamic) \
                 NUM_THREADS(N*rV*rV/2, rV)
@@ -140,7 +141,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 for (comp_t rv = 0; rv <= ru; rv++){
                     real_t *rAv = rA + N*rv; // rv-th column of rA
                     rAAu[rv] = ZERO;
-                    for (size_t n = 0; n < N; n++){
+                    for (matrix_index_t n = 0; n < N; n++){
                         rAAu[rv] += rAu[n]*rAv[n];
                     }
                 }
@@ -150,12 +151,14 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 for (comp_t rv = 0; rv < rV; rv++){
                     rY[rv] = ZERO;
                     real_t *rAv = rA + N*rv; // rv-th column of rA
-                    for (size_t n = 0; n < N; n++){ rY[rv] += rAv[n]*Y[n]; }
+                    for (matrix_index_t n = 0; n < N; n++){
+                        rY[rv] += rAv[n]*Y[n];
+                    }
                 }
             }
             /* keep also rA for later update of the residual */
         }
-    }else{ /* main problem premultiplied by A^t */
+    }else{ /* main problem is already premultiplied by A^t */
         if (Y){ /* recall that observation Y is actually A^t Y */
             #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV)
             for (comp_t rv = 0; rv < rV; rv++){
@@ -167,7 +170,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 }
             }
         }
-        if (N == FULL_ATA){ /* full matrix */
+        if (N == Gram_full()){ /* full Gram matrix */
             /* fill upper triangular part of rA^t rA */
             #pragma omp parallel for schedule(dynamic) NUM_THREADS(V*V/2, rV)
             for (comp_t ru = 0; ru < rV; ru++){
@@ -180,13 +183,13 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                         const real_t *Au = A + (size_t) V*comp_list[i];
                         /* run along the component rv */
                         for (index_t j = first_vertex[rv];
-                                j < first_vertex[rv + 1]; j++){
+                             j < first_vertex[rv + 1]; j++){
                             rAAu[rv] += Au[comp_list[j]];
                         }
                     }
                 }
             }
-        }else if (A){ /* diagonal matrix */
+        }else if (A){ /* diagonal "Gram" (square) matrix */
             #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV)
             for (comp_t rv = 0; rv < rV; rv++){
                 rAA[rv] = ZERO;
@@ -196,18 +199,18 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                     rAA[rv] += A[comp_list[i]];
                 }
             }
-        }else if (a){ /* identity */
+        }else if (a){ /* just the identity */
             #pragma omp parallel for schedule(static) NUM_THREADS(rV)
             for (comp_t rv = 0; rv < rV; rv++){
                 rAA[rv] = first_vertex[rv + 1] - first_vertex[rv];
             }
         }
     }
-    if (rN == FULL_ATA){ /* fill lower triangular part of rA^t rA */
+    if (rN == PFDR::Gram_full()){ /* fill lower triangular part of rA^t rA */
         #pragma omp parallel for schedule(dynamic) NUM_THREADS(rV*rV/2, rV)
         for (comp_t ru = 0; ru < rV - 1; ru++){
             real_t *rAAu = rAA + (size_t) rV*ru;
-            size_t i = rV + ((size_t) rV + 1)*ru;
+            matrix_index_t i = rV + ((size_t) rV + 1)*ru;
             for (comp_t rv = ru + 1; rv < rV; rv++){
                 rAAu[rv] = rAA[i];
                 i += rV;
@@ -260,7 +263,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 }
             }
             if (low_bnd){
-                rlow_bnd[rv] = -INF_REAL;
+                rlow_bnd[rv] = -real_inf();
                 /* run along the component rv */
                 for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1];
                     i++){
@@ -271,7 +274,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
             }
             real_t *rupp_bnd = nullptr;
             if (upp_bnd){
-                rupp_bnd[rv] = INF_REAL;
+                rupp_bnd[rv] = real_inf();
                 /* run along the component rv */
                 for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1];
                     i++){
@@ -304,7 +307,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
             new Pfdr_d1_ql1b<real_t, comp_t>(rV, rE, reduced_edges);
 
         pfdr->set_edge_weights(reduced_edge_weights);
-        if (IS_ATA(rN)){ pfdr->set_quadratic(rY, rN, rAA, a); }
+        if (PFDR::is_Gram(rN)){ pfdr->set_quadratic(rY, rN, rAA, a); }
         else{ pfdr->set_quadratic(Y, N, rA); }
         pfdr->set_l1(rl1_weights, ZERO, rYl1);
         pfdr->set_bounds(rlow_bnd, homo_low_bnd, rupp_bnd, homo_upp_bnd);
@@ -321,11 +324,11 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
 
     }
 
-    if (!IS_ATA(N)){ /* direct matricial case, compute residual R = Y - A X */
+    if (!is_Gram(N)){ /* direct matricial case, compute residual R = Y - A X */
         #pragma omp parallel for schedule(static) NUM_THREADS(N*rV, N)
-        for (size_t n = 0; n < N; n++){
+        for (matrix_index_t n = 0; n < N; n++){
             R[n] = Y_(n);
-            size_t i = n;
+            matrix_index_t i = n;
             for (comp_t rv = 0; rv < rV; rv++){
                 R[n] -= rA[i]*rX[rv];
                 i += N;
@@ -345,8 +348,7 @@ TPL index_t CP_D1_QL1B::split()
     for (index_t v = 0; v < V; v++){ grad[v] = ZERO; }
 
     uintmax_t Vns = V - saturated_vert;
-    uintmax_t num_ops = Vns*(!IS_ATA(N) ? N : N == FULL_ATA ? V : 1);
-    // num_ops += E*Vns/V;
+    uintmax_t num_ops = Vns*(N == Gram_full() ? V : N == Gram_diag() ? 1 : N);
     num_ops += Vns/V;
 
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
@@ -355,10 +357,10 @@ TPL index_t CP_D1_QL1B::split()
         if (is_saturated[rv]){ continue; }
 
         /**  gradient of quadratic term  **/ 
-        if (!IS_ATA(N)){ /* direct matricial case, grad = -(A^t) R */
+        if (!is_Gram(N)){ /* direct matricial case, grad = -(A^t) R */
             const real_t* Av = A + N*v;
-            for (size_t n = 0; n < N; n++){ grad[v] -= Av[n]*R[n]; }
-        }else if (N == FULL_ATA){ /* grad = (A^t A)*X - A^t Y  */
+            for (matrix_index_t n = 0; n < N; n++){ grad[v] -= Av[n]*R[n]; }
+        }else if (N == Gram_full()){ /* grad = (A^t A)*X - A^t Y  */
             const real_t* Av = A + (size_t) V*v;
             for (comp_t ru = 0; ru < rV; ru++){
                 if (rX[ru] == ZERO){ continue; }
@@ -410,7 +412,7 @@ TPL uintmax_t CP_D1_QL1B::split_complexity()
     complexity += V; // account for gradient, l1, bounds and final labeling
     complexity += E; // edges capacities
     if (l1_weights || homo_l1_weight || low_bnd || upp_bnd ||
-        homo_low_bnd != -INF_REAL || homo_upp_bnd != INF_REAL){
+        homo_low_bnd != -real_inf() || homo_upp_bnd != real_inf()){
         complexity *= 2; // nondifferentiability: two cuts
     }
     return complexity*(V - saturated_vert)/V; // account saturation linearly
@@ -457,19 +459,20 @@ TPL void CP_D1_QL1B::split_component(comp_t rv,
         for (index_t i = 0; i < comp_size; i++){
             index_t v = comp_list_rv[i];
             if (rX[rv] == upp_bnd[v]){
-                maxflow->terminal_capacity(i) = INF_REAL;
+                maxflow->terminal_capacity(i) = real_inf();
             }
         }
-    }else if (dir == 1 && homo_upp_bnd < INF_REAL && rX[rv] == homo_upp_bnd){
+    }else if (dir == 1 && homo_upp_bnd < real_inf() && rX[rv] == homo_upp_bnd){
         continue; // no value can increase
     }else if (dir == 2 && low_bnd){
         for (index_t i = 0; i < comp_size; i++){
             index_t v = comp_list_rv[i];
             if (rX[rv] == low_bnd[v]){
-                maxflow->terminal_capacity(i) = INF_REAL;
+                maxflow->terminal_capacity(i) = real_inf();
             }
         }
-    }else if (dir == 2 && homo_low_bnd > -INF_REAL && rX[rv] == homo_low_bnd){
+    }else if (dir == 2 && homo_low_bnd > -real_inf()
+              && rX[rv] == homo_low_bnd){
         continue; // no value can decrease
     }
 
@@ -501,7 +504,7 @@ TPL void CP_D1_QL1B::split_component(comp_t rv,
     /* when no nondifferentiable part exists besides the total variation, 
      * only one cut is required (+1 vs -1), equivalent to the first one */
     if (!l1_weights && !homo_l1_weight && !low_bnd && !upp_bnd &&
-        homo_low_bnd == -INF_REAL && homo_upp_bnd == INF_REAL){
+        homo_low_bnd == -real_inf() && homo_upp_bnd == real_inf()){
         return;
     }
        
@@ -548,7 +551,7 @@ TPL real_t CP_D1_QL1B::compute_evolution(bool compute_dif)
         amp = sqrt(amp);
         return amp > eps ? dif/amp : dif/eps;
     }else{
-        return INF_REAL;
+        return real_inf();
     }
 }
 
@@ -559,13 +562,13 @@ TPL real_t CP_D1_QL1B::compute_objective()
     real_t obj = ZERO;
 
     /* quadratic term */
-    if (!IS_ATA(N)){ /* direct matricial case, 1/2 ||Y - A X||^2 */
+    if (!is_Gram(N)){ /* direct matricial case, 1/2 ||Y - A X||^2 */
         #pragma omp parallel for reduction(+:obj) schedule(static) \
             NUM_THREADS(N)
-        for (size_t n = 0; n < N; n++){ obj += R[n]*R[n]; }
+        for (matrix_index_t n = 0; n < N; n++){ obj += R[n]*R[n]; }
         obj *= HALF;
     /* premultiplied by A^t, 1/2 <X, A^t A X> - <X, A^t Y> */
-    }else if (N == FULL_ATA){ /* full matrix */
+    }else if (N == Gram_full()){ /* full matrix */
         #pragma omp parallel for reduction(+:obj) schedule(dynamic) \
             NUM_THREADS(V*V/2, rV)
         for (comp_t ru = 0; ru < rV; ru++){
@@ -637,8 +640,17 @@ TPL real_t CP_D1_QL1B::compute_objective()
     return obj;
 }
 
-/* instantiate for compilation */
+/**  instantiate for compilation  **/
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+template class Cp_d1_ql1b<double, int32_t, int16_t>;
+template class Cp_d1_ql1b<float, int32_t, int16_t>;
+template class Cp_d1_ql1b<double, int32_t, int32_t>;
+template class Cp_d1_ql1b<float, int32_t, int32_t>;
+#else
 template class Cp_d1_ql1b<double, uint32_t, uint16_t>;
 template class Cp_d1_ql1b<float, uint32_t, uint16_t>;
 template class Cp_d1_ql1b<double, uint32_t, uint32_t>;
 template class Cp_d1_ql1b<float, uint32_t, uint32_t>;
+#endif

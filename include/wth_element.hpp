@@ -59,11 +59,11 @@ value_t nth_element_idx(index_t* indices, const value_t* values, index_t size,
  * 'weights' is an array of weighting the values;
  * the rank 'wrk' is a weighted rank, expected to range from zero up to the
  * total sum of all weights;
- * returns the value of the element whose weighted rank interval contains 'wrk';
- * 'values' and 'weights' are read-only, indexed by the indices in the dedicated
- * array; 'indices' is reordered such that all indices before the index of the
- * wrk-th element refers to lower values, and all indices after the wrk-th
- * refers to greater values */
+ * returns the value of the element whose weighted rank interval contains 'wrk'
+ * 'values' and 'weights' are read-only, indexed by the indices in the
+ * dedicated array; 'indices' is reordered such that all indices before the
+ * index of the wrk-th element refers to lower values, and all indices after
+ * the wrk-th refers to greater values */
 #undef WEIGHT
 #undef INCR
 #undef WRK_INCR

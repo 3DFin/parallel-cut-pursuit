@@ -18,7 +18,7 @@
  * Thus, it is sufficient to call the method with Y <- Dy, and A <- D A.
  * Moreover, when A is the identity and M is diagonal (weighted square l2
  * distance between x and y), one should call on the precomposed version 
- * (N set to DIAG_ATA, see below) with Y <- DDy = My and A <- D2 = M.
+ * (N set to Gram_diag(), see below) with Y <- DDy = My and A <- D2 = M.
  *
  * Parallel implementation with OpenMP API.
  *
@@ -33,19 +33,18 @@
  *===========================================================================*/
 #pragma once
 #include "pfdr_graph_d1.hpp"
-#define INF_REAL (std::numeric_limits<real_t>::infinity())
-#define FULL_ATA ((size_t) 0)
-#define DIAG_ATA ((size_t) -1)
-#define IS_ATA(N) (N == FULL_ATA || N == DIAG_ATA)
 
 /* vertex_t is an integer type able to represent the number of vertices */
 template <typename real_t, typename vertex_t>
 class Pfdr_d1_ql1b : public Pfdr_d1<real_t, vertex_t>
 {
 public:
+
+    using typename Pfdr_d1<real_t, vertex_t>::index_t;
+
     /**  constructor, destructor  **/
 
-    Pfdr_d1_ql1b(vertex_t V, size_t E, const vertex_t* edges);
+    Pfdr_d1_ql1b(vertex_t V, index_t E, const vertex_t* edges);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (adjacency graph structure given at construction, 
@@ -68,21 +67,36 @@ public:
         real_t lipsch_norm_tol = 1e-3, int lipsch_norm_it_max = 100,
         int lipsch_norm_nb_init = 10);
 
-    /* if A is null, it is supposed to be scalar and N is set to DIAG_ATA,
-     * in that case, if a is zero, there is no quadratic part, else if a is
-     * nonzero, the matrix A is the identity; for an arbitrary scalar matrix,
-     * use identity and scale observations and penalizations accordingly */
-    void set_quadratic(const real_t* Y, size_t N = DIAG_ATA,
-        const real_t* A = nullptr, real_t a = 1.0);
+    /* flag Gram matrices */
+    static index_t Gram_full() { return 0; }
+    static index_t Gram_diag() { return -1; }
+    static bool is_Gram(index_t N)
+        { return N == Gram_full() || N == Gram_diag(); }
+
+    /* set the quadratic part, see members Y, N, A for details;
+     * set Y to a null pointer for all zeros;
+     * set A to a null pointer for identity matrix (set a to nonzero), or for
+     * no quadratic part (set a to zero);
+     * for a general scalar matrix, use the identity (A null, a zero) and scale
+     * observations and penalizations accordingly */
+    void set_quadratic(const real_t* Y, index_t N, const real_t* A = nullptr,
+        real_t a = 1.0);
+
+    /* overload for identity matrix */
+    void set_quadratic(const real_t* Y)
+        { set_quadratic(Y, Gram_diag(), nullptr); }
 
     /* set l1_weights null for homogeneously equal to homo_l1_weight */
     void set_l1(const real_t* l1_weights = nullptr,
         real_t homo_l1_weight = 0.0, const real_t* Yl1 = nullptr);
+
+    /* representing infinite values (has_infinity checked by constructor) */
+    static real_t real_inf(){ return std::numeric_limits<real_t>::infinity(); }
     
     /* set bounds *_bnd to null for homogeneously equal to homo_*_bnd */
     void set_bounds(
-        const real_t* low_bnd = nullptr, real_t homo_low_bnd = -INF_REAL,
-        const real_t* upp_bnd = nullptr, real_t homo_upp_bnd = INF_REAL);
+        const real_t* low_bnd = nullptr, real_t homo_low_bnd = -real_inf(),
+        const real_t* upp_bnd = nullptr, real_t homo_upp_bnd = real_inf());
 
     /* specialization, initialize with coordinatewise pseudo-inverse
      * pinv = <Av, Y>/||Av||^2, or on l1 target if there is no quadratic part
@@ -96,20 +110,20 @@ public:
 private:
     /**  quadratic problem  **/
 
-    size_t N; /* number of observations;
-     * if zero (macro FULL_ATA), matricial information is precomputed, 
+    index_t N; /* number of observations;
+     * if zero (function Gram_full()), matricial information is precomputed, 
      * that is, argument A is actually (A^t A), and argument Y is (A^t Y);
-     * if negative one (i.e. maximum value representable by size_t, macro 
-     * DIAG_ATA), A is a diagonal matrix and only the diagonal of (A^t A) = A^2
-     * is given */
+     * if negative one (or maximum value representable by matrix_index_t if
+     * unsigned type, macro Gram_diag()), A is a diagonal matrix and only the
+     * diagonal of (A^t A) = A^2 is given */
 
     const real_t* A; /* linear operator;
      * if N is positive, N-by-V array, column major format;
-     * if N is zero (FULL_ATA), matrix (A^t A), V-by-V array, column major
-     * format;
-     * if N is negative one (DIAG_ATA), diagonal of (A^t A) = A^2, array of 
-     * length V, or null pointer for identity matrix (a = 1) or no quadratic
-     * part (a = 0) */
+     * if N is zero (function Gram_full()), matrix (A^t A), V-by-V array,
+     * column major format;
+     * if N is negative one (function Gram_diag()), diagonal of (A^t A) = A^2,
+     * array of length V, or null pointer for identity matrix (a = 1) or no
+     * quadratic part (a = 0) */
     real_t a; 
 
     const real_t* Y; /* if N is positive, observations, array of length N;

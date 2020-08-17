@@ -8,7 +8,7 @@
  * Sciences, 2015, 8, 2706-2739
  *
  * Hugo Raguet 2016, 2018
- *============================================================================*/
+ *===========================================================================*/
 #pragma once
 #include <cstdlib>
 #include <iostream>
@@ -17,9 +17,18 @@
 template <typename real_t> class Pcd_prox
 {
 public:
+
+    #if defined _OPENMP && _OPENMP < 200805
+    /* use of unsigned counter in parallel loops requires OpenMP 3.0;
+     * although published in 2008, MSVC still does not support it as of 2020 */
+    typedef long int index_t;
+    #else
+    typedef size_t index_t;
+    #endif
+
     /**  constructor, destructor  **/
 
-    Pcd_prox(size_t size);
+    Pcd_prox(index_t size);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (monitoring arrays, etc.); it does free the rest (iterate, 
@@ -65,7 +74,7 @@ public:
 protected:
 
     /**  parameters  **/
-    size_t size; // dimension of the problem
+    index_t size; // dimension of the problem
 
     /* stability of preconditioning; 0 < cond_min < 1;
      * corresponds roughly to the minimum ratio between different
@@ -119,7 +128,7 @@ protected:
     virtual real_t compute_objective() = 0;
 
     /* allocate memory and fail with error message if not successful */
-    static inline void* malloc_check(size_t size)
+    static inline void* malloc_check(index_t size)
     {
         void *ptr = malloc(size);
         if (ptr == nullptr){

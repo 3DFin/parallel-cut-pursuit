@@ -1,13 +1,14 @@
 /*=============================================================================
  * Hugo Raguet 2019
  *===========================================================================*/
-#include "../include/cut_pursuit_d0.hpp"
+#include "cut_pursuit_d0.hpp"
 
 #define ZERO ((real_t) 0.0)
 #define ONE ((real_t) 1.0)
+#define TWO ((size_t) 2) // avoid overflows
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
-/* special flag */
-#define MERGE_INIT MAX_NUM_COMP
+/* special flag (no component can have this identifier) */
+#define MERGE_INIT (std::numeric_limits<comp_t>::max())
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
     typename value_t>
@@ -57,7 +58,7 @@ TPL real_t CP_D0::compute_graph_d0()
     real_t weighted_contour_length = ZERO;
     #pragma omp parallel for schedule(static) NUM_THREADS(rE) \
         reduction(+:weighted_contour_length)
-    for (size_t re = 0; re < rE; re++){
+    for (index_t re = 0; re < rE; re++){
         weighted_contour_length += reduced_edge_weights[re];
     }
     return weighted_contour_length;
@@ -262,13 +263,13 @@ TPL CP_D0::Merge_info::Merge_info(size_t D)
 TPL CP_D0::Merge_info::~Merge_info()
 { free(value); }
 
-TPL void CP_D0::delete_merge_candidate(size_t re)
+TPL void CP_D0::delete_merge_candidate(index_t re)
 {
     if (merge_info_list[re] != no_merge_info){ delete merge_info_list[re]; }
     merge_info_list[re] = nullptr;
 }
 
-TPL void CP_D0::select_best_merge_candidate(size_t re, real_t* best_gain,
+TPL void CP_D0::select_best_merge_candidate(index_t re, real_t* best_gain,
     index_t* best_edge)
 {
     if (merge_info_list[re] != no_merge_info
@@ -278,7 +279,7 @@ TPL void CP_D0::select_best_merge_candidate(size_t re, real_t* best_gain,
     }
 }
 
-TPL void CP_D0::accept_merge_candidate(size_t re, comp_t& ru, comp_t& rv)
+TPL void CP_D0::accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv)
 {
     merge_components(ru, rv); // ru now the root of the merge chain
     value_t* rXu = rX + D*ru;
@@ -290,7 +291,7 @@ TPL comp_t CP_D0::compute_merge_chains()
     comp_t merge_count = 0;
    
     merge_info_list = (Merge_info**) malloc_check(sizeof(Merge_info*)*rE);
-    for (size_t re = 0; re < rE; re++){ merge_info_list[re] = no_merge_info; }
+    for (index_t re = 0; re < rE; re++){ merge_info_list[re] = no_merge_info; }
 
     real_t* best_par_gains =
         (real_t*) malloc_check(sizeof(real_t)*omp_get_num_procs());
@@ -316,10 +317,10 @@ TPL comp_t CP_D0::compute_merge_chains()
 
         /* differences between threads is small: using static schedule */
         #pragma omp parallel for schedule(static) num_threads(num_par_thrds)
-        for (size_t re = 0; re < rE; re++){
+        for (index_t re = 0; re < rE; re++){
             if (!merge_info_list[re]){ continue; }
-            comp_t ru = reduced_edges[2*re];
-            comp_t rv = reduced_edges[2*re + 1];
+            comp_t ru = reduced_edges[TWO*re];
+            comp_t rv = reduced_edges[TWO*re + 1];
 
             if (last_merge_root != MERGE_INIT){
                 /* the roots of their respective chains might have changed */
@@ -346,7 +347,7 @@ TPL comp_t CP_D0::compute_merge_chains()
 
         /**  select best candidate among parallel threads  **/
         real_t best_gain = best_par_gains[0];
-        size_t best_edge = best_par_edges[0];
+        index_t best_edge = best_par_edges[0];
         for (int thrd_num = 1; thrd_num < num_par_thrds; thrd_num++){
             if (best_gain < best_par_gains[thrd_num]){
                 best_gain = best_par_gains[thrd_num];
@@ -377,7 +378,7 @@ TPL comp_t CP_D0::compute_merge_chains()
 
 /**  instantiate for compilation  **/
 #if defined _OPENMP && _OPENMP < 200805
-/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
  * although published in 2008, MSVC still does not support it as of 2020 */
     template class Cp_d0<float, int32_t, int16_t>;
     template class Cp_d0<double, int32_t, int16_t>;

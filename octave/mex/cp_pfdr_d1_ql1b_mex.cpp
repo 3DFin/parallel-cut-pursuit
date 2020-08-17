@@ -9,14 +9,14 @@
  *      pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
  *      pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
  *      max_num_threads [none], balance_parallel_split [true],
- *      AtA_if_square [true]
+ *      Gram_if_square [true]
  * 
  *  Hugo Raguet 2016, 2018, 2019, 2020
  *===========================================================================*/
 #include <cstdint>
 #include <cstring>
 #include "mex.h"
-#include "../../include/cp_pfdr_d1_ql1b.hpp"
+#include "cp_pfdr_d1_ql1b.hpp"
 
 using namespace std;
 
@@ -24,15 +24,29 @@ using namespace std;
  * edges in the main graph;
  * comp_t must be able to represent the number of constant connected components
  * in the reduced graph */
-typedef uint32_t index_t;
-#define mxINDEX_CLASS mxUINT32_CLASS
-#define INDEX_CLASS_NAME "uint32"
-/* comment the following if more than 65535 components are expected */
-typedef uint16_t comp_t;
-#define mxCOMP_CLASS mxUINT16_CLASS
-/* uncomment the following if more than 65535 components are expected */
-// typedef uint32_t comp_t;
-// #define mxCOMP_CLASS mxUINT32_CLASS
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+    typedef int32_t index_t;
+    # define mxINDEX_CLASS mxINT32_CLASS
+    # define INDEX_CLASS_NAME "int32"
+    /* comment the following if more than 32767 components are expected */
+    typedef int16_t comp_t;
+    # define mxCOMP_CLASS mxINT16_CLASS
+    /* uncomment the following if more than 32767 components are expected */
+    // typedef int32_t comp_t;
+    // #define mxCOMP_CLASS mxINT32_CLASS
+#else
+    typedef uint32_t index_t;
+    #define mxINDEX_CLASS mxUINT32_CLASS
+    #define INDEX_CLASS_NAME "uint32"
+    /* comment the following if more than 65535 components are expected */
+    typedef uint16_t comp_t;
+    #define mxCOMP_CLASS mxUINT16_CLASS
+    /* uncomment the following if more than 65535 components are expected */
+    // typedef uint32_t comp_t;
+    // #define mxCOMP_CLASS mxUINT32_CLASS
+#endif
 
 /* function for checking optional parameters */
 static void check_opts(const mxArray* options)
@@ -49,7 +63,7 @@ static void check_opts(const mxArray* options)
     const char* opts_names[] = {"edge_weights", "Yl1", "l1_weights", "low_bnd",
         "upp_bnd", "cp_dif_tol", "cp_it_max", "pfdr_rho", "pfdr_cond_min",
         "pfdr_dif_rcd", "pfdr_dif_tol", "pfdr_it_max", "verbose",
-        "max_num_threads", "balance_parallel_split", "AtA_if_square"};
+        "max_num_threads", "balance_parallel_split", "Gram_if_square"};
 
     const int num_given_opts = mxGetNumberOfFields(options);
 
@@ -133,10 +147,11 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
         }else{ /* A is given V-by-1, representing a diagonal V-by-V */
             V = N;
         }
-        N = DIAG_ATA;
-    }else if (V == N && (nrhs < 5 || !mxGetField(prhs[4], 0, "AtA_if_square")
-        || mxIsLogicalScalarTrue(mxGetField(prhs[4], 0, "AtA_if_square")))){
-        N = FULL_ATA; // A and Y are left-premultiplied by A^t
+        N = Cp_d1_ql1b<real_t, index_t, comp_t>::Gram_diag();
+    }else if (V == N && (nrhs < 5 || !mxGetField(prhs[4], 0, "Gram_if_square")
+        || mxIsLogicalScalarTrue(mxGetField(prhs[4], 0, "Gram_if_square")))){
+        /* A and Y are left-premultiplied by A^t */
+        N = Cp_d1_ql1b<real_t, index_t, comp_t>::Gram_full(); 
     }
 
     /**  graph structure  **/
@@ -177,8 +192,8 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     GET_REAL_OPT(edge_weights, 1.0)
     GET_REAL_OPT(l1_weights, 0.0)
-    GET_REAL_OPT(low_bnd, -INF_REAL)
-    GET_REAL_OPT(upp_bnd, INF_REAL)
+    GET_REAL_OPT(low_bnd, (-Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf()))
+    GET_REAL_OPT(upp_bnd, (Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf()))
 
     const real_t* Yl1 = nullptr;
     if (opt = mxGetField(options, 0, "Yl1")){
@@ -213,7 +228,7 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     double* Time = nlhs > 4 ?
         (double*) mxMalloc(sizeof(double)*(cp_it_max + 1)) : nullptr;
     real_t *Dif = nlhs > 5 ?
-        (real_t*) mxMalloc(sizeof(double)*cp_it_max) : nullptr;
+        (real_t*) mxMalloc(sizeof(real_t)*cp_it_max) : nullptr;
 
     /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
 

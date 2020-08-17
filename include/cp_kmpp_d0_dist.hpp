@@ -28,7 +28,6 @@
 #pragma once
 #include <cmath>
 #include "cut_pursuit_d0.hpp"
-#define QUADRATIC ((real_t) 1.0) /* special value for loss term */
 
 /* real_t is the real numeric type, used for the base field and for the
  * objective functional computation;
@@ -56,6 +55,9 @@ public:
 
     /**  methods for manipulating parameters  **/
 
+    /* specific loss */
+    static real_t quadratic_loss() { return 1.0; }
+
     /* Y is changed only if the corresponding argument is not null */
     void set_loss(real_t loss, const real_t* Y = nullptr,
         const real_t* vert_weights = nullptr,
@@ -64,7 +66,7 @@ public:
     /* overload for changing only loss weights */
     void set_loss(const real_t* vert_weights = nullptr,
         const real_t* coor_weights = nullptr)
-    { set_loss(loss, nullptr, vert_weights, coor_weights); }
+        { set_loss(loss, nullptr, vert_weights, coor_weights); }
 
     void set_kmpp_param(int kmpp_init_num = 3, int kmpp_iter_num = 3);
 
@@ -72,7 +74,7 @@ private:
     /**  separable loss term: weighted square l2 or smoothed KL **/
     const real_t* Y; // observations, D-by-V array, column major format
 
-    /* 1 for quadratic (macro QUADRATIC)
+    /* 1 for quadratic (function quadratic_loss())
      *      f(x) = 1/2 ||y - x||_{l2,W}^2 ,
      * where W is a diagonal metric (separable product along ℝ^V and ℝ^D),
      * that is ||y - x||_{l2,W}^2 = sum_{v in V} w_v ||x_v - y_v||_{l2,M}^2
@@ -136,7 +138,7 @@ private:
      * merge information must be created with new and destroyed with delete;
      * for nonpositive gain, do not create (or destroy if it exists) the merge
      * information and flag it with special pointer value 'no_merge_info' */
-    void update_merge_candidate(size_t re, comp_t ru, comp_t rv) override;
+    void update_merge_candidate(index_t re, comp_t ru, comp_t rv) override;
 
     /* rough estimate of the number of operations for updating all candidates;
      * useful for estimating the number of parallel threads */
@@ -144,7 +146,7 @@ private:
 
     /* accept the merge candidate and return the component root of the
      * resulting merge chain */
-    void accept_merge_candidate(size_t re, comp_t& ru, comp_t& rv) override;
+    void accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv) override;
 
     index_t merge() override; // override for freeing comp_weights
 
@@ -183,4 +185,5 @@ private:
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::verbose;
     using Cp<real_t, index_t, comp_t>::malloc_check;
+    using Cp<real_t, index_t, comp_t>::real_inf;
 };

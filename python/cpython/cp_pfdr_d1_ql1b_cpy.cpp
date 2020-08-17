@@ -3,8 +3,8 @@
  *          Y, A, first_edge, adj_vertices, edge_weights, Yl1, l1_weights,
  *          low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
  *          pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
- *          balance_parallel_split, AtA_if_square, real_is_double, compute_Obj,
- *          compute_Time, compute_Dif)
+ *          balance_parallel_split, Gram_if_square, real_is_double,
+ *          compute_Obj, compute_Time, compute_Dif)
  * 
  *  Baudoin Camille 2019
  *===========================================================================*/
@@ -13,7 +13,7 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <Python.h>
 #include <numpy/arrayobject.h>
-#include "../../include/cp_pfdr_d1_ql1b.hpp" 
+#include "cp_pfdr_d1_ql1b.hpp" 
 
 using namespace std;
 
@@ -21,12 +21,25 @@ using namespace std;
  * edges in the main graph;
  * comp_t must be able to represent the number of constant connected components
  * in the reduced graph */
-typedef uint32_t index_t;
-typedef uint16_t comp_t;
-#define NPY_COMP_CLASS NPY_UINT16 
-/* uncomment the following if more than 65535 components are expected */
-// typedef uint32_t comp_t;
-// #define NPY_COMP_CLASS NPY_UINT32 
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+    typedef int32_t index_t;
+    /* comment the following if more than 32767 components are expected */
+    typedef int16_t comp_t;
+    #define NPY_COMP_CLASS NPY_INT16
+    /* uncomment the following if more than 32767 components are expected */
+    // typedef int32_t comp_t;
+    // #define NPY_COMP_CLASS NPY_INT32
+#else
+    typedef uint32_t index_t;
+    /* comment the following if more than 65535 components are expected */
+    typedef uint16_t comp_t;
+    #define NPY_COMP_CLASS NPY_UINT16
+    /* uncomment the following if more than 65535 components are expected */
+    // typedef uint32_t comp_t;
+    // #define NPY_COMP_CLASS NPY_UINT32
+#endif
 
 /* template for handling both single and double precisions */
 template<typename real_t, NPY_TYPES pyREAL_CLASS>
@@ -37,7 +50,7 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
     PyArrayObject* py_low_bnd, PyArrayObject* py_upp_bnd, real_t cp_dif_tol,
     int cp_it_max, real_t pfdr_rho, real_t pfdr_cond_min, real_t pfdr_dif_rcd,
     real_t pfdr_dif_tol, int pfdr_it_max, int verbose, int max_num_threads, 
-    int balance_parallel_split, int AtA_if_square, int compute_Obj, 
+    int balance_parallel_split, int Gram_if_square, int compute_Obj, 
     int compute_Time, int compute_Dif)
 {
     /**  get inputs  **/
@@ -66,9 +79,10 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
         }else{ /* A is given V-by-1, representing a diagonal V-by-V */
             V = N;
         }
-        N = DIAG_ATA; /* DIAG_ATA is a macro */
-    }else if (V == N && AtA_if_square){
-        N = FULL_ATA; 
+        N = Cp_d1_ql1b<real_t, index_t, comp_t>::Gram_diag();
+    }else if (V == N && Gram_if_square){
+        /* A and Y are left-premultiplied by A^t */
+        N = Cp_d1_ql1b<real_t, index_t, comp_t>::Gram_full(); 
     }
 
     /* graph structure */
@@ -96,13 +110,13 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
         (real_t*) PyArray_DATA(py_low_bnd) : nullptr; 
     real_t * ptr_low_bnd = (real_t*) PyArray_DATA(py_low_bnd);
     real_t homo_low_bnd = (PyArray_SIZE(py_low_bnd) == 1) ?
-        ptr_low_bnd[0] : -INF_REAL;
+        ptr_low_bnd[0] : -Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf();
 
     const real_t *upp_bnd = (PyArray_SIZE(py_upp_bnd) > 1) ?
         (real_t*) PyArray_DATA(py_upp_bnd) : nullptr; 
     real_t * ptr_upp_bnd = (real_t*) PyArray_DATA(py_upp_bnd);
     real_t homo_upp_bnd = (PyArray_SIZE(py_upp_bnd) == 1) ?
-        ptr_upp_bnd[0] : INF_REAL;
+        ptr_upp_bnd[0] : Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf();
     if (max_num_threads<=0){
         max_num_threads = omp_get_max_threads();
     }
@@ -194,7 +208,7 @@ static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
         *py_edge_weights, *py_Yl1, *py_l1_weights, *py_low_bnd, *py_upp_bnd; 
     double cp_dif_tol, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol;
     int cp_it_max, pfdr_it_max, verbose, max_num_threads, 
-        balance_parallel_split, AtA_if_square, real_is_double, compute_Obj, 
+        balance_parallel_split, Gram_if_square, real_is_double, compute_Obj, 
         compute_Time, compute_Dif; 
     
     /* parse the input, from Python Object to C PyArray, double, or int type */
@@ -206,7 +220,7 @@ static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_Yl1,
         &py_l1_weights, &py_low_bnd, &py_upp_bnd, &cp_dif_tol, &cp_it_max,
         &pfdr_rho, &pfdr_cond_min, &pfdr_dif_rcd, &pfdr_dif_tol, &pfdr_it_max,
-        &verbose, &max_num_threads, &balance_parallel_split, &AtA_if_square, 
+        &verbose, &max_num_threads, &balance_parallel_split, &Gram_if_square, 
         &real_is_double, &compute_Obj, &compute_Time, &compute_Dif)) {
         return NULL;
     }
@@ -216,7 +230,7 @@ static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
             py_A, py_first_edge, py_adj_vertices, py_edge_weights, py_Yl1,
             py_l1_weights, py_low_bnd, py_upp_bnd, cp_dif_tol, cp_it_max,
             pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
-            verbose, max_num_threads, balance_parallel_split, AtA_if_square, 
+            verbose, max_num_threads, balance_parallel_split, Gram_if_square, 
             compute_Obj, compute_Time, compute_Dif);
         return PyReturn;
     }else{ /* real_t type is float */
@@ -225,7 +239,7 @@ static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
             py_l1_weights, py_low_bnd, py_upp_bnd, cp_dif_tol, cp_it_max,
             pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol,
             pfdr_it_max, verbose, max_num_threads, balance_parallel_split, 
-            AtA_if_square, compute_Obj, compute_Time, compute_Dif);
+            Gram_if_square, compute_Obj, compute_Time, compute_Dif);
         return PyReturn;
     }
 }

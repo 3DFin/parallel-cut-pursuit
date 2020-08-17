@@ -25,18 +25,19 @@
  *===========================================================================*/
 #pragma once
 #include "pfdr_graph_d1.hpp"
-#define LINEAR ((real_t) 0.0)
-#define QUADRATIC ((real_t) 1.0)
 
 /* vertex_t is an integer type able to represent the number of vertices */
 template <typename real_t, typename vertex_t>
 class Pfdr_d1_lsx : public Pfdr_d1<real_t, vertex_t>
 {
 public:
+
+    using typename Pfdr_d1<real_t, vertex_t>::index_t;
+
     /**  constructor, destructor  **/
 
-    Pfdr_d1_lsx(vertex_t V, size_t E, const vertex_t* edges, real_t loss,
-        size_t D, const real_t* Y, const real_t* d1_coor_weights = nullptr);
+    Pfdr_d1_lsx(vertex_t V, index_t E, const vertex_t* edges, real_t loss,
+        index_t D, const real_t* Y, const real_t* d1_coor_weights = nullptr);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (adjacency graph structure given at construction, 
@@ -50,6 +51,10 @@ public:
  
     void initialize_iterate() override; // initialize on simplex based on Y
 
+    /* specific losses */
+    static real_t linear_loss() { return 0.0; }
+    static real_t quadratic_loss() { return 1.0; }
+
     /* warning: the first parameter loss can only be used to change the 
      * smoothing parameter of a Kullback-Leibler loss; for changing from one
      * loss type to another, create a new instance; Y is changed only if the
@@ -59,16 +64,16 @@ public:
 
     /* overload for changing only loss_weights */
     void set_loss(const real_t* loss_weights)
-    { set_loss(loss, nullptr, loss_weights); }
+        { set_loss(loss, nullptr, loss_weights); }
 
 private:
     /**  separable loss term  **/
 
-    /* 0 for linear (macro LINEAR)
+    /* 0 for linear (function linear_loss())
      *     f(x) = - <x, y>_w ,
      * with <x, y>_w = sum_{v,d} w_v y_{v,d} x_{v,d} ;
      *
-     * 1 for quadratic (macro QUADRATIC)
+     * 1 for quadratic (function quadratic_loss())
      *     f(x) = 1/2 ||y - x||_{l2,w}^2 ,
      * with  ||y - x||_{l2,w}^2 = sum_{v,d} w_v (y_{v,d} - x_{v,d})^2 ;
      *

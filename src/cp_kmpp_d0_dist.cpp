@@ -2,12 +2,11 @@
  * Hugo Raguet 2018
  *===========================================================================*/
 #include <random>
-#include "../include/cp_kmpp_d0_dist.hpp"
+#include "cp_kmpp_d0_dist.hpp"
 
 #define ZERO ((real_t) 0.0)
 #define ONE ((real_t) 1.0)
 #define HALF ((real_t) 0.5)
-#define INF_REAL (std::numeric_limits<real_t>::infinity())
 #define VERT_WEIGHTS_(v) (vert_weights ? vert_weights[(v)] : ONE)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
@@ -24,9 +23,9 @@ TPL CP_D0_DIST::Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
     kmpp_init_num = 3;
     kmpp_iter_num = 3;
 
-    loss = QUADRATIC;
+    loss = quadratic_loss();
     fYY = ZERO;
-    fXY = INF_REAL;
+    fXY = real_inf();
 }
 
 TPL CP_D0_DIST::~Cp_d0_dist(){ free(comp_weights); }
@@ -34,7 +33,7 @@ TPL CP_D0_DIST::~Cp_d0_dist(){ free(comp_weights); }
 TPL inline real_t CP_D0_DIST::distance(const real_t* Yv, const real_t* Xv)
 {
     real_t dist = 0.0;
-    if (loss == QUADRATIC){
+    if (loss == quadratic_loss()){
         if (coor_weights){
             for (size_t d = 0; d < D; d++){
                 dist += coor_weights[d]*(Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
@@ -75,7 +74,7 @@ TPL void CP_D0_DIST::set_loss(real_t loss, const real_t* Y,
     this->coor_weights = coor_weights; 
     /* recompute the constant dist(Y, Y) if necessary */
     fYY = ZERO;
-    if (loss != QUADRATIC){
+    if (loss != quadratic_loss()){
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:fYY)
         for (index_t v = 0; v < V; v++){
@@ -96,7 +95,9 @@ TPL real_t CP_D0_DIST::fv(index_t v, const real_t* Xv)
 
 TPL real_t CP_D0_DIST::compute_f()
 {
-    if (fXY == INF_REAL){ fXY = Cp_d0<real_t, index_t, comp_t>::compute_f(); }
+    if (fXY == real_inf()){
+        fXY = Cp_d0<real_t, index_t, comp_t>::compute_f();
+    }
     return fXY - fYY;
 }
 
@@ -104,7 +105,7 @@ TPL void CP_D0_DIST::solve_reduced_problem()
 {
     free(comp_weights);
     comp_weights = (real_t*) malloc_check(sizeof(real_t)*rV);
-    fXY = INF_REAL; // rX will change, fXY must be recomputed
+    fXY = real_inf(); // rX will change, fXY must be recomputed
 
     #pragma omp parallel for schedule(static) NUM_THREADS(2*D*V, rV)
     for (comp_t rv = 0; rv < rV; rv++){
@@ -143,11 +144,11 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
 
     /* current centroids, min sum of distances and corresponding assignment */
     real_t* centroids = (real_t*) malloc_check(sizeof(real_t)*D*K);
-    real_t min_sum_dist = INF_REAL;
+    real_t min_sum_dist = real_inf();
     comp_t* best_assign = (comp_t*) malloc_check(sizeof(comp_t)*comp_size);
 
     /* store centroids entropy for Kullback-Leibler divergence */
-    real_t* bottom_dist = loss == QUADRATIC ?
+    real_t* bottom_dist = loss == quadratic_loss() ?
         nullptr : (real_t*) malloc_check(sizeof(real_t)*K);
 
     /**  kmeans ++  **/
@@ -162,10 +163,12 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
             }else{
                 for (index_t i = 0; i < comp_size; i++){
                     index_t v = comp_list_rv[i];
-                    nearest_dist[i] = INF_REAL;
+                    nearest_dist[i] = real_inf();
                     for (comp_t l = 0; l < k; l++){
                         real_t dist = distance(centroids + D*l, Y + D*v);
-                        if (loss != QUADRATIC){ dist -= bottom_dist[l]; }
+                        if (loss != quadratic_loss()){
+                            dist -= bottom_dist[l];
+                        }
                         if (dist < nearest_dist[i]){ nearest_dist[i] = dist; }
                     }
                     if (vert_weights){ nearest_dist[i] *= vert_weights[v]; }
@@ -178,7 +181,7 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
             const real_t* Yv = Y + D*rand_v;
             real_t* Ck = centroids + D*k;
             for (size_t d = 0; d < D; d++){ Ck[d] = Yv[d]; }
-            if (loss != QUADRATIC){ bottom_dist[k] = distance(Ck, Ck); }
+            if (loss != quadratic_loss()){ bottom_dist[k] = distance(Ck, Ck); }
         } // end for k
 
         /**  k-means  **/
@@ -186,7 +189,7 @@ TPL void CP_D0_DIST::init_split_values(comp_t rv, real_t* altX)
             /* assign clusters to centroids */
             for (index_t i = 0; i < comp_size; i++){
                 index_t v = comp_list_rv[i];
-                real_t min_dist = INF_REAL;
+                real_t min_dist = real_inf();
                 for (comp_t k = 0; k < K; k++){
                     real_t dist = distance(centroids + D*k, Y + D*v);
                     if (dist < min_dist){
@@ -251,22 +254,22 @@ TPL void CP_D0_DIST::update_split_values(comp_t rv, real_t* altX)
         if (total_weights[k]){
             for (size_t d = 0; d < D; d++){ altXk[d] /= total_weights[k]; }
         }else{ // no vertex assigned to k, flag with infinity
-            altXk[0] = INF_REAL;
+            altXk[0] = real_inf();
         }
     }
     free(total_weights);
 }
 
-TPL bool CP_D0_DIST::is_split_value(real_t altX){ return altX != INF_REAL; }
+TPL bool CP_D0_DIST::is_split_value(real_t altX){ return altX != real_inf(); }
 
-TPL void CP_D0_DIST::update_merge_candidate(size_t re, comp_t ru, comp_t rv)
+TPL void CP_D0_DIST::update_merge_candidate(index_t re, comp_t ru, comp_t rv)
 {
     real_t* rXu = rX + D*ru;
     real_t* rXv = rX + D*rv;
     real_t wru = comp_weights[ru];
     real_t wrv = comp_weights[rv];
 
-    if (loss == QUADRATIC){
+    if (loss == quadratic_loss()){
         real_t gain = reduced_edge_weights[re]
             - wru*wrv/(wru + wrv)*distance(rXu, rXv);
 
@@ -310,7 +313,7 @@ TPL void CP_D0_DIST::update_merge_candidate(size_t re, comp_t ru, comp_t rv)
 TPL size_t CP_D0_DIST::update_merge_complexity()
 { return rE*2*D; /* each update is only linear in D */ }
 
-TPL void CP_D0_DIST::accept_merge_candidate(size_t re, comp_t& ru, comp_t& rv)
+TPL void CP_D0_DIST::accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv)
 {
     Cp_d0<real_t, index_t, comp_t>::accept_merge_candidate(re, ru, rv);
         // ru now the root of the merge chain
@@ -326,14 +329,14 @@ TPL index_t CP_D0_DIST::merge()
 
 TPL real_t CP_D0_DIST::compute_evolution(bool compute_dif)
 {
-    if (!compute_dif){ return INF_REAL; }
+    if (!compute_dif){ return real_inf(); }
     real_t dif = ZERO;
     #pragma omp parallel for schedule(dynamic) reduction(+:dif) \
         NUM_THREADS(D*(V - saturated_vert), rV)
     for (comp_t rv = 0; rv < rV; rv++){
         if (is_saturated[rv]){ continue; }
         real_t* rXv = rX + D*rv;
-        real_t distXX = loss == QUADRATIC ? ZERO : distance(rXv, rXv);
+        real_t distXX = loss == quadratic_loss() ? ZERO : distance(rXv, rXv);
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
             real_t* lrXv = last_rX + D*last_comp_assign[v];
@@ -346,15 +349,15 @@ TPL real_t CP_D0_DIST::compute_evolution(bool compute_dif)
 
 /**  instantiate for compilation  **/
 #if defined _OPENMP && _OPENMP < 200805
-/* use of unsigned iterator in parallel loops requires OpenMP 3.0;
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
  * although published in 2008, MSVC still does not support it as of 2020 */
-    template class Cp_d0_dist<float, int32_t, int16_t>;
-    template class Cp_d0_dist<double, int32_t, int16_t>;
-    template class Cp_d0_dist<float, int32_t, int32_t>;
-    template class Cp_d0_dist<double, int32_t, int32_t>;
+template class Cp_d0_dist<float, int32_t, int16_t>;
+template class Cp_d0_dist<double, int32_t, int16_t>;
+template class Cp_d0_dist<float, int32_t, int32_t>;
+template class Cp_d0_dist<double, int32_t, int32_t>;
 #else
-    template class Cp_d0_dist<float, uint32_t, uint16_t>;
-    template class Cp_d0_dist<double, uint32_t, uint16_t>;
-    template class Cp_d0_dist<float, uint32_t, uint32_t>;
-    template class Cp_d0_dist<double, uint32_t, uint32_t>;
+template class Cp_d0_dist<float, uint32_t, uint16_t>;
+template class Cp_d0_dist<double, uint32_t, uint16_t>;
+template class Cp_d0_dist<float, uint32_t, uint32_t>;
+template class Cp_d0_dist<double, uint32_t, uint32_t>;
 #endif

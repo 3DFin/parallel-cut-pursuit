@@ -129,7 +129,7 @@ protected:
      * information and flag it with special pointer value 'no_merge_info';
      * NOTA: it might be necessary to take into account previous merges stored
      * in the merge chains, see header `cut_pursuit.hpp` for details */
-    virtual void update_merge_candidate(size_t re, comp_t ru, comp_t rv) = 0;
+    virtual void update_merge_candidate(index_t re, comp_t ru, comp_t rv) = 0;
 
     /* rough estimate of the number of operations for updating all candidates;
      * useful for estimating the number of parallel threads */
@@ -140,7 +140,7 @@ protected:
      * with lowest index, and assigned to the parameter ru; the root of the
      * other chain in the merge is assigned to rv;
      * see header `cut_pursuit.hpp` for details */
-    virtual void accept_merge_candidate(size_t re, comp_t& ru, comp_t& rv);
+    virtual void accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv);
 
     /**  type resolution for base template class members  **/
     using Cp<real_t, index_t, comp_t>::rX;
@@ -177,8 +177,8 @@ private:
     /* compute the merge chains and return the number of effective merges */
     comp_t compute_merge_chains() override;
     /* auxiliary functions for merge */
-    void delete_merge_candidate(size_t re);
-    void select_best_merge_candidate(size_t re, real_t* best_gain,
+    void delete_merge_candidate(index_t re);
+    void select_best_merge_candidate(index_t re, real_t* best_gain,
         index_t* best_edge);
     Merge_info reserved_merge_info;
 

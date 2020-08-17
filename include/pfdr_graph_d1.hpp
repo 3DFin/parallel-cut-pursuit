@@ -22,7 +22,7 @@
  * Inclusion and Convex Optimization, Optimization Letters, 2018, 1-24
  *
  * Hugo Raguet 2016, 2018
- *============================================================================*/
+ *===========================================================================*/
 #pragma once
 #include "pcd_fwd_doug_rach.hpp"
 
@@ -31,6 +31,9 @@ template <typename real_t, typename vertex_t>
 class Pfdr_d1 : public Pfdr<real_t, vertex_t>
 {
 public:
+
+    using typename Pfdr<real_t, vertex_t>::index_t;
+
     /* for multidimensional data, type of graph total variation, which is
      * nothing but the sum of norms of finite differences over the edges:
      * d1,1 is the sum of l1 norms;
@@ -66,12 +69,12 @@ public:
      *
      * note that the last three configurations resort to additional
      * auxiliary variables and weights Z_Id and Id_W (only for D > 1) */
-    Pfdr_d1(vertex_t V, size_t E, const vertex_t* edges, size_t D,
+    Pfdr_d1(vertex_t V, index_t E, const vertex_t* edges, index_t D,
         D1p d1p = D12, const real_t* coor_weights = nullptr,
         Condshape hess_f_h_shape = MULTIDIM);
 
     /* delegation for monodimensional setting */
-    Pfdr_d1(vertex_t V, size_t E, const vertex_t* edges,
+    Pfdr_d1(vertex_t V, index_t E, const vertex_t* edges,
         Condshape hess_f_h_shape = MONODIM) :
         Pfdr_d1(V, E, edges, 1, D11, nullptr, hess_f_h_shape){};
 
@@ -99,7 +102,7 @@ protected:
 
     /* number of vertices and of (undirected) edges */
     const vertex_t& V = Pfdr<real_t, vertex_t>::size;
-    const size_t E;
+    const index_t E;
 
     /**  specialization of base virtual methods  **/
 

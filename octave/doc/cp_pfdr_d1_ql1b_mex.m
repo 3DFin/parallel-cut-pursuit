@@ -46,7 +46,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %                    zero scalar (for no quadratic part);
 %     for an arbitrary scalar matrix, use identity and scale observations and
 %     penalizations accordingly
-%     if N = V in a direct matricial case, set the last option 'AtA_if_square'
+%     if N = V in a direct matricial case, set the last option 'Gram_if_square'
 %     to false
 % first_edge, adj_vertices - forward-star graph representation:
 %     vertices are numeroted (start at 0) in the order they are given in Y or A
@@ -65,7 +65,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %     upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
 %     pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-3*cp_dif_tol],
 %     pfdr_it_max [1e4], verbose [1e3], max_num_threads [none],
-%     balance_parallel_split [true], AtA_if_square [true]
+%     balance_parallel_split [true], Gram_if_square [true]
 % edge_weights - (real) array of length E, or scalar for homogeneous weights
 % Yl1 - offset for l1 penalty, (real) array of length V
 % l1_weights - (real) array of length V, or scalar for homogeneous weights
@@ -99,7 +99,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %     used for parallelization with OpenMP
 % balance_parallel_split - if true, the parallel workload of the split step 
 %     is balanced; WARNING: this might trade off speed against optimality
-% AtA_if_square - if A is square, set this to false for direct matricial case
+% Gram_if_square - if A is square, set this to false for direct matricial case
 %
 % OUTPUTS: indices start at 0
 %

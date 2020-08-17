@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <limits>
 #include <cstdint> // for instantiation
-#include "../include/maxflow.hpp"
+#include "maxflow.hpp"
 
 /* special constants for node->parent */
 #define TERMINAL terminal
@@ -505,6 +505,13 @@ TPL void MXFL::maxflow()
     nodeptr_block = nullptr; 
 }
 
-/* instantiate for compilation */
+/**  instantiate for compilation  **/
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+template class Maxflow<int32_t, float>;
+template class Maxflow<int32_t, double>;
+#else
 template class Maxflow<uint32_t, float>;
 template class Maxflow<uint32_t, double>;
+#endif

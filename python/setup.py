@@ -20,13 +20,20 @@ to_compile = [ # comment undesired extension modules
     "cp_pfdr_d1_lsx_cpy",
     "cp_kmpp_d0_dist_cpy"
 ]
-include_dirs = [numpy.get_include()] # find the Numpy headers
+include_dirs = [numpy.get_include(), "../include"] # find the Numpy headers
 # compilation and linkage options
 # _GLIBCXX_PARALLEL is only useful for libstdc++ users
 # MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
-extra_compile_args = ["-Wextra", "-Wpedantic", "-std=c++11", "-fopenmp", "-g0",
-                      "-D_GLIBCXX_PARALLEL", "-DMIN_OPS_PER_THREAD=10000"]
-extra_link_args = ["-lgomp"]
+if os.name == 'nt': # windows
+    extra_compile_args = ["/std:c++11", "/openmp", "-D_GLIBCXX_PARALLEL",
+                          "-DMIN_OPS_PER_THREAD=10000"]
+    extra_link_args = ["/lgomp"]
+elif os.name == 'posix': # linux
+    extra_compile_args = ["-std=c++11", "-fopenmp", "-D_GLIBCXX_PARALLEL",
+                          "-DMIN_OPS_PER_THREAD=10000"]
+    extra_link_args = ["-lgomp"]
+else:
+    raise NotImplementedError('OS not yet supported.')
 
 ###  auxiliary functions  ###
 class build_class(build):

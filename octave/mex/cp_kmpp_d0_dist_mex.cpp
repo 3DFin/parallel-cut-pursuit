@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <cstring>
 #include "mex.h"
-#include "../../include/cp_kmpp_d0_dist.hpp"
+#include "cp_kmpp_d0_dist.hpp"
 
 using namespace std;
 
@@ -194,7 +194,7 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
     double* Time = nlhs > 4 ?
         (double*) mxMalloc(sizeof(double)*(cp_it_max + 1)) : nullptr;
     real_t* Dif = nlhs > 5 ?
-        (real_t*) mxMalloc(sizeof(double)*cp_it_max) : nullptr;
+        (real_t*) mxMalloc(sizeof(real_t)*cp_it_max) : nullptr;
 
     /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
 

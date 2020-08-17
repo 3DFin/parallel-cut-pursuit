@@ -2,8 +2,8 @@
  * Hugo Raguet 2018
  *===========================================================================*/
 #include <cmath>
-#include "../include/omp_num_threads.hpp"
-#include "../include/pcd_prox_split.hpp"
+#include "omp_num_threads.hpp"
+#include "pcd_prox_split.hpp"
 
 #define TPL template <typename real_t>
 #define PCD_PROX Pcd_prox<real_t>
@@ -15,7 +15,7 @@
 
 using namespace std;
 
-TPL PCD_PROX::Pcd_prox(size_t size) : size(size)
+TPL PCD_PROX::Pcd_prox(index_t size) : size(size)
 {
     name = "Preconditioned proximal splitting algorithm";
     objective_values = iterate_evolution = nullptr;
@@ -62,7 +62,7 @@ TPL real_t* PCD_PROX::get_iterate(){ return this->X; }
 TPL void PCD_PROX::initialize_iterate()
 {
     if (!X){ X = (real_t*) malloc_check(sizeof(real_t)*size); }
-    for (size_t i = 0; i < size; i++){ X[i] = ZERO; }
+    for (index_t i = 0; i < size; i++){ X[i] = ZERO; }
 }
 
 TPL void PCD_PROX::preconditioning(bool init)
@@ -88,7 +88,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
 
     if (dif_tol > ZERO || dif_rcd > ZERO || iterate_evolution){
         last_X = (real_t*) malloc_check(sizeof(real_t)*size);
-        for (size_t i = 0; i < size; i++){ last_X[i] = X[i]; }
+        for (index_t i = 0; i < size; i++){ last_X[i] = X[i]; }
     }
 
     while (it < it_max && dif >= dif_tol){
@@ -146,7 +146,7 @@ TPL real_t PCD_PROX::compute_evolution()
     real_t norm = ZERO;
     #pragma omp parallel for schedule(static) NUM_THREADS(size) \
         reduction(+:dif, norm)
-    for (size_t i = 0; i < size; i++){
+    for (index_t i = 0; i < size; i++){
         real_t d = last_X[i] - X[i];
         dif += d*d;
         norm += X[i]*X[i];

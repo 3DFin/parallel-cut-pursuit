@@ -14,11 +14,22 @@
  * Hugo Raguet 2016, 2018
  *===========================================================================*/
 #pragma once
-#include <cstddef>
+#include <cstdlib> // for size_t
+
+namespace proj_simplex {
+
+#if defined _OPENMP && _OPENMP < 200805
+/* use of unsigned counter in parallel loops requires OpenMP 3.0;
+ * although published in 2008, MSVC still does not support it as of 2020 */
+typedef long int index_t;
+#else
+typedef size_t index_t;
+#endif
 
 template <typename real_t>
-void proj_simplex(real_t *X, size_t D, size_t N = 1, const real_t *A = nullptr,
-    real_t a = 1., const real_t *M = nullptr, const real_t *m = nullptr);
+void proj_simplex(real_t *X, index_t D, index_t N = 1,
+    const real_t *A = nullptr, real_t a = 1., const real_t *M = nullptr,
+    const real_t *m = nullptr);
 /* 7 arguments
  * X - array of N D-dimensionnal vectors, D-by-N array, column major format
  * D - ambiant dimensionality
@@ -32,3 +43,5 @@ void proj_simplex(real_t *X, size_t D, size_t N = 1, const real_t *A = nullptr,
  *     otherwise set to null and specify the common metric in 'm'
  * m - (inverse terms of) a diagonal metric
  *     set to null for usual euclidean metric */
+
+} // namespace

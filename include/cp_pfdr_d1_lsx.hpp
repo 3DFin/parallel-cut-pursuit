@@ -29,9 +29,6 @@
  *=========================================================================*/
 #pragma once
 #include "cut_pursuit_d1.hpp"
-/* these macros must correspond with the ones in pfdr_d1_lsx.hpp */
-#define LINEAR ((real_t) 0.0)
-#define QUADRATIC ((real_t) 1.0)
 
 /* real_t is the real numeric type, used for the base field and for the
  * objective functional computation;
@@ -62,13 +59,17 @@ public:
 
     /**  methods for manipulating parameters  **/
 
+    /* specific losses */
+    static real_t linear_loss() { return 0.0; }
+    static real_t quadratic_loss() { return 1.0; }
+
     /* Y is changed only if the corresponding argument is not null */
     void set_loss(real_t loss, const real_t* Y = nullptr,
         const real_t* loss_weights = nullptr);
 
     /* overload for changing only loss weights */
     void set_loss(const real_t* loss_weights)
-    { set_loss(loss, nullptr, loss_weights); }
+        { set_loss(loss, nullptr, loss_weights); }
 
     void set_pfdr_param(real_t rho, real_t cond_min, real_t dif_rcd,
         int it_max, real_t dif_tol);
@@ -85,11 +86,11 @@ private:
      * must lie on the simplex */
     const real_t* Y; 
 
-    /* 0 for linear (macro LINEAR)
+    /* 0 for linear (function linear_loss())
      *     f(x) = - <x, y>_w ,
      * with <x, y>_w = sum_{v,d} w_v y_{v,d} x_{v,d} ;
      *
-     * 1 for quadratic (macro QUADRATIC)
+     * 1 for quadratic (function quadratic_loss())
      *     f(x) = 1/2 ||y - x||_{l2,w}^2 ,
      * with ||y - x||_{l2,w}^2 = sum_{v,d} w_v (y_{v,d} - x_{v,d})^2 ;
      *
@@ -169,4 +170,5 @@ private:
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::verbose;
     using Cp<real_t, index_t, comp_t>::malloc_check;
+    using Cp<real_t, index_t, comp_t>::real_inf;
 };
