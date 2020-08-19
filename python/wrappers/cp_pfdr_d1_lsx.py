@@ -74,13 +74,16 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     loss - 0 for linear, 1 for quadratic, 0 < loss < 1 for smoothed 
         Kullback-Leibler (see above)
-    Y - observations, (real) D-by-V array, column-major format;
+    Y - observations, (real) D-by-V array, column-major (F-contigous) format;
+        careful to the internal memory representation of multidimensional
+        arrays, usually numpy uses row-major (C-contiguous) format
+        (convert to F_CONTIGUOUS without copying data by using transpose);
         for Kullback-Leibler loss, the value at each vertex must lie on the
         probability simplex
     first_edge, adj_vertices - graph forward-star representation:
-        vertices are numeroted (start at 0) in the order they are given in Y
-            (careful to the internal memory representation of multidimensional
-            arrays, usually Python uses row-major format)
+        vertices are numeroted (start at 0) in the order they are given in Y;
+            careful to the internal memory representation of multidimensional
+            arrays, usually numpy uses row-major (C-contiguous) format
         edges are numeroted (start at 0) so that all edges originating
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting from 

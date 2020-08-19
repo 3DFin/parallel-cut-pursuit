@@ -13,7 +13,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
                     pfdr_cond_min=1e-2, pfdr_dif_rcd=0., pfdr_dif_tol=None, 
                     pfdr_it_max=int(1e4), verbose=int(1e3), 
                     max_num_threads=0, balance_parallel_split=True,
-                    AtA_if_square=True, compute_Obj=False,
+                    Gram_if_square=True, compute_Obj=False,
                     compute_Time=False, compute_Dif=False):
     """
     Comp, rX, cp_it, Obj, Time, Dif = cp_pfdr_d1_ql1b(
@@ -21,7 +21,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
             Yl1=None, l1_weights=None, low_bnd=None, upp_bnd=None,
             cp_dif_tol=1e-5, cp_it_max=10, pfdr_rho=1.0, pfdr_cond_min=1e-2,
             pfdr_dif_rcd=0.0, pfdr_dif_tol=1e-3*cp_dif_tol,
-            pfdr_it_max=int(1e4), verbose=int(1e3), AtA_if_square=True,
+            pfdr_it_max=int(1e4), verbose=int(1e3), Gram_if_square=True,
             max_num_threads=0, balance_parallel_split=True, compute_Obj=False,
             compute_Time=False, compute_Dif=False)
 
@@ -68,8 +68,11 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
                        zero scalar (for no quadratic part);
         for an arbitrary scalar matrix, use identity and scale observations
         and penalizations accordingly
-        if N = V in a direct matricial case, the last argument 'AtA_if_square'
+        if N = V in a direct matricial case, the last argument 'Gram_if_square'
         must be set to false
+        careful to the internal memory representation of multidimensional
+        arrays, usually numpy uses row-major (C-contiguous) format
+        (convert to F_CONTIGUOUS without copying data by using transpose)
     first_edge, adj_vertices - graph forward-star representation:
         vertices are numeroted (start at 0) in the order given in Y or A
             (careful to the internal memory representation of multidimensional
@@ -113,7 +116,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
-    AtA_if_square - if A is square, set this to false for direct matricial case
+    Gram_if_square - if A is square, set to false for direct matricial case
     compute_Obj - compute the objective functional along iterations 
     compute_Time - monitor elapsing time along iterations
     compute_Dif - compute relative evolution along iterations 
@@ -281,12 +284,12 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     verbose = int(verbose)
     max_num_threads = int(max_num_threads)
 
-    # Check type of all booleen arguments (AtA_if_square, compute_Obj,
+    # Check type of all booleen arguments (Gram_if_square, compute_Obj,
     # compute_Time, compute_Dif)
     for name, b_args in zip(
-            ["AtA_if_square", "balance_parallel_split", "compute_Obj", 
+            ["Gram_if_square", "balance_parallel_split", "compute_Obj", 
              "compute_Time", "compute_Dif"],
-            [ AtA_if_square ,  balance_parallel_split ,  compute_Obj ,
+            [ Gram_if_square ,  balance_parallel_split ,  compute_Obj ,
               compute_Time ,  compute_Dif ]):
         if type(b_args) != bool:
             raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument "
@@ -297,7 +300,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
             Y, A, first_edge, adj_vertices, edge_weights, Yl1, l1_weights,
             low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
             pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
-            balance_parallel_split, AtA_if_square, real_t == "float64", 
+            balance_parallel_split, Gram_if_square, real_t == "float64", 
             compute_Obj, compute_Time, compute_Dif) 
 
     it = it[0]
