@@ -128,7 +128,7 @@ protected:
     virtual real_t compute_objective() = 0;
 
     /* allocate memory and fail with error message if not successful */
-    static inline void* malloc_check(index_t size)
+    void* malloc_check(index_t size)
     {
         void *ptr = malloc(size);
         if (ptr == nullptr){

@@ -122,11 +122,12 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
     }
 
     /**  prepare output; rX is created later  **/
+    /* NOTA: no check for successful allocations is performed */
 
-    npy_intp size_py_comp_t[] = {V};
-    PyArrayObject* py_comp_t = (PyArrayObject*) PyArray_Zeros(1,
-        size_py_comp_t, PyArray_DescrFromType(NPY_COMP_CLASS), 1);
-    comp_t *Comp = (comp_t*) PyArray_DATA(py_comp_t); 
+    npy_intp size_py_Comp[] = {V};
+    PyArrayObject* py_Comp = (PyArrayObject*) PyArray_Zeros(1,
+        size_py_Comp, PyArray_DescrFromType(NPY_COMP_CLASS), 1);
+    comp_t *Comp = (comp_t*) PyArray_DATA(py_Comp); 
 
     npy_intp size_py_it[] = {1};
     PyArrayObject* py_it = (PyArrayObject*) PyArray_Zeros(1, size_py_it,
@@ -190,7 +191,7 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
 
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
-    return Py_BuildValue("OOOOOO", py_comp_t, py_rX, py_it, py_Obj, py_Time,
+    return Py_BuildValue("OOOOOO", py_Comp, py_rX, py_it, py_Obj, py_Time,
         py_Dif); 
 }
 
@@ -212,11 +213,7 @@ static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
         compute_Time, compute_Dif; 
     
     /* parse the input, from Python Object to C PyArray, double, or int type */
-#if PY_MAJOR_VERSION >= 3
-    if(!PyArg_ParseTuple(args, "OOOOOOOOOdiddddiipippppp", &py_Y, &py_A,
-#else // python 2 does not accept the 'p' format specifier
     if(!PyArg_ParseTuple(args, "OOOOOOOOOdiddddiiiiiiiii", &py_Y, &py_A,
-#endif
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_Yl1,
         &py_l1_weights, &py_low_bnd, &py_upp_bnd, &cp_dif_tol, &cp_it_max,
         &pfdr_rho, &pfdr_cond_min, &pfdr_dif_rcd, &pfdr_dif_tol, &pfdr_it_max,
@@ -280,8 +277,8 @@ PyInit_cp_pfdr_d1_ql1b_cpy(void)
 PyMODINIT_FUNC
 initcp_pfdr_d1_ql1b_cpy(void)
 {
-    (void) Py_InitModule("cp_pfdr_d1_ql1b_cpy", cp_pfdr_d1_ql1b_methods);
     import_array() /* IMPORTANT: this must be called to use numpy array */
+    (void) Py_InitModule("cp_pfdr_d1_ql1b_cpy", cp_pfdr_d1_ql1b_methods);
 }
 
 #endif

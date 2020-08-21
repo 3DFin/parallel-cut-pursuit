@@ -145,9 +145,14 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     Baudoin Camille 2019
     """
+
     
     # Determine the type of float argument (real_t) 
     # real_t type is determined by the first parameter Y 
+    if type(Y) != np.ndarray:
+        raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be a "
+                        "numpy array.")
+
     if Y.size > 0 and Y.dtype == "float64":
         real_t = "float64" 
     elif Y.size > 0 and Y.dtype == "float32":
@@ -159,10 +164,6 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     # Convert in numpy array scalar entry: Y, first_edge, adj_vertices, 
     # edge_weights, vert_weights, coor_weights and define float numpy array
     # argument with the right float type, if empty:
-    if type(Y) != np.ndarray:
-        raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be a "
-                        "numpy array.")
-
     if type(first_edge) != np.ndarray or first_edge.dtype != "uint32":
         raise TypeError("Cut-pursuit d0 distance: argument 'first_edge' must "
                         "be a numpy array of type uint32.")
@@ -237,8 +238,7 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     kmpp_iter_num = int(kmpp_iter_num)
     max_num_threads = int(max_num_threads)
 
-    # Check type of all booleen arguments (AtA_if_square, compute_Obj, 
-    # compute_Time, compute_Dif)
+    # Check type of all booleen arguments
     for name, b_args in zip(
         ["verbose", "balance_parallel_split", "compute_Obj", "compute_Time", 
          "compute_Dif"],

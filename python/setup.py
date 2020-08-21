@@ -20,7 +20,8 @@ to_compile = [ # comment undesired extension modules
     "cp_pfdr_d1_lsx_cpy",
     "cp_kmpp_d0_dist_cpy"
 ]
-include_dirs = [numpy.get_include(), "../include"] # find the Numpy headers
+include_dirs = [numpy.get_include(), # find the Numpy headers
+                "../include"]
 # compilation and linkage options
 # _GLIBCXX_PARALLEL is only useful for libstdc++ users
 # MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
@@ -53,10 +54,8 @@ def purge(dir, pattern):
 tmp_work_dir = os.path.realpath(os.curdir)
 os.chdir(os.path.realpath(os.path.dirname(__file__)))
 
-try:
+if not os.path.exists("bin"):
     os.mkdir("bin")
-except FileExistsError:
-    pass 
 
 # remove previously compiled lib
 for shared_obj in to_compile: 

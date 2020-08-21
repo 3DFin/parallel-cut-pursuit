@@ -266,7 +266,7 @@ protected:
     virtual real_t compute_objective() = 0;
 
     /* allocate memory and fail with error message if not successful */
-    static void* malloc_check(size_t size){
+    void* malloc_check(size_t size){
         void *ptr = malloc(size);
         if (!ptr){
             std::cerr << "Cut-pursuit: not enough memory." << std::endl;
@@ -276,7 +276,7 @@ protected:
     }
 
     /* simply free if size is zero */
-    static void* realloc_check(void* ptr, size_t size){
+    void* realloc_check(void* ptr, size_t size){
         if (!size){
            free(ptr); 
            return nullptr; 

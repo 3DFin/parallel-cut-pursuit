@@ -81,11 +81,12 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     }
 
     /**  prepare output; rX is created later  **/
+    /* NOTA: no check for successful allocations is performed */
 
-    npy_intp size_py_comp_t[] = {V};
-    PyArrayObject* py_comp_t = (PyArrayObject*) PyArray_Zeros(1,
-        size_py_comp_t, PyArray_DescrFromType(NPY_COMP_CLASS), 1);
-    comp_t* Comp = (comp_t*) PyArray_DATA(py_comp_t); 
+    npy_intp size_py_Comp[] = {V};
+    PyArrayObject* py_Comp = (PyArrayObject*) PyArray_Zeros(1,
+        size_py_Comp, PyArray_DescrFromType(NPY_COMP_CLASS), 1);
+    comp_t* Comp = (comp_t*) PyArray_DATA(py_Comp); 
 
     npy_intp size_py_it[] = {1};
     PyArrayObject* py_it = (PyArrayObject*) PyArray_Zeros(1, size_py_it,
@@ -147,7 +148,7 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
-    return Py_BuildValue("OOOOOO", py_comp_t, py_rX, py_it, py_Obj, py_Time,
+    return Py_BuildValue("OOOOOO", py_Comp, py_rX, py_it, py_Obj, py_Time,
         py_Dif);
 }
 
@@ -168,11 +169,7 @@ static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
         compute_Time, compute_Dif;
 
     /* parse the input, from Python Object to C PyArray, double, or int type */
-#if PY_MAJOR_VERSION >= 3
-    if(!PyArg_ParseTuple(args, "dOOOOOOdiiidiipippppp", &loss, &py_Y,
-#else // python 2 does not accept the 'p' format specifier
     if(!PyArg_ParseTuple(args, "dOOOOOOdiiidiiiiiiiii", &loss, &py_Y,
-#endif
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_vert_weights,
         &py_coor_weights, &cp_dif_tol, &cp_it_max, &K, &split_iter_num, 
         &split_damp_ratio, &kmpp_init_num, &kmpp_iter_num, &verbose,
@@ -236,8 +233,8 @@ PyInit_cp_kmpp_d0_dist_cpy(void)
 PyMODINIT_FUNC
 initcp_kmpp_d0_dist_cpy(void)
 {
-    (void) Py_InitModule("cp_kmpp_d0_dist_cpy", cp_kmpp_d0_dist_methods);
     import_array() /* IMPORTANT: this must be called to use numpy array */
+    (void) Py_InitModule("cp_kmpp_d0_dist_cpy", cp_kmpp_d0_dist_methods);
 }
 
 #endif
