@@ -27,7 +27,7 @@ using namespace std;
  * although published in 2008, MSVC still does not support it as of 2020 */
     typedef int32_t index_t;
     # define mxINDEX_CLASS mxINT32_CLASS
-    # define INDEX_CLASS_NAME "int32"
+    # define INDEX_T_STRING "int32"
     /* comment the following if more than 32767 components are expected */
     typedef int16_t comp_t;
     # define mxCOMP_CLASS mxINT16_CLASS
@@ -37,7 +37,7 @@ using namespace std;
 #else
     typedef uint32_t index_t;
     # define mxINDEX_CLASS mxUINT32_CLASS
-    # define INDEX_CLASS_NAME "uint32"
+    # define INDEX_T_STRING "uint32"
     /* comment the following if more than 65535 components are expected */
     typedef uint16_t comp_t;
     # define mxCOMP_CLASS mxUINT16_CLASS
@@ -129,8 +129,8 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     /**  graph structure  **/
 
-    check_arg_class(prhs[2], "first_edge", mxINDEX_CLASS, INDEX_CLASS_NAME);
-    check_arg_class(prhs[3], "adj_vertices", mxINDEX_CLASS, INDEX_CLASS_NAME);
+    check_arg_class(prhs[2], "first_edge", mxINDEX_CLASS, INDEX_T_STRING);
+    check_arg_class(prhs[3], "adj_vertices", mxINDEX_CLASS, INDEX_T_STRING);
 
     const index_t *first_edge = (index_t*) mxGetData(prhs[2]);
     const index_t *adj_vertices = (index_t*) mxGetData(prhs[3]);

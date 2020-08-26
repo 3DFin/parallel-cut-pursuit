@@ -27,22 +27,22 @@ using namespace std;
     typedef int32_t index_t;
     /* comment the following if more than 32767 components are expected */
     typedef int16_t comp_t;
-    #define NPY_COMP_CLASS NPY_INT16
+    #define NPY_COMP NPY_INT16
     /* uncomment the following if more than 32767 components are expected */
     // typedef int32_t comp_t;
-    // #define NPY_COMP_CLASS NPY_INT32
+    // #define NPY_COMP NPY_INT32
 #else
     typedef uint32_t index_t;
     /* comment the following if more than 65535 components are expected */
     typedef uint16_t comp_t;
-    #define NPY_COMP_CLASS NPY_UINT16
+    #define NPY_COMP NPY_UINT16
     /* uncomment the following if more than 65535 components are expected */
     // typedef uint32_t comp_t;
-    // #define NPY_COMP_CLASS NPY_UINT32
+    // #define NPY_COMP NPY_UINT32
 #endif
 
 /* template for handling both single and double precisions */
-template<typename real_t, NPY_TYPES pyREAL_CLASS>
+template<typename real_t, NPY_TYPES NPY_REAL>
 static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_first_edge, PyArrayObject* py_adj_vertices,
     PyArrayObject* py_edge_weights, PyArrayObject* py_loss_weights,
@@ -85,7 +85,7 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
 
     npy_intp size_py_Comp[] = {V};
     PyArrayObject* py_Comp = (PyArrayObject*) PyArray_Zeros(1,
-        size_py_Comp, PyArray_DescrFromType(NPY_COMP_CLASS), 1);
+        size_py_Comp, PyArray_DescrFromType(NPY_COMP), 1);
     comp_t* Comp = (comp_t*) PyArray_DATA(py_Comp); 
 
     npy_intp size_py_it[] = {1};
@@ -98,7 +98,7 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
     if (compute_Obj){
         npy_intp size_py_Obj[] = {cp_it_max + 1};
         py_Obj = (PyArrayObject*) PyArray_Zeros(1, size_py_Obj,
-            PyArray_DescrFromType(pyREAL_CLASS), 1);
+            PyArray_DescrFromType(NPY_REAL), 1);
         Obj = (real_t*) PyArray_DATA(py_Obj);
     }
 
@@ -116,7 +116,7 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
     if (compute_Dif){
         npy_intp size_py_Dif[] = {cp_it_max};
         py_Dif = (PyArrayObject*) PyArray_Zeros(1, size_py_Dif,
-            PyArray_DescrFromType(pyREAL_CLASS), 1);
+            PyArray_DescrFromType(NPY_REAL), 1);
         Dif = (real_t*) PyArray_DATA(py_Dif);
     }
 
@@ -142,7 +142,7 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
     real_t *cp_rX = cp->get_reduced_values();
     npy_intp size_py_rX[] = {(npy_intp) D, rV};
     PyArrayObject *py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
-        PyArray_DescrFromType(pyREAL_CLASS), 1);
+        PyArray_DescrFromType(NPY_REAL), 1);
     real_t *rX = (real_t*) PyArray_DATA(py_rX);
     for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
     

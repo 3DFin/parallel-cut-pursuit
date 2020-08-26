@@ -293,6 +293,7 @@ TPL real_t PFDR_D1::compute_g()
 }
 
 /* instantiate for compilation */
+#define INSTANCE(real_t, vertex_t) template class Pfdr_d1<float, int16_t>;
 #if defined _OPENMP && _OPENMP < 200805
 /* use of unsigned counter in parallel loops requires OpenMP 3.0;
  * although published in 2008, MSVC still does not support it as of 2020 */
