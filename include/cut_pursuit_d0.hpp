@@ -116,17 +116,18 @@ protected:
 
     /* the merge candidate list is the array containing the information on the
      * merge of each reduced edge :
+     *  - a null pointer if the gain is negative or not yet computed
      *  - a pointer to a merge information if the gain is positive
-     *  - the reserved pointer value 'no_merge_info' if the gain is negative
-     *  or not yet computed
-     *  - a null pointer if the candidate has been accepted or discarded */
+     *  - the reserved pointer value 'accepted_merge' if the candidate has been
+     *  accepted or discarded */
     Merge_info** merge_info_list;
-    Merge_info* const no_merge_info;
+    Merge_info* const accepted_merge;
 
     /* update information of the given merge candidate in the list;
      * merge information must be created with new and destroyed with delete;
-     * for nonpositive gain, do not create (or destroy if it exists) the merge
-     * information and flag it with special pointer value 'no_merge_info';
+     * negative gain values might still get accepted; for inacceptable gain,
+     * do not create (or destroy if it exists) the merge information and flag
+     * it with a null pointer;
      * NOTA: it might be necessary to take into account previous merges stored
      * in the merge chains, see header `cut_pursuit.hpp` for details */
     virtual void update_merge_candidate(index_t re, comp_t ru, comp_t rv) = 0;

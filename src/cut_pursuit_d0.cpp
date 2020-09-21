@@ -19,8 +19,12 @@ using namespace std;
 TPL CP_D0::Cp_d0(index_t V, index_t E, const index_t* first_edge,
     const index_t* adj_vertices, size_t D)
     : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D),
-      no_merge_info(&reserved_merge_info)
+      accepted_merge(&reserved_merge_info)
 {
+    /* ensure handling of infinite values (negation, comparisons) is safe */
+    static_assert(numeric_limits<real_t>::is_iec559,
+        "Cut-pursuit d0: real_t must satisfy IEEE 754.");
+
     K = 2;
     split_iter_num = 2;
     split_damp_ratio = ONE;
@@ -265,15 +269,14 @@ TPL CP_D0::Merge_info::~Merge_info()
 
 TPL void CP_D0::delete_merge_candidate(index_t re)
 {
-    if (merge_info_list[re] != no_merge_info){ delete merge_info_list[re]; }
-    merge_info_list[re] = nullptr;
+    delete merge_info_list[re];
+    merge_info_list[re] = accepted_merge;
 }
 
 TPL void CP_D0::select_best_merge_candidate(index_t re, real_t* best_gain,
     index_t* best_edge)
 {
-    if (merge_info_list[re] != no_merge_info
-        && merge_info_list[re]->gain > *best_gain){
+    if (merge_info_list[re] && merge_info_list[re]->gain > *best_gain){
             *best_gain = merge_info_list[re]->gain;
             *best_edge = re;
     }
@@ -291,7 +294,7 @@ TPL comp_t CP_D0::compute_merge_chains()
     comp_t merge_count = 0;
    
     merge_info_list = (Merge_info**) malloc_check(sizeof(Merge_info*)*rE);
-    for (index_t re = 0; re < rE; re++){ merge_info_list[re] = no_merge_info; }
+    for (index_t re = 0; re < rE; re++){ merge_info_list[re] = nullptr; }
 
     real_t* best_par_gains =
         (real_t*) malloc_check(sizeof(real_t)*omp_get_num_procs());
@@ -312,13 +315,13 @@ TPL comp_t CP_D0::compute_merge_chains()
             compute_num_threads(update_merge_complexity()/rV*2);
 
         for (int thrd_num = 0; thrd_num < num_par_thrds; thrd_num++){
-            best_par_gains[thrd_num] = ZERO;
+            best_par_gains[thrd_num] = -real_inf();
         }
 
         /* differences between threads is small: using static schedule */
         #pragma omp parallel for schedule(static) num_threads(num_par_thrds)
         for (index_t re = 0; re < rE; re++){
-            if (!merge_info_list[re]){ continue; }
+            if (merge_info_list[re] == accepted_merge){ continue; }
             comp_t ru = reduced_edges[TWO*re];
             comp_t rv = reduced_edges[TWO*re + 1];
 
@@ -356,7 +359,8 @@ TPL comp_t CP_D0::compute_merge_chains()
         }
 
         /**  merge best candidate if best gain is positive  **/
-        if (best_gain > ZERO){
+        /* we allow for negative gains, as long as its not negative infinity */
+        if (best_gain > -real_inf()){
             comp_t ru = get_merge_chain_root(reduced_edges[2*best_edge]);
             comp_t rv = get_merge_chain_root(reduced_edges[2*best_edge + 1]);
             accept_merge_candidate(best_edge, ru, rv); // ru now the root

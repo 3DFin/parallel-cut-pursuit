@@ -70,6 +70,8 @@ public:
 
     void set_kmpp_param(int kmpp_init_num = 3, int kmpp_iter_num = 3);
 
+    void set_min_comp_weight(real_t min_comp_weight = ZERO);
+
 private:
     /**  separable loss term: weighted square l2 or smoothed KL **/
     const real_t* Y; // observations, D-by-V array, column major format
@@ -101,6 +103,9 @@ private:
      * set corresponding pointer to null for no weight */
     real_t loss;
     const real_t *vert_weights, *coor_weights;
+
+    /* minimum weight allowed for a component */
+    real_t min_comp_weight;
 
     /* compute the functional f at a single vertex */
     /* NOTA: not actually a metric, in spite of its name */
@@ -136,8 +141,9 @@ private:
 
     /* update information of the given merge candidate in the list;
      * merge information must be created with new and destroyed with delete;
-     * for nonpositive gain, do not create (or destroy if it exists) the merge
-     * information and flag it with special pointer value 'no_merge_info' */
+     * negative gain values might still get accepted; for inacceptable gain,
+     * do not create (or destroy if it exists) the merge information and flag
+     * it with a null pointer */
     void update_merge_candidate(index_t re, comp_t ru, comp_t rv) override;
 
     /* rough estimate of the number of operations for updating all candidates;
@@ -160,7 +166,7 @@ private:
     using Cp_d0<real_t, index_t, comp_t>::split_iter_num;
     using typename Cp_d0<real_t, index_t, comp_t>::Merge_info;
     using Cp_d0<real_t, index_t, comp_t>::merge_info_list;
-    using Cp_d0<real_t, index_t, comp_t>::no_merge_info;
+    using Cp_d0<real_t, index_t, comp_t>::accepted_merge;
     using Cp<real_t, index_t, comp_t>::D;
     using Cp<real_t, index_t, comp_t>::rX;
     using Cp<real_t, index_t, comp_t>::last_rX;
