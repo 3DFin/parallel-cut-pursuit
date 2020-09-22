@@ -7,7 +7,8 @@
  *      edge_weights [1.0], vert_weights [none], coor_weights [none],
  *      cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
  *      split_damp_ratio [1.0], kmpp_init_num [3], kmpp_iter_num [3],
- *      verbose [true], max_num_threads [none], balance_parallel_split [true]
+ *      min_comp_weight [0.0], verbose [true], max_num_threads [none],
+ *      balance_parallel_split [true]
  * 
  *  Hugo Raguet 2019, 2020
  *===========================================================================*/
@@ -57,11 +58,11 @@ static void check_opts(const mxArray* options)
             mxGetClassName(options));
     }
 
-    const int num_allow_opts = 13;
+    const int num_allow_opts = 14;
     const char* opts_names[] = {"edge_weights", "vert_weights", "coor_weights",
         "cp_dif_tol", "cp_it_max", "K", "split_iter_num", "split_damp_ratio",
-        "kmpp_init_num", "kmpp_iter_num", "verbose", "max_num_threads",
-        "balance_parallel_split"};
+        "kmpp_init_num", "kmpp_iter_num", "min_comp_weight", "verbose",
+        "max_num_threads", "balance_parallel_split"};
 
     const int num_given_opts = mxGetNumberOfFields(options);
 
@@ -178,6 +179,7 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
     real_t GET_SCAL_OPT(split_damp_ratio, 1.0);
     int GET_SCAL_OPT(kmpp_init_num, 3);
     int GET_SCAL_OPT(kmpp_iter_num, 3);
+    real_t GET_SCAL_OPT(min_comp_weight, 0.0);
     bool GET_SCAL_OPT(verbose, true);
     int GET_SCAL_OPT(max_num_threads, 0);
     bool GET_SCAL_OPT(balance_parallel_split, true);
@@ -207,6 +209,7 @@ static void cp_kmpp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
     cp->set_split_param(K, split_iter_num, split_damp_ratio);
     cp->set_kmpp_param(kmpp_init_num, kmpp_iter_num);
+    cp->set_min_comp_weight(min_comp_weight);
     cp->set_parallel_param(max_num_threads, balance_parallel_split);
     cp->set_monitoring_arrays(Obj, Time, Dif);
 

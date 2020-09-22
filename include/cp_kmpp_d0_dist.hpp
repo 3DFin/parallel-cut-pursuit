@@ -70,7 +70,7 @@ public:
 
     void set_kmpp_param(int kmpp_init_num = 3, int kmpp_iter_num = 3);
 
-    void set_min_comp_weight(real_t min_comp_weight = ZERO);
+    void set_min_comp_weight(real_t min_comp_weight = 1.0);
 
 private:
     /**  separable loss term: weighted square l2 or smoothed KL **/

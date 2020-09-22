@@ -168,6 +168,7 @@ protected:
     using Cp<real_t, index_t, comp_t>::merge_components;
     using Cp<real_t, index_t, comp_t>::malloc_check;
     using Cp<real_t, index_t, comp_t>::realloc_check;
+    using Cp<real_t, index_t, comp_t>::real_inf;
 
 private:
 

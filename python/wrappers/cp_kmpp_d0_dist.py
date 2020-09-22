@@ -10,18 +10,18 @@ from cp_kmpp_d0_dist_cpy import cp_kmpp_d0_dist_cpy
 def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
                     vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
                     cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-                    kmpp_init_num=3, kmpp_iter_num=3, verbose=True,
-                    max_num_threads=0, balance_parallel_split=True,
-                    compute_Obj=False, compute_Time=False, compute_Dif=False):
-
+                    kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
+                    verbose=True, max_num_threads=0,
+                    balance_parallel_split=True, compute_Obj=False,
+                    compute_Time=False, compute_Dif=False):
     """
     Comp, rX, cp_it, Obj, Time, Dif = cp_kmpp_d0_dist(
             loss, Y, first_edge, adj_vertices, edge_weights=None, 
             vert_weights=None, coor_weights=None, cp_dif_tol=1e-3, 
             cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-            kmpp_init_num=3, kmpp_iter_num=3, verbose=True, max_num_threads=0,
-            balance_parallel_split=True, compute_Obj=False, 
-            compute_Time=False, compute_Dif=False)
+            kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
+            verbose=True, max_num_threads=0, balance_parallel_split=True,
+            compute_Obj=False, compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d0 (weighted contour length) penalization, with
     a loss akin to a distance:
@@ -109,6 +109,9 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         and 1, the latter meaning no damping
     kmpp_init_num - number of random k-means initializations in the split step
     kmpp_iter_num - number of k-means iterations in the split step
+    min_comp_weight - minimum total weight (number of vertices if no weights
+        are given on the vertices) that a component is allowed to have;
+        components with smaller weights are merged with adjacent components
     verbose - if true, display information on the progress
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
@@ -224,13 +227,13 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be "
                         "F_CONTIGUOUS")
 
-    # Convert in float64 all float arguments if needed (loss, cp_dif_tol) 
+    # Convert in float64 all float arguments
     loss = float(loss)
     cp_dif_tol = float(cp_dif_tol)
     split_damp_ratio = float(split_damp_ratio)
+    min_comp_weight = float(min_comp_weight)
      
-    # Convert all int arguments (cp_it_max, K, split_iter_num, kmpp_init_num, 
-    # kmpp_iter_num, verbose) in ints: 
+    # Convert in int all integer arguments
     cp_it_max = int(cp_it_max)
     K = int(K)
     split_iter_num = int(split_iter_num)
@@ -253,8 +256,8 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
             loss, Y, first_edge, adj_vertices, edge_weights, vert_weights,
             coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
             split_damp_ratio, kmpp_init_num, kmpp_iter_num, verbose,
-            max_num_threads, balance_parallel_split, real_t == "float64",
-            compute_Obj, compute_Time, compute_Dif)
+            min_comp_weight, max_num_threads, balance_parallel_split,
+            real_t == "float64", compute_Obj, compute_Time, compute_Dif)
 
     it = it[0]
     

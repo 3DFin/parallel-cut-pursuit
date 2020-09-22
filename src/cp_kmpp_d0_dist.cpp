@@ -27,7 +27,7 @@ TPL CP_D0_DIST::Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
     fYY = ZERO;
     fXY = real_inf();
 
-    set_min_comp_weight = ZERO;
+    min_comp_weight = ZERO;
 }
 
 TPL CP_D0_DIST::~Cp_d0_dist(){ free(comp_weights); }

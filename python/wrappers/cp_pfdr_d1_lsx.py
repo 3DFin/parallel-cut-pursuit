@@ -14,7 +14,6 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
                    verbose=int(1e2), max_num_threads=0, 
                    balance_parallel_split=True, compute_Obj=False, 
                    compute_Time=False, compute_Dif=False):
-
     """
     Comp, rX, cp_it, Obj, Time, Dif = cp_pfdr_d1_lsx(
             loss, Y, first_edge, adj_vertices, edge_weights=None,

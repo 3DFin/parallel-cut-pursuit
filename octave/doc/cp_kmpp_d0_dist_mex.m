@@ -70,7 +70,8 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 %     edge_weights [1.0], vert_weights [none], coor_weights [none],
 %     cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
 %     split_damp_ratio [1.0], kmpp_init_num [3], kmpp_iter_num [3],
-%     verbose [true], max_num_threads [none], balance_parallel_split [true]
+%     min_comp_weight [0.0], verbose [true], max_num_threads [none],
+%     balance_parallel_split [true]
 % edge_weights - (real) array of length E or scalar for homogeneous weights
 % vert_weights - weights on vertices (w_v above); (real) array of length V
 % coor_weights - weights on coordinates (m_d above); (real) array of length D
@@ -88,6 +89,9 @@ function [Comp, rX, it, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 %     and 1, the latter meaning no damping
 % kmpp_init_num - number of random k-means initializations in the split step
 % kmpp_iter_num - number of k-means iterations in the split step
+% min_comp_weight - minimum total weight (number of vertices if no weights are
+%     given on the vertices) that a component is allowed to have;
+%     components with smaller weights are merged with adjacent components
 % verbose - if nonzero, display information on the progress
 % max_num_threads - if greater than zero, set the maximum number of threads
 %     used for parallelization with OpenMP
