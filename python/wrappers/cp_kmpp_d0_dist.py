@@ -10,18 +10,19 @@ from cp_kmpp_d0_dist_cpy import cp_kmpp_d0_dist_cpy
 def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
                     vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
                     cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-                    kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
-                    verbose=True, max_num_threads=0,
-                    balance_parallel_split=True, compute_Obj=False,
-                    compute_Time=False, compute_Dif=False):
+                    min_comp_weight = 0, kmpp_init_num=3, kmpp_iter_num=3, verbose=True,
+                    max_num_threads=0, balance_parallel_split=True,
+                    compute_Obj=False, compute_Time=False, compute_Dif=False,
+                    compute_Com=False):
+
     """
     Comp, rX, cp_it, Obj, Time, Dif = cp_kmpp_d0_dist(
             loss, Y, first_edge, adj_vertices, edge_weights=None, 
             vert_weights=None, coor_weights=None, cp_dif_tol=1e-3, 
             cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-            kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
-            verbose=True, max_num_threads=0, balance_parallel_split=True,
-            compute_Obj=False, compute_Time=False, compute_Dif=False)
+            kmpp_init_num=3, kmpp_iter_num=3, verbose=True, max_num_threads=0,
+            balance_parallel_split=True, compute_Obj=False, 
+            compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d0 (weighted contour length) penalization, with
     a loss akin to a distance:
@@ -227,13 +228,13 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be "
                         "F_CONTIGUOUS")
 
-    # Convert in float64 all float arguments
+    # Convert in float64 all float arguments if needed (loss, cp_dif_tol) 
     loss = float(loss)
     cp_dif_tol = float(cp_dif_tol)
     split_damp_ratio = float(split_damp_ratio)
-    min_comp_weight = float(min_comp_weight)
      
-    # Convert in int all integer arguments
+    # Convert all int arguments (cp_it_max, K, split_iter_num, kmpp_init_num, 
+    # kmpp_iter_num, verbose) in ints: 
     cp_it_max = int(cp_it_max)
     K = int(K)
     split_iter_num = int(split_iter_num)
@@ -252,29 +253,46 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
                             "boolean".format(name))
 
     # Call wrapper python in C  
-    Comp, rX, it, Obj, Time, Dif = cp_kmpp_d0_dist_cpy(
+    Comp, rX, it, Obj, Time, Dif, comp_List = cp_kmpp_d0_dist_cpy(
             loss, Y, first_edge, adj_vertices, edge_weights, vert_weights,
             coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
-            split_damp_ratio, kmpp_init_num, kmpp_iter_num, verbose,
-            min_comp_weight, max_num_threads, balance_parallel_split,
-            real_t == "float64", compute_Obj, compute_Time, compute_Dif)
-
+            split_damp_ratio, kmpp_init_num, kmpp_iter_num, min_comp_weight, verbose,
+            max_num_threads, balance_parallel_split, real_t == "float64",
+            compute_Obj, compute_Time, compute_Dif, compute_Com)
     it = it[0]
     
     # Return output depending of the optional output needed
-    if (compute_Obj and compute_Time and compute_Dif):
+    if (compute_Obj and compute_Time and compute_Dif and compute_Com):
+        return Comp, rX, it, Obj, Time, Dif, comp_list
+    elif (compute_Obj and compute_Time and compute_Dif):
         return Comp, rX, it, Obj, Time, Dif
+    elif (compute_Obj and compute_Time and compute_Com):
+        return Comp, rX, it, Obj, Time, comp_list
+    elif (compute_Obj and compute_Com and compute_Dif):
+        return Comp, rX, it, Obj, Dif, comp_list
+    elif (compute_Com and compute_Time and compute_Dif):
+        return Comp, rX, it, Time, Dif, comp_list
     elif (compute_Obj and compute_Time):
         return Comp, rX, it, Obj, Time
     elif (compute_Obj and compute_Dif):
         return Comp, rX, it, Obj, Dif
     elif (compute_Time and compute_Dif):
         return Comp, rX, it, Time, Dif
+    elif (compute_Obj and compute_Com):
+        return Comp, rX, it, Obj, comp_list
+    elif (compute_Com and compute_Time):
+        return Comp, rX, it, Time, comp_list
+    elif (compute_Com and compute_Dif):
+        return Comp, rX, it, Dif, comp_list
     elif (compute_Obj):
         return Comp, rX, it, Obj
     elif (compute_Time):
         return Comp, rX, it, Time
     elif (compute_Dif):
         return Comp, rX, it, Dif
+    elif (compute_Com):
+        return Comp, rX, it, comp_List
     else:
         return Comp, rX, it
+
+

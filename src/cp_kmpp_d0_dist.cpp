@@ -77,8 +77,10 @@ TPL void CP_D0_DIST::set_loss(real_t loss, const real_t* Y,
     /* recompute the constant dist(Y, Y) if necessary */
     fYY = ZERO;
     if (loss != quadratic_loss()){
+        #if defined _OPENMP && _OPENMP > 200805
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:fYY)
+        #endif
         for (index_t v = 0; v < V; v++){
             const real_t* Yv = Y + D*v;
             fYY += VERT_WEIGHTS_(v)*distance(Yv, Yv);
