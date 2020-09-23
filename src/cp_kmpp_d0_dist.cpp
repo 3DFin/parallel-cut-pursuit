@@ -26,6 +26,8 @@ TPL CP_D0_DIST::Cp_d0_dist(index_t V, index_t E, const index_t* first_edge,
     loss = quadratic_loss();
     fYY = ZERO;
     fXY = real_inf();
+
+    min_comp_weight = ZERO;
 }
 
 TPL CP_D0_DIST::~Cp_d0_dist(){ free(comp_weights); }
@@ -90,6 +92,16 @@ TPL void CP_D0_DIST::set_kmpp_param(int kmpp_init_num, int kmpp_iter_num)
 {
     this->kmpp_init_num = kmpp_init_num;
     this->kmpp_iter_num = kmpp_iter_num;
+}
+
+TPL void CP_D0_DIST::set_min_comp_weight(real_t min_comp_weight)
+{
+    if (min_comp_weight < ZERO){
+        cerr << "Cut-pursuit d0 distance: min component weight parameter "
+            "should be positive (" << min_comp_weight << " given)." << endl;
+        exit(EXIT_FAILURE);
+    }
+    this->min_comp_weight = min_comp_weight;
 }
 
 TPL real_t CP_D0_DIST::fv(index_t v, const real_t* Xv)
@@ -275,8 +287,8 @@ TPL void CP_D0_DIST::update_merge_candidate(index_t re, comp_t ru, comp_t rv)
         real_t gain = reduced_edge_weights[re]
             - wru*wrv/(wru + wrv)*distance(rXu, rXv);
 
-        if (gain > ZERO){
-            if (merge_info_list[re] == no_merge_info){
+        if (gain > ZERO || wru < min_comp_weight || wrv < min_comp_weight){
+            if (!merge_info_list[re]){
                 merge_info_list[re] = new Merge_info(D);
             }
             merge_info_list[re]->gain = gain;
@@ -285,14 +297,12 @@ TPL void CP_D0_DIST::update_merge_candidate(index_t re, comp_t ru, comp_t rv)
             for (size_t d = 0; d < D; d++){
                 merge_info_list[re]->value[d] = wru*rXu[d] + wrv*rXv[d];
             }
-        }else if (merge_info_list[re] != no_merge_info){
+        }else if (merge_info_list[re]){
             delete merge_info_list[re];
-            merge_info_list[re] = no_merge_info;
+            merge_info_list[re] = nullptr;
         }
     }else{
-        if (merge_info_list[re] == no_merge_info){
-            merge_info_list[re] = new Merge_info(D);
-        }
+        if (!merge_info_list[re]){ merge_info_list[re] = new Merge_info(D); }
         real_t* value = merge_info_list[re]->value;
 
         wru /= (comp_weights[ru] + comp_weights[rv]);
@@ -305,9 +315,11 @@ TPL void CP_D0_DIST::update_merge_candidate(index_t re, comp_t ru, comp_t rv)
             + comp_weights[ru]*(distance(rXu, rXu) - distance(rXu, value))
             + comp_weights[rv]*(distance(rXv, rXv) - distance(rXv, value));
 
-        if (merge_info_list[re]->gain <= ZERO){
+        if (merge_info_list[re]->gain <= ZERO &&
+            comp_weights[ru] >= min_comp_weight &&
+            comp_weights[rv] >= min_comp_weight){
             delete merge_info_list[re];
-            merge_info_list[re] = no_merge_info;
+            merge_info_list[re] = nullptr;
         }
     }
 }

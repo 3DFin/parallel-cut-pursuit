@@ -10,19 +10,19 @@ from cp_kmpp_d0_dist_cpy import cp_kmpp_d0_dist_cpy
 def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
                     vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
                     cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-                    kmpp_init_num=3, kmpp_iter_num=3, verbose=True,
+                    min_comp_weight = 0, kmpp_init_num=3, kmpp_iter_num=3, verbose=True,
                     max_num_threads=0, balance_parallel_split=True,
                     compute_Obj=False, compute_Time=False, compute_Dif=False,
                     compute_Com=False):
 
     """
-    Comp, rX, cp_it, Obj, Time, Dif, comp_list = cp_kmpp_d0_dist(
+    Comp, rX, cp_it, Obj, Time, Dif = cp_kmpp_d0_dist(
             loss, Y, first_edge, adj_vertices, edge_weights=None, 
             vert_weights=None, coor_weights=None, cp_dif_tol=1e-3, 
             cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
             kmpp_init_num=3, kmpp_iter_num=3, verbose=True, max_num_threads=0,
             balance_parallel_split=True, compute_Obj=False, 
-            compute_Time=False, compute_Dif=False, compute_Com=False)
+            compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d0 (weighted contour length) penalization, with
     a loss akin to a distance:
@@ -117,10 +117,9 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         is balanced; WARNING: this might trade off speed against optimality
     compute_Obj   - compute the objective functional along iterations 
     compute_Time  - monitor elapsing time along iterations
-    compute_Dif   - compute relative evolution along iterations
-    compute_Com   - returns components as list of indices 
+    compute_Dif   - compute relative evolution along iterations 
 
-    OUTPUTS: Obj, Time, Dif, Comp are optional, set parameters compute_Obj,
+    OUTPUTS: Obj, Time, Dif are optional, set parameters compute_Obj,
         compute_Time, compute_Dif to True to request them
 
     Comp - assignement of each vertex to a component, (uint16) array of
@@ -134,7 +133,6 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
            array of length cp_it + 1
     Dif - if requested, if requested, the iterate evolution along iterations
           array of length cp_it
-    comp_list - list the indices of vertices in each components (list of rV indices lists) 
  
     Parallel implementation with OpenMP API.
 
@@ -252,13 +250,12 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
                             "boolean".format(name))
 
     # Call wrapper python in C  
-    Comp, rX, it, Obj, Time, Dif, comp_list = cp_kmpp_d0_dist_cpy(
+    Comp, rX, it, Obj, Time, Dif, comp_List = cp_kmpp_d0_dist_cpy(
             loss, Y, first_edge, adj_vertices, edge_weights, vert_weights,
             coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
-            split_damp_ratio, kmpp_init_num, kmpp_iter_num, verbose,
+            split_damp_ratio, kmpp_init_num, kmpp_iter_num, min_comp_weight, verbose,
             max_num_threads, balance_parallel_split, real_t == "float64",
-            compute_Obj, compute_Time, compute_Dif)
-
+            compute_Obj, compute_Time, compute_Dif, compute_Com)
     it = it[0]
     
     # Return output depending of the optional output needed
@@ -284,7 +281,7 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         return Comp, rX, it, Time, comp_list
     elif (compute_Com and compute_Dif):
         return Comp, rX, it, Dif, comp_list
-   elif (compute_Obj):
+    elif (compute_Obj):
         return Comp, rX, it, Obj
     elif (compute_Time):
         return Comp, rX, it, Time
@@ -294,3 +291,5 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         return Comp, rX, it, comp_List
     else:
         return Comp, rX, it
+
+
