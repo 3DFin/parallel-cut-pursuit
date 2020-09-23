@@ -110,6 +110,9 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         and 1, the latter meaning no damping
     kmpp_init_num - number of random k-means initializations in the split step
     kmpp_iter_num - number of k-means iterations in the split step
+    min_comp_weight - minimum total weight (number of vertices if no weights
+        are given on the vertices) that a component is allowed to have;
+        components with smaller weights are merged with adjacent components
     verbose - if true, display information on the progress
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
