@@ -748,10 +748,8 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
      * time, so we create the list of reverse edges within each component; to
      * facilitate this, we keep the index of each vertex within components */
     index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
-    #if defined _OPENMP && _OPENMP > 200805
     #pragma omp parallel for schedule(dynamic) \
         NUM_THREADS(2*E*first_vertex[rV_big]/V, rV_big) reduction(+:rV_new)
-    #endif
     for (comp_t rv = 0; rv < rV_big; rv++){
         index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
 

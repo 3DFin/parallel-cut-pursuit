@@ -75,17 +75,16 @@ TPL void CP_D0_DIST::set_loss(real_t loss, const real_t* Y,
     this->vert_weights = vert_weights;
     this->coor_weights = coor_weights; 
     /* recompute the constant dist(Y, Y) if necessary */
-    fYY = ZERO;
+    real_t fYY_par = ZERO; // auxiliary variable for parallel region
     if (loss != quadratic_loss()){
-        #if defined _OPENMP && _OPENMP > 200805
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
-            reduction(+:fYY)
-        #endif
+            reduction(+:fYY_par)
         for (index_t v = 0; v < V; v++){
             const real_t* Yv = Y + D*v;
-            fYY += VERT_WEIGHTS_(v)*distance(Yv, Yv);
+            fYY_par += VERT_WEIGHTS_(v)*distance(Yv, Yv);
         }
     }
+    fYY = fYY_par;
 }
 
 TPL void CP_D0_DIST::set_kmpp_param(int kmpp_init_num, int kmpp_iter_num)
