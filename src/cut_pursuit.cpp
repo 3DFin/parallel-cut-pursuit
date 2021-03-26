@@ -272,7 +272,7 @@ TPL void CP::print_progress(int it, real_t dif, double timer)
         " saturated, and at most " << rE << " reduced edge(s).\n";
     if (timer > 0.0){
         cout.precision(1);
-        cout << fixed << "\telapsed time " << fixed << timer << " s.\n";
+        cout << fixed << "\telapsed time " << timer << " s.\n";
     }
     cout << endl;
 }
@@ -743,7 +743,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
 
     /**  split big components and create balanced component list  **/
     /* the number of resulting new components */
-    rV_new_par = 0; // auxiliary variable for parallel region
+    comp_t rV_new_par = 0; // auxiliary variable for parallel region
 
     /* there is need to scan all edges involving a given vertex in constant
      * time, so we create the list of reverse edges within each component; to
