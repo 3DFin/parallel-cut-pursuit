@@ -71,10 +71,12 @@ TPL CP::~Cp()
 {
     free(edge_status);
     free(comp_assign); free(last_comp_assign);
-    free(first_vertex); free(comp_list); free(index_in_comp);
+    free(first_vertex);
+    free(comp_list);
+    free(index_in_comp);
     free(is_saturated);
     free(reduced_edges); free(reduced_edge_weights);
-    free(rX); free(last_rX); 
+    free(rX); free(last_rX);
 }
 
 TPL void CP::reset_edges()
@@ -302,7 +304,7 @@ TPL void CP::assign_connected_components()
     free(first_vertex);
     first_vertex = (index_t*) malloc_check(sizeof(index_t)*(rV + ONE));
     for (comp_t rv = 0; rv < rV + ONE; rv++){ first_vertex[rv] = 0; }
-    for (index_t v = 0; v < V; v++){ first_vertex[comp_assign[v] + ONE]++; }
+    for (index_t v = 0; v < V; v++){ first_vertex[comp_assign[v] + 1]++; }
     for (comp_t rv = 1; rv < rV - 1; rv++){
         first_vertex[rv + 1] += first_vertex[rv];
     }
@@ -326,18 +328,18 @@ TPL void CP::get_bind_reverse_edges(comp_t rv, index_t*& first_edge_r,
         index_in_comp[comp_list_rv[i]] = i;
     }
     /* count reverse edges for each vertex (shift by one index) */
-    for (index_t i = 0; i <= comp_size; i++){ first_edge_r[i] = 0; }
+    for (index_t i = 0; i < comp_size + ONE; i++){ first_edge_r[i] = 0; }
     for (index_t i = 0; i < comp_size; i++){
         index_t v = comp_list_rv[i];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
             if (is_bind(e)){ /* keep only binding edges */
-                first_edge_r[index_in_comp[adj_vertices[e]] + ONE]++;
+                first_edge_r[index_in_comp[adj_vertices[e]] + 1]++;
             }
         }
     }
     /* cumulative sum for actual first binding edge id for each vertex */
     first_edge_r[0] = 0;
-    for (index_t i = 2; i <= comp_size; i++){
+    for (index_t i = 2; i < comp_size + ONE; i++){
         first_edge_r[i] += first_edge_r[i - 1];
     }
     /* store adjacent vertices, using previous sum as starting indices */
@@ -400,7 +402,6 @@ TPL void CP::compute_connected_components()
         /* get reverse binding edges for breadth-first search */
         index_t *first_edge_r, *adj_vertices_r;
         get_bind_reverse_edges(rv, first_edge_r, adj_vertices_r);
-
 
         /* auxiliary component list for reordering vertices */
         index_t* tmp_comp_list_rv = (index_t*)
@@ -512,7 +513,7 @@ TPL void CP::compute_reduced_graph()
     index_t* first_active_edge = (index_t*)
         malloc_check(sizeof(index_t)*(rV + ONE));
     /* count the number of such edges for each component (ind shift by one) */
-    for (comp_t rv = 0; rv <= rV; rv++){ first_active_edge[rv] = 0; }
+    for (comp_t rv = 0; rv < rV + ONE; rv++){ first_active_edge[rv] = 0; }
     for (index_t v = 0; v < V; v++){
         comp_t ru = comp_assign[v];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
@@ -531,7 +532,7 @@ TPL void CP::compute_reduced_graph()
         }
     }
     /* cumulative sum, giving first active edge id for each vertex */
-    for (comp_t rv = 2; rv <= rV; rv++){
+    for (comp_t rv = 2; rv < rV + ONE; rv++){
         first_active_edge[rv] += first_active_edge[rv - 1];
     }
     /* store adjacent components and edge weights using previous sum as
@@ -554,7 +555,7 @@ TPL void CP::compute_reduced_graph()
                     adj_components[ae] = ru; 
                 }
                 if (active_edge_weights && ae != NO_EDGE){
-                    /* infinite weights to parallel sepation ensure merge */
+                    /* infinite weights to parallel separation ensure merge */
                     active_edge_weights[ae] = is_par_sep(e) ? real_inf() :
                         EDGE_WEIGHTS_(e);
                 }
@@ -629,7 +630,7 @@ TPL void CP::compute_reduced_graph()
 
     if (bufsize > rE){
         reduced_edges = (comp_t*) realloc_check(reduced_edges,
-            sizeof(comp_t)*TWO*rE);
+            sizeof(comp_t)*2*rE);
         reduced_edge_weights = (real_t*) realloc_check(reduced_edge_weights,
             sizeof(real_t)*rE);
     }
@@ -716,7 +717,8 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
             value_t* rXv = rX + D*sort_comp[rv];
             for (size_t d = 0; d < D; d++){ tmp_rXv[d] = rXv[d]; }
         }
-        free(rX); rX = tmp_rX;
+        free(rX);
+        rX = tmp_rX;
 
         free(sort_comp);
     }
@@ -793,7 +795,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
                             adj_vert = adj_vertices_r;
                             continue;
                         }else if (!is_bind(e)){
-                            e++; continue; 
+                            e++; continue;
                         }
                     }
                     index_t w = adj_vert[e];
@@ -811,7 +813,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
             } /* the current new component is complete */
             rV_new_par++;
         }
-        rV_new = rV_new_par;
+
         free(first_edge_r); free(adj_vertices_r);
 
         index_t* comp_list_rv = comp_list + first_vertex[rv];
@@ -821,6 +823,8 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
 
         free(tmp_comp_list_rv);
     }
+
+    rV_new = rV_new_par;
 
     free(index_in_comp); index_in_comp = nullptr;
 
@@ -848,7 +852,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     }
 
     /* add the small components first vertices */
-    for (comp_t rv = rV_big; rv <= rV; rv++){
+    for (comp_t rv = rV_big; rv < rV + ONE; rv++){
         first_vertex_bal[rv + rV_dif] = first_vertex[rv];
     }
 
@@ -890,6 +894,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     }
 
     /**  replace the component list by the balanced one  **/
+    /* store info abount big components */
     first_vertex_big = (index_t*) realloc_check(first_vertex,
         sizeof(index_t)*(rV_big + 1));
     first_vertex = first_vertex_bal;
@@ -939,11 +944,11 @@ TPL void CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
         first_vertex[rv] = first_vertex_big[rv];
     }
     /* small components; in-place */
-    for (comp_t rv = rV_big; rv <= rV; rv++){
+    for (comp_t rv = rV_big; rv <= rV_ini; rv++){
         first_vertex[rv] = first_vertex[rv + rV_dif];
     }
     first_vertex = (index_t*) realloc_check(first_vertex,
-        sizeof(index_t)*(rV + ONE));
+        sizeof(index_t)*(rV_ini + 1));
     free(first_vertex_big);
     rV = rV_ini;
 }
@@ -1158,7 +1163,7 @@ TPL index_t CP::merge()
     /* finalize and shrink arrays to fit the reduced number of components */
     first_vertex[rV = rn] = V;
     first_vertex = (index_t*) realloc_check(first_vertex,
-        sizeof(index_t)*(rV + ONE));
+        sizeof(index_t)*(rV + 1));
     rX = (value_t*) realloc_check(rX, sizeof(value_t)*D*rV);
     is_saturated = (bool*) realloc_check(is_saturated, sizeof(bool)*rV); 
 
