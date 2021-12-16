@@ -53,8 +53,7 @@ clear predk truek
 
 %%%  solve the optimization problem  %%%
 tic;
-% [Comp, rX, it, Obj, Time, Dif]
-[Comp, rX, it, Obj] = cp_kmpp_d0_dist_mex(loss, y, first_edge, adj_vertices, options);
+[Comp, rX, Obj] = cp_kmpp_d0_dist_mex(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;

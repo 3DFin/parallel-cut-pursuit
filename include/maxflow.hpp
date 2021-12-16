@@ -17,7 +17,7 @@
 
     You should have received a copy of the GNU General Public License
     along with MAXFLOW.  If not, see <http://www.gnu.org/licenses/>.
-========================*/
+=============================================================================*/
 
 #pragma once
 #include "block.hpp"
@@ -27,84 +27,84 @@
 template <typename index_t, typename flow_t> class Maxflow
 {
 public:
-	Maxflow(index_t node_num, index_t edge_num);
+    Maxflow(index_t node_num, index_t edge_num);
 
-	~Maxflow();
+    ~Maxflow();
 
-	void add_edge(index_t i, index_t j);
+    void add_edge(index_t i, index_t j);
 
-	flow_t& terminal_capacity(index_t i);
+    flow_t& terminal_capacity(index_t i);
 
-	void set_edge_capacities(index_t e, flow_t cap, flow_t rev_cap);
+    void set_edge_capacities(index_t e, flow_t cap, flow_t rev_cap);
 
-	void maxflow();
+    /* retrieve (signed) flow passing through a given edge
+       second parameter is the initial capacity */
+    flow_t get_edge_flow(index_t e, flow_t cap);
 
-	bool is_sink(index_t i, bool default_side = false);
+    void maxflow();
+
+    bool is_sink(index_t i, bool default_side = false);
 
 private:
-	struct node;
-	struct arc;
+    struct node;
+    struct arc;
 
-	// internal variables and functions
+    // internal variables and functions
 
-	struct node
-	{
-		arc			*first;		// first outcoming arc
-		arc			*parent;	// node's parent
-		node		*next;		// pointer to the next active node
-		index_t		TS;			// timestamp showing when DIST was computed
-		index_t		DIST;		// distance to the terminal
-        /* flag showing whether the node is in the source or in the sink tree
-         * (if parent!=NULL) */
-		bool	    is_sink : 1;
-        /* if tr_cap > 0 then tr_cap is residual capacity of the arc
-         * SOURCE->node; otherwise -tr_cap is residual capacity of the arc
-         * node->SINK  */
-		flow_t	    tr_cap;		
-	};
+    struct node
+    {
+        arc *first; // first outcoming arc
+        arc *parent; // node's parent
+        node *next; // pointer to the next active node
+        index_t TS; // timestamp showing when DIST was computed
+        index_t DIST; // distance to the terminal
+        bool is_sink : 1; // indicate source or sink tree, if parent not null
+        /* positive if connected to source, negative if connected to sink */
+        flow_t term_res_cap;
+    };
 
-	struct arc
-	{
-		node		*head;		// node the arc points to
-		arc			*next;		// next arc with the same originating node
-		arc			*sister;	// reverse arc
-		flow_t		r_cap;		// residual capacity
-	};
+    struct arc
+    {
+        node* head; // node the arc points to
+        arc* next; // next arc with the same originating node
+        arc* sister; // reverse arc
+        flow_t res_cap; // residual capacity
+    };
 
-	struct nodeptr
-	{
-		node    	*ptr;
-		nodeptr		*next;
-	};
-	static const int NODEPTR_BLOCK_SIZE = 128;
+    struct nodeptr
+    {
+        node        *ptr;
+        nodeptr        *next;
+    };
+    static const int NODEPTR_BLOCK_SIZE = 128;
 
-	node *nodes, *node_last; 
-	arc *arcs, *arc_last; 
+    node *nodes, *node_last; 
+    arc *arcs, *arc_last; 
 
-    /* special constants for node->parent */
-    arc reserved_terminal_arc;
-    arc reserved_orphan_arc;
+    /* special constants for parent arcs */
+    arc reserved_terminal_arc; // the parent is an arc to terminal
     arc* const terminal;
+    arc reserved_orphan_arc; // no parent
     arc* const orphan;
 
-	DBlock<nodeptr>		*nodeptr_block;
+    DBlock<nodeptr>        *nodeptr_block;
 
-	node *queue_first[2], *queue_last[2]; // list of active nodes
-	nodeptr	*orphan_first, *orphan_last; // list of pointers to orphans
-	index_t	TIME; // monotonically increasing global counter
+    node *queue_first[2], *queue_last[2]; // list of active nodes
+    nodeptr *orphan_first, *orphan_last; // list of pointers to orphans
+    index_t TIME; // monotonically increasing global counter
 
-	// functions for processing active list
-	void set_active(node *i);
-	node *next_active();
+    // functions for processing active list
+    void set_active(node *i);
+    node *next_active();
 
-	// functions for processing orphans list
-	void set_orphan_front(node* i); // add to the beginning of the list
-	void set_orphan_rear(node* i);  // add to the end of the list
+    // functions for processing orphans list
+    void set_orphan_front(node* i); // add to the beginning of the list
+    void set_orphan_rear(node* i);  // add to the end of the list
 
-	void maxflow_init();             // called if reuse_trees == false
-	void augment(arc *middle_arc);
-	void process_source_orphan(node *i);
-	void process_sink_orphan(node *i);
+    void maxflow_init();             // called if reuse_trees == false
+    void augment(arc *middle_arc);
+    void process_source_orphan(node *i);
+    void process_sink_orphan(node *i);
 };
 
 #define TPL template <typename index_t, typename flow_t>
@@ -112,33 +112,39 @@ private:
 
 TPL inline void MXFL::add_edge(index_t _i, index_t _j)
 {
-    arc *a = arc_last ++;
-	arc *a_rev = arc_last ++;
+    arc *a = arc_last++;
+    arc *a_rev = arc_last++;
 
-	node* i = nodes + _i;
-	node* j = nodes + _j;
+    node* i = nodes + _i;
+    node* j = nodes + _j;
 
-	a -> sister = a_rev;
-	a_rev -> sister = a;
-	a -> next = i -> first;
-	i -> first = a;
-	a_rev -> next = j -> first;
-	j -> first = a_rev;
-	a -> head = j;
-	a_rev -> head = i;
+    a->sister = a_rev;
+    a_rev->sister = a;
+    a->next = i->first;
+    i->first = a;
+    a_rev->next = j->first;
+    j->first = a_rev;
+    a->head = j;
+    a_rev->head = i;
 }
 
 TPL inline flow_t& MXFL::terminal_capacity(index_t i)
 {
-	return nodes[i].tr_cap;
+    return nodes[i].term_res_cap;
 }
 
 TPL inline void MXFL::set_edge_capacities(index_t e, flow_t cap,
     flow_t rev_cap)
 {
     arc* a = arcs + (size_t) 2*e;
-	a->r_cap = cap;
-	(a + 1)->r_cap = rev_cap;
+    a->res_cap = cap;
+    (a + 1)->res_cap = rev_cap;
+}
+
+TPL inline flow_t MXFL::get_edge_flow(index_t e, flow_t cap)
+{
+    arc* a = arcs + (size_t) 2*e;
+    return cap - a->res_cap;
 }
 
 TPL inline bool MXFL::is_sink(index_t i, bool default_side)

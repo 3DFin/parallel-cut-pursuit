@@ -60,8 +60,8 @@ del predk, truek
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX, it = cp_pfdr_d1_lsx(loss, y, first_edge, adj_vertices,
-                              edge_weights=homo_d1_weight, pfdr_rho=pfdr_rho)
+Comp, rX = cp_pfdr_d1_lsx(loss, y, first_edge, adj_vertices,
+                          edge_weights=homo_d1_weight, pfdr_rho=pfdr_rho)
 it2 = time.time()
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX

@@ -12,18 +12,17 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
                     cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
                     kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight = 0.0,
                     verbose=True, max_num_threads=0,
-                    balance_parallel_split=True, compute_Obj=False,
-                    compute_Time=False, compute_Dif=False, compute_List=False):
+                    balance_parallel_split=True, compute_List=False,
+                    compute_Obj=False, compute_Time=False, compute_Dif=False):
 
     """
-    Comp, rX, cp_it, Obj, Time, Dif, List = cp_kmpp_d0_dist(
-            loss, Y, first_edge, adj_vertices, edge_weights=None, 
-            vert_weights=None, coor_weights=None, cp_dif_tol=1e-3, 
-            cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-            kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
-            verbose=True, max_num_threads=0, balance_parallel_split=True,
-            compute_Obj=False, compute_Time=False, compute_Dif=False,
-            compute_List=False)
+    Comp, rX, [List, Obj, Time, Dif] = cp_kmpp_d0_dist(loss, Y, first_edge,
+            adj_vertices, edge_weights=None, vert_weights=None,
+            coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10, K=2,
+            split_iter_num=2, split_damp_ratio=1.0, kmpp_init_num=3,
+            kmpp_iter_num=3, min_comp_weight=0.0, verbose=True,
+            max_num_threads=0, balance_parallel_split=True, compute_List=False,
+            compute_Obj=False, compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d0 (weighted contour length) penalization, with
     a loss akin to a distance:
@@ -73,16 +72,17 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     components are expected (recompilation is necessary)
 
     loss - 1 for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler
-    Y - observations, (real) D-by-V array, column-major (F-contigous) format;
+    Y - observations, (real) D-by-V array;
         careful to the internal memory representation of multidimensional
-        arrays, usually numpy uses row-major (C-contiguous) format
-        (convert to F_CONTIGUOUS without copying data by using transpose);
+        arrays; the C++ implementation uses column-major order (F-contiguous);
+        usually numpy uses row-major order (C-contiguous), but this can often
+        be taken care of without actually copying data by using transpose();
         for Kullback-Leibler loss, the value at each vertex must lie on the
         probability simplex
     first_edge, adj_vertices - forward-star graph representation:
         vertices are numeroted (start at 0) in the order they are given in Y;
             careful to the internal memory representation of multidimensional
-            arrays, usually numpy uses row-major (C-contiguous) format
+            arrays, usually numpy uses row-major order (C-contiguous)
         edges are numeroted (start at 0) so that all edges originating
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting from 
@@ -119,28 +119,27 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
-    compute_Obj   - compute the objective functional along iterations 
-    compute_Time  - monitor elapsing time along iterations
-    compute_Dif   - compute relative evolution along iterations 
-    compute_List  - report the list of indices constituting each component
+    compute_List - report the list of vertices constituting each component
+    compute_Obj  - compute the objective functional along iterations 
+    compute_Time - monitor elapsing time along iterations
+    compute_Dif  - compute relative evolution along iterations 
 
-    OUTPUTS: Obj, Time, Dif and List are optional, set parameters compute_Obj,
-        compute_Time, compute_Dif or compute_List to True to request them and
+    OUTPUTS: List, Obj, Time and Dif are optional, set parameters compute_List,
+        compute_Obj, compute_Time, or compute_Difto True to request them and
         capture them in output variables in that order
 
     Comp - assignement of each vertex to a component, (uint16) array of
         length V 
     rX  - values of each component of the minimizer, (real) array of length rV;
         the actual minimizer is then reconstructed as X = rX[Comp];
-    cp_it - actual number of cut-pursuit iterations performed
+    List - if requested, list of vertices constituting each component; python
+        list of length rV, containing (uint32) arrays of indices
     Obj - if requested, values of the objective functional along iterations;
-          array of length cp_it + 1
+        array of length actual number of cut-pursuit iterations performed + 1
     Time - if requested, the elapsed time along iterations; array of length
-          cp_it + 1
+        actual number of cut-pursuit iterations performed + 1
     Dif - if requested, if requested, the iterate evolution along iterations;
-          array of length cp_it
-    List - if requested, list of indices constituting each component; list of
-          lists, of length rV
+        array of length actual number of cut-pursuit iterations performed
  
     Parallel implementation with OpenMP API.
 
@@ -152,7 +151,7 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     smoothing semantic labelings of 3D point clouds, ISPRS Journal of
     Photogrammetry and Remote Sensing, 132:102-118, 2017
 
-    Baudoin Camille 2019
+    Baudoin Camille 2019, Raguet Hugo 2021
     """
     
     # Determine the type of float argument (real_t) 
@@ -227,10 +226,10 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
             raise TypeError("Cut-pursuit d0 distance: argument '{0}' must be "
                             "of type '{1}'".format(name, real_t))
 
-    # Check fortran continuity of all multidimensional numpy.array arguments
+    # Check fortran continuity of all multidimensional numpy array arguments
     if not(Y.flags["F_CONTIGUOUS"]):
-        raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be "
-                        "F_CONTIGUOUS")
+        raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be in "
+                        "column-major order (F-contigous).")
 
     # Convert in float64 all float arguments if needed (loss, cp_dif_tol) 
     loss = float(loss)
@@ -261,5 +260,5 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
             vert_weights, coor_weights, cp_dif_tol, cp_it_max, K,
             split_iter_num, split_damp_ratio, kmpp_init_num, kmpp_iter_num,
             min_comp_weight, verbose, max_num_threads, balance_parallel_split,
-            real_t == "float64", compute_Obj, compute_Time, compute_Dif,
-            compute_List)
+            real_t == "float64", compute_List, compute_Obj, compute_Time,
+            compute_Dif)

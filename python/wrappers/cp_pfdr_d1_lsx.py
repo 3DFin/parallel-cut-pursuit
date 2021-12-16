@@ -15,13 +15,13 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
                    balance_parallel_split=True, compute_Obj=False, 
                    compute_Time=False, compute_Dif=False):
     """
-    Comp, rX, cp_it, Obj, Time, Dif = cp_pfdr_d1_lsx(
-            loss, Y, first_edge, adj_vertices, edge_weights=None,
-            loss_weights=None, d1_coor_weights=None, cp_dif_tol=1e-3,
-            cp_it_max=10, pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
-            pfdr_dif_tol=1e-3*cp_dif_tol, pfdr_it_max=1e4, verbose=1e2, 
-            max_num_threads=0, balance_parallel_split=True, compute_Obj=False,
-            compute_Time=False, compute_Dif=False)
+    Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_lsx(loss, Y, first_edge,
+            adj_vertices, edge_weights=None, loss_weights=None,
+            d1_coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10, pfdr_rho=1.0,
+            pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0, pfdr_dif_tol=1e-3*cp_dif_tol,
+            pfdr_it_max=1e4, verbose=1e2, max_num_threads=0,
+            balance_parallel_split=True, compute_Obj=False, compute_Time=False,
+            compute_Dif=False)
 
     Cut-pursuit algorithm with d1 (total variation) penalization, with a 
     separable loss term and simplex constraints:
@@ -73,16 +73,17 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     loss - 0 for linear, 1 for quadratic, 0 < loss < 1 for smoothed 
         Kullback-Leibler (see above)
-    Y - observations, (real) D-by-V array, column-major (F-contigous) format;
-        careful to the internal memory representation of multidimensional
-        arrays, usually numpy uses row-major (C-contiguous) format
-        (convert to F_CONTIGUOUS without copying data by using transpose);
+    Y - observations, (real) D-by-V array;
         for Kullback-Leibler loss, the value at each vertex must lie on the
         probability simplex
+        careful to the internal memory representation of multidimensional
+        arrays; the C++ implementation uses column-major order (F-contiguous);
+        usually numpy uses row-major order (C-contiguous), but this can often 
+        be taken care of without actually copying data by using transpose();
     first_edge, adj_vertices - graph forward-star representation:
         vertices are numeroted (start at 0) in the order they are given in Y;
             careful to the internal memory representation of multidimensional
-            arrays, usually numpy uses row-major (C-contiguous) format
+            arrays, usually numpy uses row-major order (C-contiguous)
         edges are numeroted (start at 0) so that all edges originating
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting from 
@@ -134,13 +135,12 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
         length V
     rX - values of each component of the minimizer, (real) array of length rV;
         the actual minimizer is then reconstructed as X = rX[Comp];
-    cp_it - actual number of cut-pursuit iterations performed
-    Obj - if requested ,the values of the objective functional along iterations
-          array of length cp_it + 1
-    Time - if requested, the elapsed time along iterations
-           array of length cp_it + 1
-    Dif  - if requested, the iterate evolution along iterations
-           array of length cp_it
+    Obj - if requested, values of the objective functional along iterations;
+        array of length actual number of cut-pursuit iterations performed + 1
+    Time - if requested, the elapsed time along iterations; array of length
+        actual number of cut-pursuit iterations performed + 1
+    Dif - if requested, if requested, the iterate evolution along iterations;
+        array of length actual number of cut-pursuit iterations performed
      
     Parallel implementation with OpenMP API.
 
@@ -151,7 +151,7 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     H. Raguet, A Note on the Forward-Douglas--Rachford Splitting for Monotone 
     Inclusion and Convex Optimization Optimization Letters, 2018, 1-24
 
-    Baudoin Camille 2019
+    Baudoin Camille 2019, Raguet Hugo 2021
     """
     
     # Determine the type of float argument (real_t) 
@@ -224,8 +224,8 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     # Check fortran continuity of all multidimensional numpy.array arguments
     if not(Y.flags["F_CONTIGUOUS"]):
-        raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be "
-                        "F_CONTIGUOUS.")
+        raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be in "
+                        "column-major order (F-contigous).")
 
     # Convert in float64 all float arguments if needed (cp_dif_tol, pfdr_rho,
     # pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol) 
@@ -256,29 +256,8 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
                             "be boolean".format(name))
 
     # Call wrapper python in C  
-    Comp, rX, it, Obj, Time, Dif = cp_pfdr_d1_lsx_cpy(
-            loss, Y, first_edge, adj_vertices, edge_weights, loss_weights,
-            d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
-            pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
-            balance_parallel_split, real_t == "float64", compute_Obj, 
-            compute_Time, compute_Dif) 
-
-    it = it[0]
-    
-    # Return output depending of the optional output needed
-    if (compute_Obj and compute_Time and compute_Dif):
-        return Comp, rX, it, Obj, Time, Dif
-    elif (compute_Obj and compute_Time):
-        return Comp, rX, it, Obj, Time
-    elif (compute_Obj and compute_Dif):
-        return Comp, rX, it, Obj, Dif
-    elif (compute_Time and compute_Dif):
-        return Comp, rX, it, Time, Dif
-    elif (compute_Obj):
-        return Comp, rX, it, Obj
-    elif (compute_Time):
-        return Comp, rX, it, Time
-    elif (compute_Dif):
-        return Comp, rX, it, Dif
-    else:
-        return Comp, rX, it
+    return cp_pfdr_d1_lsx_cpy(loss, Y, first_edge, adj_vertices, edge_weights,
+            loss_weights, d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho,
+            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
+            max_num_threads, balance_parallel_split, real_t == "float64",
+            compute_Obj, compute_Time, compute_Dif) 

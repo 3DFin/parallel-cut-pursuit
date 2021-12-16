@@ -10,9 +10,9 @@ cd(fileparts(which('example_tomography.m')));
 addpath('bin/');
 
 %%%  general parameters  %%%
-plot_results = false;
+plot_results = true;
 print_results = false; % requires color encapsulated postscript driver on your
-                      % system
+                       % system
 
 %%%  parameters; see octave/doc/cp_pfdr_d1_ql1b_mex.m %%%
 options = struct; % reinitialize

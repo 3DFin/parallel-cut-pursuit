@@ -53,10 +53,10 @@ upp_bnd = 1.0
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX, it = cp_pfdr_d1_ql1b(y, A, first_edge, adj_vertices,
-                               edge_weights=d1_weights, low_bnd=low_bnd,
-                               upp_bnd=upp_bnd, pfdr_rho=pfdr_rho,
-                               pfdr_dif_tol=pfdr_dif_tol)
+Comp, rX = cp_pfdr_d1_ql1b(y, A, first_edge, adj_vertices,
+                           edge_weights=d1_weights, low_bnd=low_bnd,
+                           upp_bnd=upp_bnd, pfdr_rho=pfdr_rho,
+                           pfdr_dif_tol=pfdr_dif_tol)
 it2 = time.time()
 x = rX[Comp] # rX is components values, Comp is components assignment
 del rX, Comp

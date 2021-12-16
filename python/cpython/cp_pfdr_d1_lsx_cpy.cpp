@@ -1,12 +1,12 @@
 /*=============================================================================
- * Comp, rX, it, Obj, Time, Dif = cp_pfdr_d1_lsx_cpy(
- *          loss, Y, first_edge, adj_vertices, edge_weights, loss_weights,
- *          d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
- *          pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
+ * Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_lsx_cpy(loss, Y, first_edge,
+ *          adj_vertices, edge_weights, loss_weights, d1_coor_weights,
+ *          cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
+ *          pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
  *          balance_parallel_split, real_is_double, compute_Obj, compute_Time, 
  *          compute_Dif)
  * 
- *  Baudoin Camille 2019
+ *  Baudoin Camille 2019, Raguet Hugo 2021
  *===========================================================================*/
 #include <cstdint>
 #define PY_SSIZE_T_CLEAN
@@ -69,16 +69,16 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
     const index_t* adj_vertices = (index_t*) PyArray_DATA(py_adj_vertices);
 
     /* penalizations */
-    const real_t *edge_weights = (PyArray_SIZE(py_edge_weights) > 1) ?
-        (real_t*) PyArray_DATA(py_edge_weights) : nullptr;
-    real_t* ptr_edge_weights = (real_t*) PyArray_DATA(py_edge_weights);
-    real_t homo_edge_weight = (PyArray_SIZE(py_edge_weights) == 1) ?
-        ptr_edge_weights[0] : 1;
-    const real_t* d1_coor_weights = (PyArray_SIZE(py_d1_coor_weights) > 0) ?
+    const real_t* edge_weights = (real_t*) PyArray_DATA(py_edge_weights);
+    real_t homo_edge_weight = PyArray_SIZE(py_edge_weights) == 1 ?
+        edge_weights[0] : 1.0;
+    if (PyArray_SIZE(py_edge_weights) <= 1){ edge_weights = nullptr; }
+
+    const real_t* d1_coor_weights = PyArray_SIZE(py_d1_coor_weights) > 0 ?
         (real_t*) PyArray_DATA(py_d1_coor_weights) : nullptr;
-    if (max_num_threads<=0){
-        max_num_threads = omp_get_max_threads();
-    }
+
+    /* number of threads */ 
+    if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
 
     /**  prepare output; rX is created later  **/
     /* NOTA: no check for successful allocations is performed */
@@ -88,41 +88,20 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
         size_py_Comp, PyArray_DescrFromType(NPY_COMP), 1);
     comp_t* Comp = (comp_t*) PyArray_DATA(py_Comp); 
 
-    npy_intp size_py_it[] = {1};
-    PyArrayObject* py_it = (PyArrayObject*) PyArray_Zeros(1, size_py_it,
-        PyArray_DescrFromType(NPY_UINT32), 1);
-    int* it = (int*) PyArray_DATA(py_it);
-
     real_t* Obj = nullptr;
-    PyArrayObject* py_Obj = (PyArrayObject*) Py_None;
-    if (compute_Obj){
-        npy_intp size_py_Obj[] = {cp_it_max + 1};
-        py_Obj = (PyArrayObject*) PyArray_Zeros(1, size_py_Obj,
-            PyArray_DescrFromType(NPY_REAL), 1);
-        Obj = (real_t*) PyArray_DATA(py_Obj);
-    }
+    if (compute_Obj){ Obj = (real_t*) malloc(sizeof(real_t)*(cp_it_max + 1)); }
 
     double* Time = nullptr;
-    PyArrayObject* py_Time = (PyArrayObject*) Py_None;
     if (compute_Time){
-        npy_intp size_py_Time[] = {cp_it_max + 1};
-        py_Time = (PyArrayObject*) PyArray_Zeros(1, size_py_Time,
-            PyArray_DescrFromType(NPY_FLOAT64), 1);
-        Time = (double*) PyArray_DATA(py_Time);
+        Time = (double*) malloc(sizeof(double)*(cp_it_max + 1));
     }
 
     real_t* Dif = nullptr;
-    PyArrayObject *py_Dif = (PyArrayObject*) Py_None;
-    if (compute_Dif){
-        npy_intp size_py_Dif[] = {cp_it_max};
-        py_Dif = (PyArrayObject*) PyArray_Zeros(1, size_py_Dif,
-            PyArray_DescrFromType(NPY_REAL), 1);
-        Dif = (real_t*) PyArray_DATA(py_Dif);
-    }
+    if (compute_Dif){ Dif = (real_t*) malloc(sizeof(real_t)*cp_it_max); }
 
     /**  cut-pursuit with preconditioned forward-Douglas-Rachford  **/
 
-    Cp_d1_lsx<real_t, index_t, comp_t> *cp =
+    Cp_d1_lsx<real_t, index_t, comp_t>* cp =
         new Cp_d1_lsx<real_t, index_t, comp_t>
             (V, E, first_edge, adj_vertices, D, Y);
 
@@ -135,21 +114,70 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
         pfdr_dif_tol);
     cp->set_parallel_param(max_num_threads, balance_parallel_split);
 
-    *it = cp->cut_pursuit();
+    int cp_it = cp->cut_pursuit();
+
+    /* retrieve monitoring arrays */
+    PyArrayObject* py_Obj = nullptr;
+    if (compute_Obj){
+        npy_intp size_py_Obj[] = {cp_it + 1};
+        py_Obj = (PyArrayObject*) PyArray_Zeros(1, size_py_Obj,
+            PyArray_DescrFromType(NPY_REAL), 1);
+        real_t* Obj_ = (real_t*) PyArray_DATA(py_Obj);
+        for (int i = 0; i < size_py_Obj[0]; i++){ Obj_[i] = Obj[i]; }
+        free(Obj);
+    }
+
+    PyArrayObject* py_Time = nullptr;
+    if (compute_Time){
+        npy_intp size_py_Time[] = {cp_it + 1};
+        py_Time = (PyArrayObject*) PyArray_Zeros(1, size_py_Time,
+            PyArray_DescrFromType(NPY_FLOAT64), 1);
+        double* Time_ = (double*) PyArray_DATA(py_Time);
+        for (int i = 0; i <= size_py_Time[0]; i++){ Time_[i] = Time[i]; }
+        free(Time);
+    }
+
+    PyArrayObject* py_Dif = nullptr;
+    if (compute_Dif){
+        npy_intp size_py_Dif[] = {cp_it};
+        py_Dif = (PyArrayObject*) PyArray_Zeros(1, size_py_Dif,
+            PyArray_DescrFromType(NPY_REAL), 1);
+        real_t* Dif_ = (real_t*) PyArray_DATA(py_Dif);
+        for (int i = 0; i < size_py_Dif[0]; i++){ Dif_[i] = Dif[i]; }
+        free(Dif);
+    }
 
     /* copy reduced values */
     comp_t rV = cp->get_components();
-    real_t *cp_rX = cp->get_reduced_values();
+    real_t* cp_rX = cp->get_reduced_values();
     npy_intp size_py_rX[] = {(npy_intp) D, rV};
-    PyArrayObject *py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
+    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
         PyArray_DescrFromType(NPY_REAL), 1);
-    real_t *rX = (real_t*) PyArray_DATA(py_rX);
+    real_t* rX = (real_t*) PyArray_DATA(py_rX);
     for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
     
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
-    return Py_BuildValue("OOOOOO", py_Comp, py_rX, py_it, py_Obj, py_Time,
-        py_Dif);
+
+    /* build output according to optional output specified */
+    if (compute_Obj && compute_Time && compute_Dif){
+        return Py_BuildValue("OOOOO", py_Comp, py_rX, py_Obj, py_Time,
+            py_Dif);
+    }else if (compute_Obj && compute_Time){
+        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Time);
+    }else if (compute_Obj && compute_Dif){
+        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Dif);
+    }else if (compute_Time && compute_Dif){
+        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Time, py_Dif);
+    }else if (compute_Obj){
+        return Py_BuildValue("OOO", py_Comp, py_rX, py_Obj);
+    }else if (compute_Time){
+        return Py_BuildValue("OOO", py_Comp, py_rX, py_Time);
+    }else if (compute_Dif){
+        return Py_BuildValue("OOO", py_Comp, py_rX, py_Dif);
+    }else{
+        return Py_BuildValue("OO", py_Comp, py_rX);
+    }
 }
 
 /* actual python interface */
@@ -180,20 +208,18 @@ static PyObject* cp_pfdr_d1_lsx_cpy(PyObject* self, PyObject* args)
     }
 
     if (real_is_double){
-        PyObject* PyReturn = cp_pfdr_d1_lsx<double, NPY_FLOAT64>(loss, py_Y,
-            py_first_edge, py_adj_vertices, py_edge_weights, py_loss_weights,
+        return cp_pfdr_d1_lsx<double, NPY_FLOAT64>(loss, py_Y, py_first_edge,
+            py_adj_vertices, py_edge_weights, py_loss_weights,
             py_d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
             pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
             balance_parallel_split, compute_Obj, compute_Time, compute_Dif);
-        return PyReturn;
     }else{ /* real_t type is float */
-        PyObject* PyReturn = cp_pfdr_d1_lsx<float, NPY_FLOAT32>(loss, py_Y,
-            py_first_edge, py_adj_vertices, py_edge_weights, py_loss_weights,
-            py_d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho,
-            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
-            verbose, max_num_threads, balance_parallel_split, compute_Obj,
+        return cp_pfdr_d1_lsx<float, NPY_FLOAT32>(loss, py_Y, py_first_edge,
+            py_adj_vertices, py_edge_weights, py_loss_weights,
+            py_d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
+            pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
+            balance_parallel_split, compute_Obj,
             compute_Time, compute_Dif);
-        return PyReturn;
     }
 }
 

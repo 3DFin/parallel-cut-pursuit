@@ -1,8 +1,8 @@
 /*=============================================================================
- * Comp, rX, it, Obj, Time, Dif = cp_pfdr_d1_ql1b_cpy(
- *          Y, A, first_edge, adj_vertices, edge_weights, Yl1, l1_weights,
- *          low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
- *          pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
+ * Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_ql1b_cpy(Y, A, first_edge,
+ *          adj_vertices, edge_weights, Yl1, l1_weights, low_bnd, upp_bnd,
+ *          cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
+ *          pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
  *          balance_parallel_split, Gram_if_square, real_is_double,
  *          compute_Obj, compute_Time, compute_Dif)
  * 
@@ -60,9 +60,9 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
     size_t N = py_A_dims[0];
     index_t V = PyArray_NDIM(py_A) > 1 ? py_A_dims[1] : 1;
 
-    const real_t *Y = PyArray_SIZE(py_Y) > 0 ?
+    const real_t* Y = PyArray_SIZE(py_Y) > 0 ?
         (real_t*) PyArray_DATA(py_Y) : nullptr;
-    const real_t *A = (N == 1 && V == 1) ?
+    const real_t* A = (N == 1 && V == 1) ?
         nullptr : (real_t*) PyArray_DATA(py_A); 
     real_t * ptr_A = (real_t*) PyArray_DATA(py_A);
     const real_t a = (N == 1 && V == 1) ?
@@ -87,39 +87,35 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
 
     /* graph structure */
     index_t E = PyArray_SIZE(py_adj_vertices);
-    const index_t *first_edge = (index_t*) PyArray_DATA(py_first_edge); 
-    const index_t *adj_vertices = (index_t*) PyArray_DATA(py_adj_vertices); 
+    const index_t* first_edge = (index_t*) PyArray_DATA(py_first_edge); 
+    const index_t* adj_vertices = (index_t*) PyArray_DATA(py_adj_vertices); 
 
     /* penalizations */
-    const real_t *edge_weights = (PyArray_SIZE(py_edge_weights) > 1) ?
-        (real_t*) PyArray_DATA(py_edge_weights) : nullptr; 
-    real_t * ptr_edge_weights = (real_t*) PyArray_DATA(py_edge_weights);
-    real_t homo_edge_weight = (PyArray_SIZE(py_edge_weights) == 1) ?
-        ptr_edge_weights[0] : 1;
+    const real_t* edge_weights = (real_t*) PyArray_DATA(py_edge_weights);
+    real_t homo_edge_weight = PyArray_SIZE(py_edge_weights) == 1 ? 
+        edge_weights[0] : 1.0;
+    if (PyArray_SIZE(py_edge_weights) <= 1){ edge_weights = nullptr; }
 
-    const real_t* Yl1 = (PyArray_SIZE(py_Yl1)>0) ? 
-        (real_t*) PyArray_DATA(py_Yl1) : nullptr; 
+    const real_t* Yl1 = PyArray_SIZE(py_Yl1) > 0 ?
+        (real_t*) PyArray_DATA(py_Yl1) : nullptr;
 
-    const real_t *l1_weights = (PyArray_SIZE(py_l1_weights) > 1) ?
-        (real_t*) PyArray_DATA(py_l1_weights) : nullptr;
-    real_t * ptr_l1_weights = (real_t*) PyArray_DATA(py_l1_weights);
-    real_t homo_l1_weight =  (PyArray_SIZE(py_l1_weights) == 1) ?
-        ptr_l1_weights[0] : 0;
+    const real_t* l1_weights = (real_t*) PyArray_DATA(py_l1_weights);
+    real_t homo_l1_weight = PyArray_SIZE(py_l1_weights) == 1 ?
+        l1_weights[0] : 0.0;
+    if (PyArray_SIZE(py_l1_weights) <= 1){ l1_weights = nullptr; }
 
-    const real_t *low_bnd = (PyArray_SIZE(py_low_bnd) > 1) ?
-        (real_t*) PyArray_DATA(py_low_bnd) : nullptr; 
-    real_t * ptr_low_bnd = (real_t*) PyArray_DATA(py_low_bnd);
-    real_t homo_low_bnd = (PyArray_SIZE(py_low_bnd) == 1) ?
-        ptr_low_bnd[0] : -Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf();
+    const real_t* low_bnd = (real_t*) PyArray_DATA(py_low_bnd);
+    real_t homo_low_bnd = PyArray_SIZE(py_low_bnd) == 1 ? 
+        low_bnd[0] : -Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf();
+    if (PyArray_SIZE(py_low_bnd) <= 1){ low_bnd = nullptr; }
 
-    const real_t *upp_bnd = (PyArray_SIZE(py_upp_bnd) > 1) ?
-        (real_t*) PyArray_DATA(py_upp_bnd) : nullptr; 
-    real_t * ptr_upp_bnd = (real_t*) PyArray_DATA(py_upp_bnd);
-    real_t homo_upp_bnd = (PyArray_SIZE(py_upp_bnd) == 1) ?
-        ptr_upp_bnd[0] : Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf();
-    if (max_num_threads<=0){
-        max_num_threads = omp_get_max_threads();
-    }
+    const real_t* upp_bnd = (real_t*) PyArray_DATA(py_upp_bnd);
+    real_t homo_upp_bnd = PyArray_SIZE(py_upp_bnd) == 1 ?
+        upp_bnd[0] : Cp_d1_ql1b<real_t, index_t, comp_t>::real_inf();
+    if (PyArray_SIZE(py_upp_bnd) <= 1){ upp_bnd = nullptr; }
+
+    /* number of threads */ 
+    if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
 
     /**  prepare output; rX is created later  **/
     /* NOTA: no check for successful allocations is performed */
@@ -127,43 +123,22 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
     npy_intp size_py_Comp[] = {V};
     PyArrayObject* py_Comp = (PyArrayObject*) PyArray_Zeros(1,
         size_py_Comp, PyArray_DescrFromType(NPY_COMP), 1);
-    comp_t *Comp = (comp_t*) PyArray_DATA(py_Comp); 
-
-    npy_intp size_py_it[] = {1};
-    PyArrayObject* py_it = (PyArrayObject*) PyArray_Zeros(1, size_py_it,
-        PyArray_DescrFromType(NPY_UINT32), 1);
-    int* it = (int*) PyArray_DATA(py_it); 
+    comp_t* Comp = (comp_t*) PyArray_DATA(py_Comp); 
 
     real_t* Obj = nullptr;
-    PyArrayObject* py_Obj = (PyArrayObject*) Py_None;
-    if (compute_Obj){
-        npy_intp size_py_Obj[] = {cp_it_max + 1};
-        py_Obj = (PyArrayObject*) PyArray_Zeros(1, size_py_Obj,
-            PyArray_DescrFromType(NPY_REAL), 1);
-        Obj = (real_t*) PyArray_DATA(py_Obj);
-    }
+    if (compute_Obj){ Obj = (real_t*) malloc(sizeof(real_t)*(cp_it_max + 1)); }
 
     double* Time = nullptr;
-    PyArrayObject* py_Time = (PyArrayObject*) Py_None;
     if (compute_Time){
-        npy_intp size_py_Time[] = {cp_it_max + 1};
-        py_Time = (PyArrayObject*) PyArray_Zeros(1, size_py_Time,
-            PyArray_DescrFromType(NPY_FLOAT64), 1);
-        Time = (double*) PyArray_DATA(py_Time);
+        Time = (double*) malloc(sizeof(double)*(cp_it_max + 1));
     }
 
     real_t* Dif = nullptr;
-    PyArrayObject* py_Dif = (PyArrayObject*) Py_None;
-    if (compute_Dif){
-        npy_intp size_py_Dif[] = {cp_it_max};
-        py_Dif = (PyArrayObject*) PyArray_Zeros(1, size_py_Dif,
-            PyArray_DescrFromType(NPY_REAL), 1);
-        Dif = (real_t*) PyArray_DATA(py_Dif);
-    }
+    if (compute_Dif){ Dif = (real_t*) malloc(sizeof(real_t)*cp_it_max); }
 
     /**  cut-pursuit with preconditioned forward-Douglas-Rachford  **/
 
-    Cp_d1_ql1b<real_t, index_t, comp_t> *cp =
+    Cp_d1_ql1b<real_t, index_t, comp_t>* cp =
         new Cp_d1_ql1b<real_t, index_t, comp_t>
             (V, E, first_edge, adj_vertices);
 
@@ -178,7 +153,38 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
     cp->set_monitoring_arrays(Obj, Time, Dif);
     cp->set_components(0, Comp); // use the preallocated component array Comp
 
-    *it = cp->cut_pursuit();
+    int cp_it = cp->cut_pursuit();
+
+    /* retrieve monitoring arrays */
+    PyArrayObject* py_Obj = nullptr;
+    if (compute_Obj){
+        npy_intp size_py_Obj[] = {cp_it + 1};
+        py_Obj = (PyArrayObject*) PyArray_Zeros(1, size_py_Obj,
+            PyArray_DescrFromType(NPY_REAL), 1);
+        real_t* Obj_ = (real_t*) PyArray_DATA(py_Obj);
+        for (int i = 0; i < size_py_Obj[0]; i++){ Obj_[i] = Obj[i]; }
+        free(Obj);
+    }
+
+    PyArrayObject* py_Time = nullptr;
+    if (compute_Time){
+        npy_intp size_py_Time[] = {cp_it + 1};
+        py_Time = (PyArrayObject*) PyArray_Zeros(1, size_py_Time,
+            PyArray_DescrFromType(NPY_FLOAT64), 1);
+        double* Time_ = (double*) PyArray_DATA(py_Time);
+        for (int i = 0; i <= size_py_Time[0]; i++){ Time_[i] = Time[i]; }
+        free(Time);
+    }
+
+    PyArrayObject* py_Dif = nullptr;
+    if (compute_Dif){
+        npy_intp size_py_Dif[] = {cp_it};
+        py_Dif = (PyArrayObject*) PyArray_Zeros(1, size_py_Dif,
+            PyArray_DescrFromType(NPY_REAL), 1);
+        real_t* Dif_ = (real_t*) PyArray_DATA(py_Dif);
+        for (int i = 0; i < size_py_Dif[0]; i++){ Dif_[i] = Dif[i]; }
+        free(Dif);
+    }
 
     /* copy reduced values */
     comp_t rV = cp->get_components();
@@ -186,22 +192,40 @@ static PyObject* cp_pfdr_d1_ql1b(PyArrayObject* py_Y,
     npy_intp size_py_rX[] = {rV};
     PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(1, size_py_rX,
         PyArray_DescrFromType(NPY_REAL), 1);
-    real_t *rX = (real_t*) PyArray_DATA(py_rX);
+    real_t* rX = (real_t*) PyArray_DATA(py_rX);
     for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
 
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
-    return Py_BuildValue("OOOOOO", py_Comp, py_rX, py_it, py_Obj, py_Time,
-        py_Dif); 
+
+    /* build output according to optional output specified */
+    if (compute_Obj && compute_Time && compute_Dif){
+        return Py_BuildValue("OOOOO", py_Comp, py_rX, py_Obj, py_Time,
+            py_Dif);
+    }else if (compute_Obj && compute_Time){
+        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Time);
+    }else if (compute_Obj && compute_Dif){
+        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Dif);
+    }else if (compute_Time && compute_Dif){
+        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Time, py_Dif);
+    }else if (compute_Obj){
+        return Py_BuildValue("OOO", py_Comp, py_rX, py_Obj);
+    }else if (compute_Time){
+        return Py_BuildValue("OOO", py_Comp, py_rX, py_Time);
+    }else if (compute_Dif){
+        return Py_BuildValue("OOO", py_Comp, py_rX, py_Dif);
+    }else{
+        return Py_BuildValue("OO", py_Comp, py_rX);
+    }
+
 }
 
 /* actual interface */
 #if PY_VERSION_HEX >= 0x03040000 // Py_UNUSED suppress warning from 3.4
-static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * Py_UNUSED(self),
-    PyObject * args)
-{ 
+static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject* Py_UNUSED(self), PyObject* args)
+{
 #else
-static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
+static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject* self, PyObject* args)
 {   (void) self; // suppress unused parameter warning
 #endif
     /* INPUT */ 
@@ -223,21 +247,19 @@ static PyObject* cp_pfdr_d1_ql1b_cpy(PyObject * self, PyObject * args)
     }
 
     if (real_is_double){ /* real_t type is double */
-        PyObject* PyReturn = cp_pfdr_d1_ql1b<double, NPY_FLOAT64>(py_Y,
-            py_A, py_first_edge, py_adj_vertices, py_edge_weights, py_Yl1,
-            py_l1_weights, py_low_bnd, py_upp_bnd, cp_dif_tol, cp_it_max,
-            pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
-            verbose, max_num_threads, balance_parallel_split, Gram_if_square, 
+        return cp_pfdr_d1_ql1b<double, NPY_FLOAT64>(py_Y, py_A, py_first_edge,
+            py_adj_vertices, py_edge_weights, py_Yl1, py_l1_weights,
+            py_low_bnd, py_upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho,
+            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
+            max_num_threads, balance_parallel_split, Gram_if_square, 
             compute_Obj, compute_Time, compute_Dif);
-        return PyReturn;
     }else{ /* real_t type is float */
-        PyObject* PyReturn = cp_pfdr_d1_ql1b<float, NPY_FLOAT32>(py_Y, py_A,
-            py_first_edge, py_adj_vertices, py_edge_weights, py_Yl1,
-            py_l1_weights, py_low_bnd, py_upp_bnd, cp_dif_tol, cp_it_max,
-            pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol,
-            pfdr_it_max, verbose, max_num_threads, balance_parallel_split, 
-            Gram_if_square, compute_Obj, compute_Time, compute_Dif);
-        return PyReturn;
+        return cp_pfdr_d1_ql1b<float, NPY_FLOAT32>(py_Y, py_A, py_first_edge,
+            py_adj_vertices, py_edge_weights, py_Yl1, py_l1_weights,
+            py_low_bnd, py_upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho,
+            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
+            max_num_threads, balance_parallel_split, Gram_if_square,
+            compute_Obj, compute_Time, compute_Dif);
     }
 }
 

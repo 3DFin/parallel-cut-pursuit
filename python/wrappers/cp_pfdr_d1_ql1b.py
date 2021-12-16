@@ -16,14 +16,14 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
                     Gram_if_square=True, compute_Obj=False,
                     compute_Time=False, compute_Dif=False):
     """
-    Comp, rX, cp_it, Obj, Time, Dif = cp_pfdr_d1_ql1b(
-            Y | AtY, A | AtA, first_edge, adj_vertices, edge_weights=None,
-            Yl1=None, l1_weights=None, low_bnd=None, upp_bnd=None,
-            cp_dif_tol=1e-5, cp_it_max=10, pfdr_rho=1.0, pfdr_cond_min=1e-2,
-            pfdr_dif_rcd=0.0, pfdr_dif_tol=1e-3*cp_dif_tol,
-            pfdr_it_max=int(1e4), verbose=int(1e3), Gram_if_square=True,
-            max_num_threads=0, balance_parallel_split=True, compute_Obj=False,
-            compute_Time=False, compute_Dif=False)
+    Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_ql1b(Y | AtY, A | AtA, first_edge,
+            adj_vertices, edge_weights=None, Yl1=None, l1_weights=None,
+            low_bnd=None, upp_bnd=None, cp_dif_tol=1e-5, cp_it_max=10,
+            pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
+            pfdr_dif_tol=1e-3*cp_dif_tol, pfdr_it_max=int(1e4),
+            verbose=int(1e3), Gram_if_square=True, max_num_threads=0,
+            balance_parallel_split=True, compute_Obj=False, compute_Time=False,
+            compute_Dif=False)
 
     Cut-pursuit algorithm with d1 (total variation) penalization, with a 
     quadratic functional, l1 penalization and box constraints:
@@ -69,14 +69,16 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         for an arbitrary scalar matrix, use identity and scale observations
         and penalizations accordingly
         if N = V in a direct matricial case, the last argument 'Gram_if_square'
-        must be set to false
-        careful to the internal memory representation of multidimensional
-        arrays, usually numpy uses row-major (C-contiguous) format
-        (convert to F_CONTIGUOUS without copying data by using transpose)
+
+      careful to the internal memory representation of multidimensional
+      arrays; the C++ implementation uses column-major order (F-contiguous);
+      usually numpy uses row-major order (C-contiguous), but this can often be
+      taken care of without actually copying data by using transpose();
+
     first_edge, adj_vertices - graph forward-star representation:
         vertices are numeroted (start at 0) in the order given in Y or A
-            (careful to the internal memory representation of multidimensional
-            arrays, usually Python uses row-major format)
+            careful to the internal memory representation of multidimensional
+            arrays, usually numpy uses row-major order (C-contiguous)
         edges are numeroted (start at 0) so that all edges originating
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting 
@@ -128,14 +130,14 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         length V
     rX - values of each component of the minimizer, (real) array of length rV;
         the actual minimizer is then reconstructed as X = rX[Comp];
-    cp_it - actual number of cut-pursuit iterations performed
-    Obj - if requested, the values of the objective functional along iterations
-          array of length cp_it + 1; in the precomputed A^t A version, a
-        constant 1/2||Y||^2 in the quadratic part is omited
-    Time - if requested, the elapsed time along iterations
-           array of length cp_it + 1
-    Dif  - if requested, the iterate evolution along iterations
-           array of length cp_it
+    Obj - if requested, values of the objective functional along iterations;
+        array of length actual number of cut-pursuit iterations performed + 1;
+        NOTA: in the precomputed A^t A version, a constant 1/2||Y||^2 in the
+        quadratic part is omited
+    Time - if requested, the elapsed time along iterations; array of length
+        actual number of cut-pursuit iterations performed + 1
+    Dif - if requested, if requested, the iterate evolution along iterations;
+        array of length actual number of cut-pursuit iterations performed
 
     Parallel implementation with OpenMP API.
 
@@ -146,7 +148,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     H. Raguet, A Note on the Forward-Douglas--Rachford Splitting for Monotone 
     Inclusion and Convex Optimization Optimization Letters, 2018, 1-24
 
-    Baudoin Camille 2019
+    Baudoin Camille 2019, Hugo Raguet 2021
     """
 
     # Determine the type of float argument (real_t) 
@@ -246,7 +248,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     
     if first_edge.size != V + 1:
         raise ValueError("Cut-pursuit d1 quadratic l1 bounds: argument "
-                         "'first_edge' should contain |V + 1| = {0} elements, "
+                         "'first_edge' should contain |V| + 1 = {0} elements, "
                          "but {1} are given.".format(V + 1, first_edge.size))
  
     # Check type of all numpy.array arguments of type float (Y, A, 
@@ -263,10 +265,10 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     # Check fortran continuity of all multidimensional numpy.array arguments
     if not(Y.flags["F_CONTIGUOUS"]):
         raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument 'Y' "
-                        "must be F_CONTIGUOUS")
+                        "must be in column-major order (F-contigous).")
     if not(A.flags["F_CONTIGUOUS"]):
         raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument 'A' "
-                        "must be F_CONTIGUOUS")
+                        "must be in column-major order (F-contigous).")
 
     # Convert in float64 all float arguments if needed (cp_dif_tol, pfdr_rho, 
     # pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol) 
@@ -296,29 +298,8 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
                             "'{0}' must be boolean".format(name))
     
     # Call wrapper python in C  
-    Comp, rX, it, Obj, Time, Dif = cp_pfdr_d1_ql1b_cpy(
-            Y, A, first_edge, adj_vertices, edge_weights, Yl1, l1_weights,
-            low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
-            pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
-            balance_parallel_split, Gram_if_square, real_t == "float64", 
-            compute_Obj, compute_Time, compute_Dif) 
-
-    it = it[0]
-    
-    # Return output depending of the optional output needed
-    if (compute_Obj and compute_Time and compute_Dif):
-        return Comp, rX, it, Obj, Time, Dif
-    elif (compute_Obj and compute_Time):
-        return Comp, rX, it, Obj, Time
-    elif (compute_Obj and compute_Dif):
-        return Comp, rX, it, Obj, Dif
-    elif (compute_Time and compute_Dif):
-        return Comp, rX, it, Time, Dif
-    elif (compute_Obj):
-        return Comp, rX, it, Obj
-    elif (compute_Time):
-        return Comp, rX, it, Time
-    elif (compute_Dif):
-        return Comp, rX, it, Dif
-    else:
-        return Comp, rX, it
+    return cp_pfdr_d1_ql1b_cpy(Y, A, first_edge, adj_vertices, edge_weights,
+            Yl1, l1_weights, low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho,
+            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
+            max_num_threads, balance_parallel_split, Gram_if_square,
+            real_t == "float64", compute_Obj, compute_Time, compute_Dif)

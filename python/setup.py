@@ -18,7 +18,8 @@ import re
 to_compile = [ # comment undesired extension modules
     "cp_pfdr_d1_ql1b_cpy",
     "cp_pfdr_d1_lsx_cpy",
-    "cp_kmpp_d0_dist_cpy"
+    "cp_kmpp_d0_dist_cpy",
+    "cp_prox_tv"
 ]
 include_dirs = [numpy.get_include(), # find the Numpy headers
                 "../include"]
@@ -107,6 +108,23 @@ if name in to_compile:
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)
     setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
+
+
+name = "cp_prox_tv_cpy"
+if name in to_compile:
+    mod = Extension(
+            name,
+            # list source files
+            ["cpython/cp_prox_tv_cpy.cpp", "../src/cp_prox_tv.cpp",
+             "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
+             "../src/maxflow.cpp", "../src/pfdr_d1_ql1b.cpp",
+             "../src/pfdr_graph_d1.cpp", "../src/pcd_fwd_doug_rach.cpp",
+            "../src/pcd_prox_split.cpp"],
+            include_dirs=include_dirs,
+            extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args)
+    setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
+
 
 ###  postprocessing  ###
 try:

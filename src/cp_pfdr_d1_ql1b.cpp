@@ -349,7 +349,7 @@ TPL index_t CP_D1_QL1B::split()
 
     uintmax_t Vns = V - saturated_vert;
     uintmax_t num_ops = Vns*(N == Gram_full() ? V : N == Gram_diag() ? 1 : N);
-    num_ops += Vns/V;
+    if (l1_weights || homo_l1_weight){ num_ops += Vns; }
 
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
     for (index_t v = 0; v < V; v++){

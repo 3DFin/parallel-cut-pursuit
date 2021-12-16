@@ -10,7 +10,7 @@ cd(fileparts(which('example_EEG.m')));
 addpath('bin/');
 
 %%%  general parameters  %%%
-plot_results = false;
+plot_results = true;
 print_results = false; % requires color encapsulated postscript driver on your
                       % system; be sure to run octave 4.2.2 or later, fixing a
                       % bug in trisurf
@@ -45,7 +45,7 @@ options.low_bnd = 0.0;
 %%%  solve the optimization problem  %%%
 tic;
 [Comp, rX] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, adj_vertices, options);
-% [Comp, rX, it, Obj, Time] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, adj_vertices, options);
+% [Comp, rX, Obj, Time] = cp_pfdr_d1_ql1b_mex(y, Phi, first_edge, adj_vertices, options);
 time = toc;
 x = rX(Comp + 1); % rX is components values, Comp is components assignment
 clear Comp rX;

@@ -65,8 +65,8 @@ del predk, truek
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX, it = cp_kmpp_d0_dist(loss, y, first_edge, adj_vertices,
-                               edge_weights=homo_d0_weight)
+Comp, rX = cp_kmpp_d0_dist(loss, y, first_edge, adj_vertices,
+                           edge_weights=homo_d0_weight)
 it2 = time.time()
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX

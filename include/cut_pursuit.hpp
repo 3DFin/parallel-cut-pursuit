@@ -1,7 +1,7 @@
 /*=============================================================================
  * Base class for cut-pursuit algorithm
  * 
- * L. Landrieu, L. and G. Obozinski, Cut Pursuit: Fast Algorithms to Learn 
+ * L. Landrieu and G. Obozinski, Cut Pursuit: Fast Algorithms to Learn 
  * Piecewise Constant Functions on General Weighted Graphs, SIAM Journal on 
  * Imaging Sciences, 2017, 10, 1724-1766
  *
@@ -55,7 +55,7 @@ public:
      * and reduced problem elements, etc.), but this can be prevented by
      * getting the corresponding pointer member and setting it to null
      * beforehand */
-	virtual ~Cp();
+    virtual ~Cp();
 
     /**  manipulate private members pointers and values  **/
 

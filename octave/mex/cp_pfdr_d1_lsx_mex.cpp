@@ -1,5 +1,5 @@
 /*=============================================================================
- * [Comp, rX, it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, first_edge,
+ * [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, first_edge,
  *      adj_vertices, [options])
  *
  * options is a struct with any of the following fields [with default values]:
@@ -183,14 +183,12 @@ static void cp_pfdr_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     plhs[0] = mxCreateNumericMatrix(1, V, mxCOMP_CLASS, mxREAL);
     comp_t *Comp = (comp_t*) mxGetData(plhs[0]);
-    plhs[2] = mxCreateNumericMatrix(1, 1, mxINDEX_CLASS, mxREAL);
-    int *it = (int*) mxGetData(plhs[2]);
 
-    real_t* Obj = nlhs > 3 ?
+    real_t* Obj = nlhs > 2 ?
         (real_t*) mxMalloc(sizeof(real_t)*(cp_it_max + 1)) : nullptr;
-    double* Time = nlhs > 4 ?
+    double* Time = nlhs > 3 ?
         (double*) mxMalloc(sizeof(double)*(cp_it_max + 1)) : nullptr;
-    real_t *Dif = nlhs > 5 ?
+    real_t *Dif = nlhs > 4 ?
         (real_t*) mxMalloc(sizeof(real_t)*cp_it_max) : nullptr;
 
     /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
@@ -209,7 +207,7 @@ static void cp_pfdr_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     cp->set_components(0, Comp); // use the preallocated component array Comp
 
-    *it = cp->cut_pursuit();
+    int cp_it = cp->cut_pursuit();
 
     /* copy reduced values */
     comp_t rV = cp->get_components();
@@ -222,14 +220,14 @@ static void cp_pfdr_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
     delete cp;
 
     /**  resize monitoring arrays and assign to outputs  **/
+    if (nlhs > 2){
+        plhs[2] = resize_and_create_mxRow(Obj, cp_it + 1, mxREAL_CLASS);
+    }
     if (nlhs > 3){
-        plhs[3] = resize_and_create_mxRow(Obj, *it + 1, mxREAL_CLASS);
+        plhs[3] = resize_and_create_mxRow(Time, cp_it + 1, mxDOUBLE_CLASS);
     }
     if (nlhs > 4){
-        plhs[4] = resize_and_create_mxRow(Time, *it + 1, mxDOUBLE_CLASS);
-    }
-    if (nlhs > 5){
-        plhs[5] = resize_and_create_mxRow(Dif, *it, mxREAL_CLASS);
+        plhs[4] = resize_and_create_mxRow(Dif, cp_it, mxREAL_CLASS);
     }
 
 }

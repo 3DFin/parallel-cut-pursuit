@@ -21,7 +21,7 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 from cp_pfdr_d1_ql1b import cp_pfdr_d1_ql1b 
 
 ###  general parameters  ###
-plot_results = False
+plot_results = True
 print_results = False
 
 ###  parameters; see documentation of cp_pfdr_d1_ql1b  ###
@@ -55,10 +55,10 @@ supp0 = np.array(x0 != 0, dtype="int")
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX, it = cp_pfdr_d1_ql1b(y, Phi, first_edge, adj_vertices,
-                               edge_weights=d1_weights, l1_weights=l1_weights,
-                               low_bnd=low_bnd, pfdr_rho=pfdr_rho,
-                               balance_parallel_split=balance_parallel_split)
+Comp, rX = cp_pfdr_d1_ql1b(y, Phi, first_edge, adj_vertices,
+                           edge_weights=d1_weights, l1_weights=l1_weights,
+                           low_bnd=low_bnd, pfdr_rho=pfdr_rho,
+                           balance_parallel_split=balance_parallel_split)
 it2 = time.time()
 x = rX[Comp] # rX is components values, Comp is components assignment
 del rX, Comp

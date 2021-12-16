@@ -372,9 +372,10 @@ TPL void CP::compute_connected_components()
     index_t saturated_vert_par = 0;
     index_t tmp_rV = 0; // identify and count components, prevent overflow
 
-    /* there is need to scan all edges involving a given vertex in constant
-     * time, so we create the list of reverse edges within each component; to
-     * facilitate this, we keep the index of each vertex within components */
+    /** there is need to scan all edges involving a given vertex without
+     * running through all edges of the graph, so we create the list of
+     * 'reverse edges' within each component; to facilitate this, we keep the
+     * index of each vertex within its component **/
     index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
 
     #pragma omp parallel for schedule(dynamic) NUM_THREADS(2*E, rV) \
@@ -747,10 +748,12 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     /* the number of resulting new components */
     comp_t rV_new_par = 0; // auxiliary variable for parallel region
 
-    /* there is need to scan all edges involving a given vertex in constant
-     * time, so we create the list of reverse edges within each component; to
-     * facilitate this, we keep the index of each vertex within components */
+    /** there is need to scan all edges involving a given vertex without
+     * running through all edges of the graph, so we create the list of
+     * 'reverse edges' within each component; to facilitate this, we keep the
+     * index of each vertex within its component **/
     index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
+
     #pragma omp parallel for schedule(dynamic) \
         NUM_THREADS(2*E*first_vertex[rV_big]/V, rV_big) reduction(+:rV_new_par)
     for (comp_t rv = 0; rv < rV_big; rv++){
