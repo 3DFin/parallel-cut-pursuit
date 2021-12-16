@@ -11,10 +11,10 @@ Extension modules for Python.
 
 1. [**General problem statement**](#general-problem-statement)  
 2. [**Generic C++ classes**](#generic-classes)  
-3. [**Specialization the proximity operator of the graph total variation**](#specialization-Cp_prox_tv-proximity-operator-of-the-graph-total-variation)  
-4. [**Specialization for quadratic functional and graph total variation**](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation)  
-5. [**Specialization for separable multidimensional loss and graph total variation**](#specialization-Cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation)  
-6. [**Specialization for separable distance and contour length**](#specialization-Cp_d0_dist-separable-distance-and-weighted-contour-length)
+3. [**Specialization the proximity operator of the graph total variation**](#specialization-cp_prox_tv-proximity-operator-of-the-graph-total-variation)  
+4. [**Specialization for quadratic functional and graph total variation**](#specialization-cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation)  
+5. [**Specialization for separable multidimensional loss and graph total variation**](#specialization-cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation)  
+6. [**Specialization for separable distance and contour length**](#specialization-cp_d0_dist-separable-distance-and-weighted-contour-length)
 7. [**Directory tree**](#directory-tree)
 8. [**C++ documentation**](#c-documentation)
 9. [**GNU Octave or Matlab**](#gnu-octave-or-matlab)
@@ -82,7 +82,7 @@ _ι_<sub>[_a_,_b_]</sub> is the convex indicator of [_a_, _b_] : x ↦ 0 if _x_ 
 
 When _y_<sup>(ℓ<sub>1</sub>)</sup> is zero, the combination of ℓ<sub>1</sub> norm and total variation is sometimes coined _fused LASSO_.  
 
-When _A_ is the identity, _λ_ is zero and there are no box constraints, the problem boils down to [the proximity operator of the graph total variation](#specialization-Cp_prox_tv-proximity-operator-of-the-graph-total-variation).  
+When _A_ is the identity, _λ_ is zero and there are no box constraints, the problem boils down to [the proximity operator of the graph total variation](#specialization-cp_prox_tv-proximity-operator-of-the-graph-total-variation).  
 
 Currently, _A_ must be provided as a matrix. See the documentation for special cases.  
 
@@ -206,11 +206,11 @@ See the script `compile_mex.m` for typical compilation commands; it can be run d
 
 Extensive documentation of the MEX interfaces can be found within dedicated `.m` files in `octave/doc/`.  
 
-The script `example_EEG.m` exemplifies the use of [`Cp_d1_ql1b`](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _brain source identification from electroencephalography_.  
+The script `example_EEG.m` exemplifies the use of [`Cp_d1_ql1b`](#specialization-cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _brain source identification from electroencephalography_.  
 
-The script `example_tomography.m` exemplifies the use of [`Cp_d1_ql1b`](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _image reconstruction from tomography_.   
+The script `example_tomography.m` exemplifies the use of [`Cp_d1_ql1b`](#specialization-cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _image reconstruction from tomography_.   
 
-The scripts `example_labeling_3D.m` and `example_labeling_3D_d0.m` exemplify the use of, respectively, [`Cp_d1_lsx`](#specialization-Cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation) and [`Cp_d0_dist`](#specialization-Cp_d0_dist-separable-distance-and-weighted-contour-length), on a task of _spatial regularization of semantic classification of a 3D point cloud_.  
+The scripts `example_labeling_3D.m` and `example_labeling_3D_d0.m` exemplify the use of, respectively, [`Cp_d1_lsx`](#specialization-cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation) and [`Cp_d0_dist`](#specialization-cp_d0_dist-separable-distance-and-weighted-contour-length), on a task of _spatial regularization of semantic classification of a 3D point cloud_.  
 
 ### Python
 Requires `numpy` package.  
@@ -220,11 +220,11 @@ Compatible with Python 2 and Python 3.
 Extensive documentation of the Python wrappers can be found in the corresponding `.py` files.  
 The scripts are mostly written for Python 3, and should work with Python 2 with minor tweaking.
 
-The script `example_EEG.py` exemplifies the use of [`Cp_d1_ql1b`](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _brain source identification from electroencephalography_.  
+The script `example_EEG.py` exemplifies the use of [`Cp_d1_ql1b`](#specialization-cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _brain source identification from electroencephalography_.  
 
-The script `example_tomography.py` exemplifies the use of [`Cp_d1_ql1b`](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _image reconstruction from tomography_.   
+The script `example_tomography.py` exemplifies the use of [`Cp_d1_ql1b`](#specialization-cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _image reconstruction from tomography_.   
 
-The scripts `example_labeling_3D.py` and `example_labeling_3D_d0.py` exemplify the use of, respectively, [`Cp_d1_lsx`](#specialization-Cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation) and [`Cp_d0_dist`](#specialization-Cp_d0_dist-separable-distance-and-weighted-contour-length), on a task of _spatial regularization of semantic classification of a 3D point cloud_.  
+The scripts `example_labeling_3D.py` and `example_labeling_3D_d0.py` exemplify the use of, respectively, [`Cp_d1_lsx`](#specialization-cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation) and [`Cp_d0_dist`](#specialization-cp_d0_dist-separable-distance-and-weighted-contour-length), on a task of _spatial regularization of semantic classification of a 3D point cloud_.  
 
 ### References
 L. Landrieu and G. Obozinski, [Cut Pursuit: Fast Algorithms to Learn Piecewise Constant Functions on Weighted Graphs](http://epubs.siam.org/doi/abs/10.1137/17M1113436), 2017.  
