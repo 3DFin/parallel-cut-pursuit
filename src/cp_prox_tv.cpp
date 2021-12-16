@@ -20,7 +20,7 @@ TPL CP_PROX_TV::Cp_prox_tv(index_t V, index_t E, const index_t* first_edge,
     const index_t* adj_vertices)
     : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices)
 {
-    Y = R = Gd1 = nullptr;
+    Y = Gd1 = nullptr;
 
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
     pfdr_dif_tol = 1e-3*dif_tol; pfdr_it = pfdr_it_max = 1e4;
@@ -29,7 +29,7 @@ TPL CP_PROX_TV::Cp_prox_tv(index_t V, index_t E, const index_t* first_edge,
     monitor_evolution = true;
 }
 
-TPL CP_PROX_TV::~Cp_prox_tv(){ free(R); }
+TPL CP_PROX_TV::~Cp_prox_tv(){ }
 
 TPL void CP_PROX_TV::set_observation(const real_t* Y)
 {
@@ -162,7 +162,7 @@ TPL void CP_PROX_TV::split_component(comp_t rv,
     /**  the cut is essentially +1 vs -1
      **  actual derivative value is twice the cut cost plus a constant  */
 
-    real_t rXv = rX[comp_assign[v]];
+    real_t rXv = rX[rv];
 
     /* set gradient of quadratic term on terminal capacities */
     for (index_t i = 0; i < comp_size; i++){
@@ -199,7 +199,7 @@ TPL void CP_PROX_TV::split_component(comp_t rv,
     e_in_comp = 0;
     for (index_t i = 0; i < comp_size; i++){
         index_t v = comp_list_rv[i];
-        if (maxflow->is_sink(i)){ label_assign[v] = dir; }
+        label_assign[v] = maxflow->is_sink(i);
         if (!Gd1){ continue; }
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
             if (is_bind(e)){

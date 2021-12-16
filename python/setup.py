@@ -19,7 +19,7 @@ to_compile = [ # comment undesired extension modules
     "cp_pfdr_d1_ql1b_cpy",
     "cp_pfdr_d1_lsx_cpy",
     "cp_kmpp_d0_dist_cpy",
-    "cp_prox_tv"
+    "cp_prox_tv_cpy"
 ]
 include_dirs = [numpy.get_include(), # find the Numpy headers
                 "../include"]
@@ -119,7 +119,7 @@ if name in to_compile:
              "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
              "../src/maxflow.cpp", "../src/pfdr_d1_ql1b.cpp",
              "../src/pfdr_graph_d1.cpp", "../src/pcd_fwd_doug_rach.cpp",
-            "../src/pcd_prox_split.cpp"],
+             "../src/pcd_prox_split.cpp", "../src/matrix_tools.cpp"],
             include_dirs=include_dirs,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)

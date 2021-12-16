@@ -86,7 +86,7 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
         npy_intp size_py_Gtv[] = {E};
         py_Gtv = (PyArrayObject*) PyArray_Zeros(1, size_py_Gtv,
             PyArray_DescrFromType(NPY_REAL), 1);
-        Gtv = (real_t*) PyArray_DATA(py_Dif);
+        Gtv = (real_t*) PyArray_DATA(py_Gtv);
     }
 
     real_t* Obj = nullptr;

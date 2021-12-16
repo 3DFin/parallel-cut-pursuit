@@ -193,7 +193,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
             ["balance_parallel_split", "compute_Liste", "compute_Subgrads",
              "compute_Obj", "compute_Time", "compute_Dif"],
             [ balance_parallel_split ,  compute_Liste ,  compute_Subgrads ,
-              compute_Obj ,  compute_Time ,  compute_Dif ]:
+              compute_Obj ,  compute_Time ,  compute_Dif ]):
         if type(b_args) != bool:
             raise TypeError("Cut-pursuit prox TV: argument '{0}' must be "
                             "boolean".format(name))
