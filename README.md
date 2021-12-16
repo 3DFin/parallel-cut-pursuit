@@ -6,19 +6,21 @@ Parallel implementation with OpenMP.
 MEX interfaces for GNU Octave or Matlab.  
 Extension modules for Python.  
 
+
 ### Table of Content  
 
 1. [**General problem statement**](#general-problem-statement)  
 2. [**Generic C++ classes**](#generic-classes)  
-3. [**Specialization for quadratic functional and graph total variation**](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation)  
-4. [**Specialization for separable multidimensional loss and graph total variation**](#specialization-Cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation)  
-5. [**Specialization for separable distance and contour length**](#specialization-Cp_d0_dist-separable-distance-and-weighted-contour-length)
-6. [**Directory tree**](#directory-tree)
-7. [**C++ documentation**](#c-documentation)
-8. [**GNU Octave or Matlab**](#gnu-octave-or-matlab)
-9. [**Python**](#python)
-10. [**References**](#references)
-11. [**License**](#license)
+3. [**Specialization the proximity operator of the graph total variation**](#specialization-Cp_prox_tv-proximity-operator-of-the-graph-total-variation)  
+4. [**Specialization for quadratic functional and graph total variation**](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation)  
+5. [**Specialization for separable multidimensional loss and graph total variation**](#specialization-Cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation)  
+6. [**Specialization for separable distance and contour length**](#specialization-Cp_d0_dist-separable-distance-and-weighted-contour-length)
+7. [**Directory tree**](#directory-tree)
+8. [**C++ documentation**](#c-documentation)
+9. [**GNU Octave or Matlab**](#gnu-octave-or-matlab)
+10. [**Python**](#python)
+11. [**References**](#references)
+12. [**License**](#license)
 
 ### General problem statement
 The cut-pursuit algorithms minimize functionals structured, over a weighted graph _G_ = (_V_, _E_, _w_), as 
@@ -51,6 +53,16 @@ The class `Cp` is the most generic, defining all steps of the cut-pursuit approa
 The class `Cp_d1` specializes methods for directionally differentiable cases involving the graph total variation.  
 The class `Cp_d0` specializes methods for noncontinuous cases involving the contour length penalization.  
 
+### Specialization `Cp_prox_tv`: proximity operator of the graph total variation
+Also coined “graph total variation denoising” or “general fused LASSO signal approximation”. The base set is Ω = ℝ, and the objective functional is  
+
+    _F_: _x_ ∈ ℝ<sup>_V_</sup> ↦  1/2 ║<i>y</i> − <i>x</i>║<sup>2</sup> +
+ ∑<sub>(_u_,_v_) ∈ _E_</sub> _w_<sub>(_u_,_v_)</sub>
+ |_x_<sub>_u_</sub> − _x_<sub>_v_</sub>| ,   
+
+where _y_ ∈ ℝ<sup>_n_</sup> 
+and _w_ ∈ ℝ<sup>_E_</sup> are regularization weights.  
+
 ### Specialization `Cp_d1_ql1b`: quadratic functional, ℓ<sub>1</sub> norm, bounds, and graph total variation
 The base set is Ω = ℝ, and the general form is  
 
@@ -70,11 +82,11 @@ _ι_<sub>[_a_,_b_]</sub> is the convex indicator of [_a_, _b_] : x ↦ 0 if _x_ 
 
 When _y_<sup>(ℓ<sub>1</sub>)</sup> is zero, the combination of ℓ<sub>1</sub> norm and total variation is sometimes coined _fused LASSO_.  
 
-When _A_ is the identity, _λ_ is zero and there are no box constraints, the problem boils down to the _proximity operator_ of the graph total variation, also coined “graph total variation denoising” or “general fused LASSO signal approximation”.  
+When _A_ is the identity, _λ_ is zero and there are no box constraints, the problem boils down to [the proximity operator of the graph total variation](#specialization-Cp_prox_tv-proximity-operator-of-the-graph-total-variation).  
 
 Currently, _A_ must be provided as a matrix. See the documentation for special cases.  
 
-The reduced problem is solved using the [preconditioned forward-Douglas–Rachford splitting algorithm](https://1a7r0ch3.github.io/fdr/) (see also the [corresponding repository](https://github.com/1a7r0ch3/pcd-prox-split)).  
+The reduced problem is solved using the [preconditioned forward-Douglas–Rachford splitting algorithm](https://1a7r0ch3.github.io/fdr/) (see also the [corresponding repository](https://gitlab.com/1a7r0ch3/pcd-prox-split)).  
 
 Two examples where _A_ is a full ill-conditioned matrix are provided with [GNU Octave or Matlab](#gnu-octave-or-matlab) and [Python](#python) interfaces: one with positivity and fused LASSO constraints on a task of _brain source identification from electroencephalography_, and another with boundary constraints on a task of _image reconstruction from tomography_.
 
@@ -185,14 +197,14 @@ An example with the smoothed Kullback–Leibler is provided with [GNU Octave or 
 Requires `C++11`.  
 Be sure to have OpenMP enabled with your compiler to enjoy parallelization. Note that, as of 2020, MSVC still does not support OpenMP 3.0 (published in 2008); consider switching to a decent compiler.  
 
-The number of parallel threads used in parallel regions is crucial for good performance; it is roughly controlled by a macro `MIN_OPS_PER_THREAD` which can be set by usual `D` compilation flag. A rule of thumb is to set it to `10000` on personnal computers with a handful of cores, and up to `100000` for large computer clusters with tens of cores.  
+The number of parallel threads used in parallel regions is crucial for good performance; it is roughly controlled by a macro `MIN_OPS_PER_THREAD` which can be set by usual `D` compilation flag. A rule of thumb is to set it to `10000` on personal computers with a handful of cores, and up to `100000` for large computer clusters with tens of cores.  
 
 The C++ classes are documented within the corresponding headers in `include/`.  
 
 ### GNU Octave or Matlab
 See the script `compile_mex.m` for typical compilation commands; it can be run directly from the GNU Octave interpreter, but Matlab users must set compilation flags directly on the command line `CXXFLAGS = ...` and `LDFLAGS = ...`.  
 
-Extensive documention of the MEX interfaces can be found within dedicated `.m` files in `octave/doc/`.  
+Extensive documentation of the MEX interfaces can be found within dedicated `.m` files in `octave/doc/`.  
 
 The script `example_EEG.m` exemplifies the use of [`Cp_d1_ql1b`](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _brain source identification from electroencephalography_.  
 
@@ -205,7 +217,7 @@ Requires `numpy` package.
 See the script `setup.py` for compiling modules with `distutils`; on UNIX systems, it can be directly interpreted as `python setup.py build_ext`.  
 Compatible with Python 2 and Python 3.  
 
-Extensive documention of the Python wrappers can be found in the corresponding `.py` files.  
+Extensive documentation of the Python wrappers can be found in the corresponding `.py` files.  
 The scripts are mostly written for Python 3, and should work with Python 2 with minor tweaking.
 
 The script `example_EEG.py` exemplifies the use of [`Cp_d1_ql1b`](#specialization-Cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation), on a task of _brain source identification from electroencephalography_.  

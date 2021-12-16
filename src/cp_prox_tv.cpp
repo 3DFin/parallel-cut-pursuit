@@ -29,8 +29,6 @@ TPL CP_PROX_TV::Cp_prox_tv(index_t V, index_t E, const index_t* first_edge,
     monitor_evolution = true;
 }
 
-TPL CP_PROX_TV::~Cp_prox_tv(){ }
-
 TPL void CP_PROX_TV::set_observation(const real_t* Y)
 {
     this->Y = Y;
@@ -104,40 +102,8 @@ TPL void CP_PROX_TV::solve_reduced_problem()
 
 TPL index_t CP_PROX_TV::split()
 {
-    #if 0
-    /* NOTA: gradient could be computed only componentwise within method
-     * split_component(), thus saving space but maybe losing speed */
-    grad = (real_t*) malloc_check(sizeof(real_t)*V);
-    for (index_t v = 0; v < V; v++){ grad[v] = ZERO; }
-
-    #pragma omp parallel for schedule(static) NUM_THREADS(V - saturated_vert)
-    for (index_t v = 0; v < V; v++){
-        comp_t rv = comp_assign[v];
-        if (is_saturated[rv]){ continue; }
-
-        /**  gradient of quadratic term  **/ 
-        grad[v] += rX[rv] - Y[v];
-    }
-
-    /**  differentiable d1 contribution  **/ 
-    /* cannot parallelize with graph structure available here */
-    for (index_t v = 0; v < V; v++){
-        real_t rXv = rX[comp_assign[v]];
-        for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_cut(e)){
-                index_t u = adj_vertices[e]; /* edge (v, u): |x_v - x_u| */
-                real_t grad_d1 = rXv > rX[comp_assign[u]] ?
-                    EDGE_WEIGHTS_(e) : -EDGE_WEIGHTS_(e);
-                grad[v] += grad_d1;
-                grad[u] -= grad_d1;
-            }
-        }
-    }
-    #endif
-
     index_t activation = Cp<real_t, index_t, comp_t>::split();
 
-    free(grad);
     return activation;
 }
 
@@ -152,10 +118,6 @@ TPL uintmax_t CP_PROX_TV::split_complexity()
 TPL void CP_PROX_TV::split_component(comp_t rv,
     Maxflow<index_t, real_t>* maxflow)
 {
-    for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-        label_assign[comp_list[i]] = 0;
-    }
-
     index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
     const index_t* comp_list_rv = comp_list + first_vertex[rv];
 
@@ -167,7 +129,6 @@ TPL void CP_PROX_TV::split_component(comp_t rv,
     /* set gradient of quadratic term on terminal capacities */
     for (index_t i = 0; i < comp_size; i++){
         index_t v = comp_list_rv[i];
-        // maxflow->terminal_capacity(i) = grad[v];
         maxflow->terminal_capacity(i) = rXv - Y[v];
     }
 

@@ -49,7 +49,6 @@ public:
      * (components assignment and reduced problem elements, etc.), but this can
      * be prevented by getting the corresponding pointer member and setting it
      * to null beforehand */
-    ~Cp_prox_tv();
 
     /* set the observation, see member Y for details */
     void set_observation(const real_t* Y);
@@ -87,7 +86,6 @@ private:
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
     uintmax_t split_complexity() override;
-    real_t* grad; // store gradient of smooth part
     void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
         override;
     index_t split() override; // overload for computing gradient
