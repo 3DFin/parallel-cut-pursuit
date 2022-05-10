@@ -16,7 +16,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
                compute_Dif=False):
     """
     Comp, rX, [List, Gtv, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
-            adj_vertices, edge_weights=None, cp_dif_tol=1e-5, cp_it_max=10,
+            adj_vertices, edge_weights=1.0, cp_dif_tol=1e-4, cp_it_max=10,
             pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
             pfdr_dif_tol=1e-3*cp_dif_tol, pfdr_it_max=int(1e4),
             verbose=int(1e3), max_num_threads=0, balance_parallel_split=True,

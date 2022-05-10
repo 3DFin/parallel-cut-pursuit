@@ -48,7 +48,8 @@ public:
 
     void set_algo_param(real_t dif_tol, int it_max, int verbose, real_t eps);
     /* overload for allowing a function call for default parameter 'eps' */
-    void set_algo_param(real_t dif_tol = 1e-5, int it_max = 1e4, int verbose = 1e2)
+    void set_algo_param(real_t dif_tol = 1e-5, int it_max = 1e4,
+        int verbose = 1e2)
     {
         set_algo_param(dif_tol, it_max, verbose,
             std::numeric_limits<real_t>::epsilon());

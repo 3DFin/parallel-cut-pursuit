@@ -68,9 +68,11 @@ public:
 
     void set_relaxation(real_t rho = 1.);
 
+    /* information on Lipschitzianity provided by user */
     void set_lipschitz_param(const real_t* L = nullptr, real_t l = 0.,
         Condshape lshape = MULTIDIM);
 
+    /* overload for specifying computation of Lipschitz coefficients */
     void set_lipschitz_param(Lipschcomput lipschcomput);
 
     /* retrieving and setting auxiliary variables might be usefull for warm
@@ -82,7 +84,8 @@ public:
      * called */
     void set_auxiliary(real_t* Z);
 
-    virtual void initialize_auxiliary(); // initialize auxiliary to meaningful values
+    /* initialize auxiliary to meaningful values */
+    virtual void initialize_auxiliary(); 
 
     real_t* get_auxiliary();
 
@@ -107,7 +110,8 @@ protected:
     const real_t* L;
     real_t l;
     Lipschcomput lipschcomput; // see public declaration 
-    real_t* Lmut; // nonconst necessary for computing the Lipschitz metric
+    /* nonconst pointer to L in case Lipschitz metric must be computed */
+    real_t* Lmut;
 
     /**  algorithmic parameters  **/
 
@@ -124,7 +128,7 @@ protected:
     /* additional auxiliary variables and weights of the size of the problem
      * this is useful to make W + Id_W = Id when the weights W cannot sum to 
      * identity because they are constrained by a certain metric;
-     * such derived class responsible for allocating them */
+     * the derived class are responsible for allocating them */
     real_t *Z_Id, *Id_W;
 
     const Condshape gashape; // see public declaration 
@@ -133,17 +137,17 @@ protected:
 
     /**  preconditioning steps  **/
 
-    /* compute Lipschitz metric of f */
+    /* compute Lipschitz metric of the gradient of f */
     virtual void compute_lipschitz_metric();
 
     /* initialize the metric Ga with (pseudo-)hessian of f; default to zero */
     virtual void compute_hess_f();
 
-    /* pseudo-hessian of sum gi  and splitting weights Wi;
+    /* pseudo-hessian of sum gi and splitting weights Wi;
      * usually based on local quadratic approximations */
-    virtual void add_pseudo_hess_g() = 0; // add in Ga
+    virtual void add_pseudo_hess_g() = 0; // add the result in Ga
 
-    virtual void add_pseudo_hess_h(); // add in Ga, default to zero h
+    virtual void add_pseudo_hess_h(); // add the result in Ga, default to zero
 
     /* ensure sum Wi = Id */
     virtual void make_sum_Wi_Id();

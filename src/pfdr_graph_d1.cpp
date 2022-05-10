@@ -129,7 +129,11 @@ TPL void PFDR_D1::make_sum_Wi_Id()
     if (!Id_W){ /* weights can just be normalized */
 
         #pragma omp parallel for schedule(static) NUM_THREADS(2*E)
-        for (index_t e = 0; e < 2*E; e++){ W[e] /= sum_Wi[edges[e]]; }
+        for (index_t e = 0; e < 2*E; e++){
+            W[e] /= sum_Wi[edges[e]];
+            /* completely unbalanced weights might create zero here */
+            if (W[e] == ZERO){ W[e] = numeric_limits<real_t>::min(); }
+        }
 
     }else{ /* weights are used in order to shape the metric */
         /* compute shape and maximum */

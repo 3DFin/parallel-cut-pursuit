@@ -18,7 +18,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     """
     Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_ql1b(Y | AtY, A | AtA, first_edge,
             adj_vertices, edge_weights=None, Yl1=None, l1_weights=None,
-            low_bnd=None, upp_bnd=None, cp_dif_tol=1e-5, cp_it_max=10,
+            low_bnd=None, upp_bnd=None, cp_dif_tol=1e-4, cp_it_max=10,
             pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
             pfdr_dif_tol=1e-3*cp_dif_tol, pfdr_it_max=int(1e4),
             verbose=int(1e3), Gram_if_square=True, max_num_threads=0,

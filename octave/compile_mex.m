@@ -15,7 +15,7 @@ try
     % MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
     CXXFLAGS = [CXXFLAGS ' -Wextra -Wpedantic -std=c++11 -fopenmp -g0 ' ...
         '-D_GLIBCXX_PARALLEL -DMIN_OPS_PER_THREAD=10000'];
-    LDFLAGS = [LDFLAGS ',-fopenmp'];
+    LDFLAGS = [LDFLAGS ' -fopenmp'];
     setenv('CXXFLAGS', CXXFLAGS);
     setenv('LDFLAGS', LDFLAGS);
 

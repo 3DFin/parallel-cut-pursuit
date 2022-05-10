@@ -5,12 +5,11 @@
  *
  * involving the graph total variation penalisation
  *
- *      ||x||_d1 = sum_{uv in E} w_uv |x_u - x_v| ,
+ *      ||x||_d1 = sum_{uv in E} w_uv ||x_u - x_v|| ,
  *
  * and where f has Lipschitz continuous gradient, and the proximal operator of
- * h is easy to compute,
- *
- * using preconditioned forward-Douglas-Rachford splitting algorithm.
+ * h is easy to compute, using preconditioned forward-Douglas-Rachford
+ * splitting algorithm.
  *
  * Parallel implementation with OpenMP API.
  * 
@@ -273,7 +272,7 @@ private:
  * the resulting weights and thresholds for the proximal operator of the D12
  * graph TV are then given by (3) and (4), substituing w_γ_v by
  * λ_{(u, v), * v} coor_w(d) 
- * It can be observed thet the influence of coor_w(d) cancels, and thus (3) and
+ * It can be observed that the influence of coor_w(d) cancels, and thus (3) and
  * (4) does not depend on d; this is expected since the proximal operator is
  * not anymore separable along coordinates, thresholding the whole vector of
  * finite differences at once
@@ -296,7 +295,7 @@ private:
  * that there is no weights on the coordinates, according to (1) Γ is also 
  * MONODIM, and one can again use the weights given by (2) and compute Wd1 and
  * Thd1 according to (3) and (4), respectively.
- * 
+ *
  * (5.3) in the general case, sum W = Id cannot be achieved while keeping the
  * metric shape imposed by the weights on the coordinates, and it is necessary
  * to resort to additional auxiliary variable Z_Id and weights Id_W so that

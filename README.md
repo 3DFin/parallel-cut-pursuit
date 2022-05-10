@@ -1,4 +1,4 @@
-## Cut-Pursuit Algorithms, Parallelized Along Components
+# Cut-Pursuit Algorithms, Parallelized Along Components
 
 Generic C++ classes for implementing cut-pursuit algorithms.  
 Specialization to convex problems involving **graph total variation**, and nonconvex problems involving **contour length**, as explained in our articles [(Landrieu and Obozinski, 2016; Raguet and Landrieu, 2018)](#references).   
@@ -7,22 +7,24 @@ MEX interfaces for GNU Octave or Matlab.
 Extension modules for Python.  
 
 
-### Table of Content  
+## Table of Content  
 
 1. [**General problem statement**](#general-problem-statement)  
-2. [**Generic C++ classes**](#generic-classes)  
-3. [**Specialization the proximity operator of the graph total variation**](#specialization-cp_prox_tv-proximity-operator-of-the-graph-total-variation)  
-4. [**Specialization for quadratic functional and graph total variation**](#specialization-cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation)  
-5. [**Specialization for separable multidimensional loss and graph total variation**](#specialization-cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation)  
-6. [**Specialization for separable distance and contour length**](#specialization-cp_d0_dist-separable-distance-and-weighted-contour-length)
-7. [**Directory tree**](#directory-tree)
-8. [**C++ documentation**](#c-documentation)
-9. [**GNU Octave or Matlab**](#gnu-octave-or-matlab)
-10. [**Python**](#python)
-11. [**References**](#references)
-12. [**License**](#license)
+2. [**C++ classes and Specializations**](#c-classes-pecializations)
+2.1. [Proximity operator of the graph total variation](#cp_prox_tv-proximity-operator-of-the-graph-total-variation)  
+2.2. [Quadratic functional and graph total variation](#cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation)  
+2.3. [Separable multidimensional loss and graph total variation](#cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation)  
+2.4. [Separable distance and contour length](#cp_d0_dist-separable-distance-and-weighted-contour-length)
+3. [**Documentation**]
+3.1. [Directory tree](#directory-tree)
+3.2. [Graph structure](#graph-structure)
+3.3. [C++ documentation](#c-documentation)
+3.4. [GNU Octave or Matlab](#gnu-octave-or-matlab)
+3.5. [Python](#python)
+4. [**References**](#references)
+5. [**License**](#license)
 
-### General problem statement
+## General problem statement
 The cut-pursuit algorithms minimize functionals structured, over a weighted graph _G_ = (_V_, _E_, _w_), as 
 
     _F_: _x_ ∈ Ω<sup>_V_</sup> ↦ _f_(_x_) + 
@@ -47,13 +49,14 @@ _ψ_(_x_<sub>_u_</sub>, _x_<sub>_v_</sub>) = ║<i>x</i><sub>_u_</sub> − _x_<s
 
 Both flavors admit multidimensional extensions, that is to say Ω is not required to be only a set of scalars.
 
-### Generic classes
+## C++ classes and Specializations
+
 The class `Cp_graph` is a modification of the `Graph` class of Y. Boykov and V. Kolmogorov, for making use of their [maximum flow algorithm](#references).  
 The class `Cp` is the most generic, defining all steps of the cut-pursuit approach in virtual methods.  
 The class `Cp_d1` specializes methods for directionally differentiable cases involving the graph total variation.  
 The class `Cp_d0` specializes methods for noncontinuous cases involving the contour length penalization.  
 
-### Specialization `Cp_prox_tv`: proximity operator of the graph total variation
+### `Cp_prox_tv`: proximity operator of the graph total variation
 Also coined “graph total variation denoising” or “general fused LASSO signal approximation”. The base set is Ω = ℝ, and the objective functional is  
 
     _F_: _x_ ∈ ℝ<sup>_V_</sup> ↦  1/2 ║<i>y</i> − <i>x</i>║<sup>2</sup> +
@@ -63,7 +66,7 @@ Also coined “graph total variation denoising” or “general fused LASSO sign
 where _y_ ∈ ℝ<sup>_n_</sup> 
 and _w_ ∈ ℝ<sup>_E_</sup> are regularization weights.  
 
-### Specialization `Cp_d1_ql1b`: quadratic functional, ℓ<sub>1</sub> norm, bounds, and graph total variation
+### `Cp_d1_ql1b`: quadratic functional, ℓ<sub>1</sub> norm, bounds, and graph total variation
 The base set is Ω = ℝ, and the general form is  
 
     _F_: _x_ ∈ ℝ<sup>_V_</sup> ↦  1/2 ║<i>y</i><sup>(q)</sup> − _A_<i>x</i>║<sup>2</sup> +
@@ -180,6 +183,12 @@ When the loss is quadratic, the resulting problem is sometimes coined “minimal
 
 An example with the smoothed Kullback–Leibler is provided with [GNU Octave or Matlab](#gnu-octave-or-matlab) interface, on a task of _spatial regularization of semantic classification of a 3D point cloud_.  
 
+## Documentation
+
+### Graph structure
+
+Graph structures must be given as forward-star representation. For conversion from simple adjacency list representation, or for creation from scratch for regular N-dimensionnal grids (2D for images, 3D for volumes, etc.), see my [grid graph](https://gitlab.com/1a7r0ch3/grid-graph) repository.  
+
 ### Directory tree
     .   
     ├── data/         various data for illustration
@@ -200,7 +209,6 @@ Be sure to have OpenMP enabled with your compiler to enjoy parallelization. Note
 The number of parallel threads used in parallel regions is crucial for good performance; it is roughly controlled by a macro `MIN_OPS_PER_THREAD` which can be set by usual `D` compilation flag. A rule of thumb is to set it to `10000` on personal computers with a handful of cores, and up to `100000` for large computer clusters with tens of cores.  
 
 The C++ classes are documented within the corresponding headers in `include/`.  
-
 ### GNU Octave or Matlab
 See the script `compile_mex.m` for typical compilation commands; it can be run directly from the GNU Octave interpreter, but Matlab users must set compilation flags directly on the command line `CXXFLAGS = ...` and `LDFLAGS = ...`.  
 
@@ -226,12 +234,12 @@ The script `example_tomography.py` exemplifies the use of [`Cp_d1_ql1b`](#specia
 
 The scripts `example_labeling_3D.py` and `example_labeling_3D_d0.py` exemplify the use of, respectively, [`Cp_d1_lsx`](#specialization-cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation) and [`Cp_d0_dist`](#specialization-cp_d0_dist-separable-distance-and-weighted-contour-length), on a task of _spatial regularization of semantic classification of a 3D point cloud_.  
 
-### References
+## References
 L. Landrieu and G. Obozinski, [Cut Pursuit: Fast Algorithms to Learn Piecewise Constant Functions on Weighted Graphs](http://epubs.siam.org/doi/abs/10.1137/17M1113436), 2017.  
 
 H. Raguet and L. Landrieu, [Cut-pursuit Algorithm for Regularizing Nonsmooth Functionals with Graph Total Variation](https://1a7r0ch3.github.io/cp/), 2018.  
 
 Y. Boykov and V. Kolmogorov, An Experimental Comparison of Min-Cut/Max-Flow Algorithms for Energy Minimization in Vision, IEEE Transactions on Pattern Analysis and Machine Intelligence, 2004.
 
-### License
+## License
 This software is under the GPLv3 license.
