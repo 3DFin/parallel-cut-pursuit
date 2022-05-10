@@ -10,19 +10,19 @@ Extension modules for Python.
 ## Table of Content  
 
 1. [**General problem statement**](#general-problem-statement)  
-2. [**C++ classes and Specializations**](#c-classes-pecializations)
+2. [**C++ classes and Specializations**](#c-classes-pecializations)  
 2.1. [Proximity operator of the graph total variation](#cp_prox_tv-proximity-operator-of-the-graph-total-variation)  
 2.2. [Quadratic functional and graph total variation](#cp_d1_ql1b-quadratic-functional-ℓ1-norm-bounds-and-graph-total-variation)  
 2.3. [Separable multidimensional loss and graph total variation](#cp_d1_lsx-separable-loss-simplex-constraints-and-graph-total-variation)  
-2.4. [Separable distance and contour length](#cp_d0_dist-separable-distance-and-weighted-contour-length)
-3. [**Documentation**]
-3.1. [Directory tree](#directory-tree)
-3.2. [Graph structure](#graph-structure)
-3.3. [C++ documentation](#c-documentation)
-3.4. [GNU Octave or Matlab](#gnu-octave-or-matlab)
-3.5. [Python](#python)
-4. [**References**](#references)
-5. [**License**](#license)
+2.4. [Separable distance and contour length](#cp_d0_dist-separable-distance-and-weighted-contour-length)  
+3. [**Documentation**](#documentation)  
+3.1. [Directory tree](#directory-tree)  
+3.2. [Graph structure](#graph-structure)  
+3.3. [C++ documentation](#c-documentation)  
+3.4. [GNU Octave or Matlab](#gnu-octave-or-matlab)  
+3.5. [Python](#python)  
+4. [**References**](#references)  
+5. [**License**](#license)  
 
 ## General problem statement
 The cut-pursuit algorithms minimize functionals structured, over a weighted graph _G_ = (_V_, _E_, _w_), as 
