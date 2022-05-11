@@ -103,7 +103,9 @@ TPL void PFDR_D1::add_pseudo_hess_g()
             Ga[d + edges[2*e]*Dga] += coef;
             Ga[d + edges[2*e + 1]*Dga] += coef;
             if (!Id_W && (wshape == MULTIDIM || d == 0)){
-                W[id] = W[jd] = coef;
+                /* zero weight might create NaNs when normalized */
+                W[id] = W[jd] = coef > ZERO ? coef :
+                    numeric_limits<real_t>::min();
                 id += 2*Dw;
                 jd += 2*Dw;
             }
@@ -116,8 +118,8 @@ TPL void PFDR_D1::make_sum_Wi_Id()
     /* compute splitting weights sum */
     real_t* sum_Wi;
     /* use temporary storage if available */
-    const index_t Dwd1 = wd1shape == MULTIDIM ? D : wd1shape == MONODIM ? 1 : 0; 
-    const index_t Dthd1 = thd1shape == MULTIDIM ? D : 1; 
+    const index_t Dwd1 = wd1shape == MULTIDIM ? D : wd1shape == MONODIM ? 1: 0;
+    const index_t Dthd1 = thd1shape == MULTIDIM ? D : 1;
 
     if (2*E*Dwd1 >= V){ sum_Wi = W_d1; }
     else if (E*Dthd1 >= V){ sum_Wi = Th_d1; }
@@ -129,11 +131,7 @@ TPL void PFDR_D1::make_sum_Wi_Id()
     if (!Id_W){ /* weights can just be normalized */
 
         #pragma omp parallel for schedule(static) NUM_THREADS(2*E)
-        for (index_t e = 0; e < 2*E; e++){
-            W[e] /= sum_Wi[edges[e]];
-            /* completely unbalanced weights might create zero here */
-            if (W[e] == ZERO){ W[e] = numeric_limits<real_t>::min(); }
-        }
+        for (index_t e = 0; e < 2*E; e++){ W[e] /= sum_Wi[edges[e]]; }
 
     }else{ /* weights are used in order to shape the metric */
         /* compute shape and maximum */
@@ -214,10 +212,15 @@ TPL void PFDR_D1::preconditioning(bool init)
             real_t w_ga_u = W[i*Dw]/Ga[ud++];
             real_t w_ga_v = W[j*Dw]/Ga[vd++];
             Th_d1[ed++] = EDGE_WEIGHTS_(e)*COOR_WEIGHTS_(d)
-                *(w_ga_u + w_ga_v)/(w_ga_u*w_ga_v);
+                *(ONE/w_ga_u + ONE/w_ga_v);
             if (wd1shape != SCALAR){
-                W_d1[id++] = w_ga_u/(w_ga_u + w_ga_v);
-                W_d1[jd++] = w_ga_v/(w_ga_u + w_ga_v);
+                if (w_ga_u == ZERO && w_ga_v == ZERO){
+                    W_d1[id++] = HALF;
+                    W_d1[jd++] = HALF;
+                }else{
+                    W_d1[id++] = w_ga_u/(w_ga_u + w_ga_v);
+                    W_d1[jd++] = w_ga_v/(w_ga_u + w_ga_v);
+                }
             }
         }
     }
@@ -234,10 +237,8 @@ TPL void PFDR_D1::compute_prox_GaW_g()
         index_t id = i*D;
         index_t jd = j*D;
         index_t ed = 0; // avoid uninitialization warning
-        real_t thresholding, dnorm;
-        thresholding = ZERO; // avoid uninitialization warning
-        if (d1p == D12){ /* compute norm and threshold */
-            dnorm = ZERO;
+        real_t dnorm = ZERO; // avoid uninitialization warning
+        if (d1p == D12){ /* compute norm */
             for (index_t d = 0; d < D; d++){ 
                 /* forward step */ 
                 real_t fwd_zi = Ga_grad_f[ud++] - Z[id++];
@@ -245,7 +246,6 @@ TPL void PFDR_D1::compute_prox_GaW_g()
                 dnorm += (fwd_zi - fwd_zj)*(fwd_zi - fwd_zj)*COOR_WEIGHTS_(d);
             }
             dnorm = sqrt(dnorm);
-            thresholding = dnorm > Th_d1[e] ? ONE - Th_d1[e]/dnorm : ZERO;
             ud -= D; vd -= D; id -= D; jd -= D;
         }else if (thd1shape == MULTIDIM){
             ed = e*D;
@@ -264,7 +264,7 @@ TPL void PFDR_D1::compute_prox_GaW_g()
                 else{ dif = ZERO; }
                 if (thd1shape == MULTIDIM){ ed++; }
             }else{
-                dif *= thresholding;
+                dif *= dnorm > Th_d1[e] ? ONE - Th_d1[e]/dnorm : ZERO;
             }
             Z[id] += rho*(avg + W_d1_(j, jd)*dif - X[ud]);
             Z[jd] += rho*(avg - W_d1_(i, id)*dif - X[vd]);
