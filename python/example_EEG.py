@@ -25,12 +25,12 @@ plot_results = True
 print_results = False
 
 ###  parameters; see documentation of cp_pfdr_d1_ql1b  ###
-# cp_dif_tol = 1e-4
-cp_it_max = 15
+cp_dif_tol = 1e-4
+# cp_it_max = 15
 pfdr_rho = 1.5
 # pfdr_cond_min = 1e-2
 # pfdr_dif_rcd = 0.0
-# pfdr_dif_tol = 1e-3*cp_dif_tol
+pfdr_dif_tol = 1e-1*cp_dif_tol
 # pfdr_it_max = 1e4
 # pfdr_verbose = 1e3
 # max_num_threads = 8
@@ -58,6 +58,7 @@ it1 = time.time()
 Comp, rX = cp_pfdr_d1_ql1b(y, Phi, first_edge, adj_vertices,
                            edge_weights=d1_weights, l1_weights=l1_weights,
                            low_bnd=low_bnd, pfdr_rho=pfdr_rho,
+                           pfdr_dif_tol=pfdr_dif_tol,
                            balance_parallel_split=balance_parallel_split)
 it2 = time.time()
 x = rX[Comp] # rX is components values, Comp is components assignment
@@ -99,7 +100,7 @@ if plot_results:
     xcol[supp0 == 0] = 1
     # plot figure
     fig = plt.figure(1)
-    ax = fig.gca(projection="3d")
+    ax = plt.axes(projection="3d")
     ax.view_init(30, 90)
     cmap = plt.get_cmap("hot")
     collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
@@ -119,7 +120,7 @@ if plot_results:
     xcol[supp == 0] = 1
     # plot figure
     fig = plt.figure(2)
-    ax = fig.gca(projection="3d")
+    ax = plt.axes(projection="3d")
     ax.view_init(30, 90)
     cmap = plt.get_cmap("hot")
     collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],
@@ -137,7 +138,7 @@ if plot_results:
     # map the color index
     xcol = 1 + suppa*numberOfColors;
     fig = plt.figure(3)
-    ax = fig.gca(projection="3d")
+    ax = plt.axes(projection="3d")
     ax.view_init(30, 90)
     cmap = plt.get_cmap("hot")
     collec = ax.plot_trisurf(vertices[:,0],vertices[:,1], vertices[:,2],

@@ -21,12 +21,12 @@ darkLevel = 1/16;
 
 %%%  parameters; see octave/doc/cp_pfdr_d1_ql1b_mex.m %%%
 options = struct; % reinitialize
-% options.cp_dif_tol = 1e-4;
+options.cp_dif_tol = 1e-4;
 options.cp_it_max = 15;
 options.pfdr_rho = 1.5;
 % options.pfdr_cond_min = 1e-2;
 % options.pfdr_dif_rcd = 0.0;
-% options.pfdr_dif_tol = 1e-3*options.cp_dif_tol;
+options.pfdr_dif_tol = 1e-1*options.cp_dif_tol;
 % options.pfdr_it_max = 1e4;
 % options.verbose = 1e3;
 % options.max_num_threads = 8;

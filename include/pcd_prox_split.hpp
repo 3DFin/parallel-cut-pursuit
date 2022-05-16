@@ -44,14 +44,15 @@ public:
     void set_monitoring_arrays(real_t* objective_values = nullptr,
         real_t* iterate_evolution = nullptr);
 
-    void set_conditioning_param(real_t cond_min = 1e-2, real_t dif_rcd = 1e-4);
+    void set_conditioning_param(real_t cond_min = 1e-2, real_t dif_rcd = 1e-3);
 
-    void set_algo_param(real_t dif_tol, int it_max, int verbose, real_t eps);
+    void set_algo_param(real_t dif_tol, int dif_it, int it_max, int verbose,
+        real_t eps);
     /* overload for allowing a function call for default parameter 'eps' */
-    void set_algo_param(real_t dif_tol = 1e-5, int it_max = 1e4,
-        int verbose = 1e2)
+    void set_algo_param(real_t dif_tol = 1e-4, int dif_it = 0,
+        int it_max = 1e3, int verbose = 1e2)
     {
-        set_algo_param(dif_tol, it_max, verbose,
+        set_algo_param(dif_tol, dif_it, it_max, verbose,
             std::numeric_limits<real_t>::epsilon());
     }
 
@@ -92,6 +93,7 @@ protected:
     /* stopping criterion on iterate evolution;
      * algorithm stops if relative change of the iterate is less */
     real_t dif_tol;
+    int dif_it; // number of iterations between iterates for evolution measure
     int it_max; // maximum number of iterations
 
     /* information on the progress;

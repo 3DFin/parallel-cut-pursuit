@@ -86,7 +86,8 @@ TPL void CP_PROX_TV::solve_reduced_problem()
         pfdr->set_quadratic(rY, PFDR::Gram_diag(), rAA);
         pfdr->set_conditioning_param(pfdr_cond_min, pfdr_dif_rcd);
         pfdr->set_relaxation(pfdr_rho);
-        pfdr->set_algo_param(pfdr_dif_tol, pfdr_it_max, verbose);
+        pfdr->set_algo_param(pfdr_dif_tol, sqrt(pfdr_it_max),
+            pfdr_it_max, verbose);
         pfdr->set_iterate(rX);
         pfdr->initialize_iterate();
 

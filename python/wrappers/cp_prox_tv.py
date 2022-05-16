@@ -18,7 +18,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     Comp, rX, [List, Gtv, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
             adj_vertices, edge_weights=1.0, cp_dif_tol=1e-4, cp_it_max=10,
             pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
-            pfdr_dif_tol=1e-3*cp_dif_tol, pfdr_it_max=int(1e4),
+            pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=int(1e4),
             verbose=int(1e3), max_num_threads=0, balance_parallel_split=True,
             compute_List=False, compute_Subgrads=False, compute_Obj=False,
             compute_Time=False, compute_Dif=False)
@@ -78,7 +78,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
         away from the solution set and give bad subproblem solutions
     pfdr_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (in Euclidean norm) is less than dif_tol
-        1e-3*cp_dif_tol is a conservative value
+        1e-2*cp_dif_tol is a conservative value
     pfdr_it_max - maximum number of iterations 1e4 iterations provides enough
         precision for most subproblems
     verbose - if nonzero, display information on the progress, every 'verbose'
@@ -174,7 +174,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     # Convert in float64 all float arguments if needed (cp_dif_tol, pfdr_rho, 
     # pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol) 
     if pfdr_dif_tol is None:
-        pfdr_dif_tol = cp_dif_tol*1e-3
+        pfdr_dif_tol = 1e-2*cp_dif_tol
     cp_dif_tol = float(cp_dif_tol)
     pfdr_rho = float(pfdr_rho)
     pfdr_cond_min = float(pfdr_cond_min)

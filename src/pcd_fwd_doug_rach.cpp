@@ -31,7 +31,7 @@ TPL PFDR::Pfdr(var_index_t size, index_t aux_size, const var_index_t* aux_idx,
         gashape(gashape), wshape(wshape)
 {
     set_name("Preconditioned forward-Douglas-Rachford algorithm");
-    rho = ONE;
+    rho = 1.5;
     L = Lmut = nullptr;
     l = ZERO; lshape = SCALAR;
     lipschcomput = EACH;

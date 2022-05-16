@@ -7,7 +7,7 @@
  *      edge_weights [1.0], Yl1 [none], l1_weights [0.0], low_bnd [-Inf],
  *      upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
  *      pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
- *      pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
+ *      pfdr_dif_tol [1e-2*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
  *      max_num_threads [none], balance_parallel_split [true],
  *      Gram_if_square [true]
  * 
@@ -210,7 +210,7 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     real_t GET_SCAL_OPT(pfdr_rho, 1.0);
     real_t GET_SCAL_OPT(pfdr_cond_min, 1e-2);
     real_t GET_SCAL_OPT(pfdr_dif_rcd, 0.0);
-    real_t GET_SCAL_OPT(pfdr_dif_tol, 1e-3*cp_dif_tol);
+    real_t GET_SCAL_OPT(pfdr_dif_tol, 1e-2*cp_dif_tol);
     int GET_SCAL_OPT(pfdr_it_max, 1e4);
     int GET_SCAL_OPT(verbose, 1e3);
     int GET_SCAL_OPT(max_num_threads, 0);

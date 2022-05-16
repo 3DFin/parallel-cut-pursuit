@@ -72,7 +72,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 % options - structure with any of the following fields [with default values]:
 %     edge_weights [1.0], loss_weights [none], d1_coor_weights [none],
 %     cp_dif_tol [1e-3], cp_it_max [10], pfdr_rho [1.0], pfdr_cond_min [1e-2],
-%     pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-3*cp_dif_tol], pfdr_it_max [1e4],
+%     pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-2*cp_dif_tol], pfdr_it_max [1e4],
 %     verbose [1e2], max_num_threads [none], balance_parallel_split [true]
 % edge_weights - (real) array of length E, or scalar for homogeneous weights
 % loss_weights - weights on vertices; (real) array of length V
@@ -97,7 +97,7 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %     away from solution, and give bad subproblem solutions
 % pfdr_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (in l1 norm) is less than dif_tol;
-%     1e-3*cp_dif_tol is a conservative value
+%     1e-2*cp_dif_tol is a conservative value
 % pfdr_it_max - maximum number of iterations;
 %     1e4 iterations provides enough precision for most subproblems
 % max_num_threads - if greater than zero, set the maximum number of threads

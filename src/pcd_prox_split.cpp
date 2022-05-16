@@ -20,9 +20,10 @@ TPL PCD_PROX::Pcd_prox(index_t size) : size(size)
     name = "Preconditioned proximal splitting algorithm";
     objective_values = iterate_evolution = nullptr;
     cond_min = 1e-2;
-    dif_rcd = 1e-4;
-    dif_tol = 1e-5;
-    it_max = 1e4;
+    dif_rcd = 1e-3;
+    dif_tol = 1e-4;
+    dif_it = 32;
+    it_max = 1e3;
     verbose = 1e2;
     eps = numeric_limits<real_t>::epsilon();
     X = nullptr;
@@ -46,10 +47,15 @@ TPL void PCD_PROX::set_conditioning_param(real_t cond_min, real_t dif_rcd)
     this->dif_rcd = dif_rcd;
 }
 
-TPL void PCD_PROX::set_algo_param(real_t dif_tol, int it_max, int verbose,
-    real_t eps)
+TPL void PCD_PROX::set_algo_param(real_t dif_tol, int dif_it, int it_max,
+    int verbose, real_t eps)
 {
+    if (dif_it == 0 && dif_tol > 0.0){ /* roughly sqrt(it_max) */
+        dif_it = 1;
+        while (dif_it*dif_it < it_max){ dif_it *= 2; }
+    }
     this->dif_tol = dif_tol;
+    this->dif_it = dif_it;
     this->it_max = it_max;
     this->verbose = verbose;
     this->eps = eps;
@@ -73,7 +79,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
     int it = 0;
     real_t dif = (dif_tol > ONE) ? dif_tol : ONE;
     if (dif_rcd > dif){ dif = dif_rcd; }
-    int it_verb;
+    int it_verb, it_dif;
 
     if (verbose){
         cout << name << ":" << endl;
@@ -89,6 +95,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
     if (dif_tol > ZERO || dif_rcd > ZERO || iterate_evolution){
         last_X = (real_t*) malloc_check(sizeof(real_t)*size);
         for (index_t i = 0; i < size; i++){ last_X[i] = X[i]; }
+        it_dif = 0;
     }
 
     while (it < it_max && dif >= dif_tol){
@@ -110,15 +117,17 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
 
         main_iteration();
 
-        if (dif_tol > ZERO || dif_rcd || iterate_evolution){
+        it++; it_verb++; it_dif++;
+
+        if (iterate_evolution ||
+            ((dif_tol > ZERO || dif_rcd > ZERO) && it_dif == dif_it)){
             dif = compute_evolution();
             if (iterate_evolution){ iterate_evolution[it] = dif; }
+            it_dif = 0;
         }
 
-        it++; it_verb++;
-
         if (objective_values){ objective_values[it] = compute_objective(); }
-        
+
     }
     
     if (verbose){ print_progress(it, dif); cout << endl; }
