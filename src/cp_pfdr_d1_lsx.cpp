@@ -34,7 +34,7 @@ TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
     loss_weights = nullptr;
 
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
-    pfdr_dif_tol = 1e-3*dif_tol; pfdr_it = pfdr_it_max = 1e4;
+    pfdr_dif_tol = 1e-2*dif_tol; pfdr_it = pfdr_it_max = 1e4;
 
     /* with a separable loss, components are only coupled by total variation
      * and it makes sense to consider nonevolving components as saturated */

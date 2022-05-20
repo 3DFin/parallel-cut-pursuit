@@ -260,4 +260,4 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
             loss_weights, d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho,
             pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
             max_num_threads, balance_parallel_split, real_t == "float64",
-            compute_Obj, compute_Time, compute_Dif) 
+            compute_Obj, compute_Time, compute_Dif)

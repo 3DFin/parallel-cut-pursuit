@@ -23,7 +23,7 @@ TPL CP_PROX_TV::Cp_prox_tv(index_t V, index_t E, const index_t* first_edge,
     Y = Gd1 = nullptr;
 
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
-    pfdr_dif_tol = 1e-3*dif_tol; pfdr_it = pfdr_it_max = 1e4;
+    pfdr_dif_tol = 1e-2*dif_tol; pfdr_it = pfdr_it_max = 1e4;
 
     /* it makes sense to consider nonevolving components as saturated */
     monitor_evolution = true;

@@ -79,7 +79,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     pfdr_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (in Euclidean norm) is less than dif_tol
         1e-2*cp_dif_tol is a conservative value
-    pfdr_it_max - maximum number of iterations 1e4 iterations provides enough
+    pfdr_it_max - maximum number of iterations; 1e4 iterations provides enough
         precision for most subproblems
     verbose - if nonzero, display information on the progress, every 'verbose'
         PFDR iterations
