@@ -1,7 +1,7 @@
-function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
+function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
     first_edge, adj_vertices, options)
 %
-%        [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y,
+%        [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y,
 %   first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d1 (total variation) penalization, with a
@@ -112,13 +112,12 @@ function [Comp, rX, cp_it, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 % Comp - assignement of each vertex to a component, (uint16) array of length V
 % rX - values of each component of the minimizer, (real) array of length rV;
 %     the actual minimizer can be reconstructed with X = rX(Comp + 1)
-% cp_it - actual number of cut-pursuit iterations performed
 % Obj  - the values of the objective functional along iterations;
-%     array of length cp_it + 1
+%     array of length number of iterations performed + 1
 % Time - if requested, the elapsed time along iterations;
-%     array of length cp_it + 1
+%     array of length number of iterations performed + 1
 % Dif  - if requested, the iterate evolution along iterations;
-%     array of length cp_it
+%     array of length number of iterations performed
 % 
 % Parallel implementation with OpenMP API.
 %

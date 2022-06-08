@@ -149,10 +149,19 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
         free(Dif);
     }
 
-    /* get number of components and their lists of indices if necessary */
+    /* get number of components and list of indices */
     index_t *first_vertex, *comp_list;
     comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
 
+    /* copy reduced values */
+    real_t* cp_rX = cp->get_reduced_values();
+    npy_intp size_py_rX[] = {rV};
+    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(1, size_py_rX,
+        PyArray_DescrFromType(NPY_REAL), 1);
+    real_t* rX = (real_t*) PyArray_DATA(py_rX);
+    for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
+
+    /* copy list of indices if requested */
     PyObject* py_List = nullptr;
     if (compute_List){
         py_List = PyList_New(rV); // list of arrays
@@ -168,14 +177,6 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
             PyList_SetItem(py_List, rv, (PyObject*) py_List_rv);
         }
     }
-
-    /* copy reduced values */
-    real_t* cp_rX = cp->get_reduced_values();
-    npy_intp size_py_rX[] = {rV};
-    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(1, size_py_rX,
-        PyArray_DescrFromType(NPY_REAL), 1);
-    real_t* rX = (real_t*) PyArray_DATA(py_rX);
-    for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
 
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
