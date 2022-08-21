@@ -97,11 +97,14 @@ public:
      * 1) if not explicitely set by the user, memory pointed by these members
      * is allocated using malloc(), and thus should be deleted with free()
      * 2) they are free()'d by destructor, unless set to null beforehand */
-    comp_t get_components(comp_t** comp_assign = nullptr,
-        index_t** first_vertex = nullptr, index_t** comp_list = nullptr);
 
-    index_t get_reduced_graph(comp_t** reduced_edges = nullptr,
-        real_t** reduced_edge_weights = nullptr);
+    comp_t get_components(const comp_t** comp_assign = nullptr,
+        const index_t** first_vertex = nullptr,
+        const index_t** comp_list = nullptr);
+
+    /* return the number of reduced edges */
+    index_t get_reduced_graph(const comp_t** reduced_edges = nullptr,
+        const real_t** reduced_edge_weights = nullptr);
 
     /* retrieve the reduced iterate (values of the components);
      * WARNING: reduced values are free()'d by destructor */
@@ -160,8 +163,12 @@ protected:
     /* components saturation */
     bool* is_saturated;
     comp_t saturated_comp; // number of saturated components
-    /* reduced connectivity */
-    comp_t* reduced_edges; // array with pair of vertices
+    /* reduced connectivity
+     * reduced edges represented with edges list (array of size twice the 
+     * number of reduced edges, consecutive indices are linked components)
+     * guaranteed to be in increasing order of starting components (eases
+     * conversion to forward-star representation) */
+    comp_t* reduced_edges;
     real_t* reduced_edge_weights;
 
     /**  parameters  **/
@@ -342,6 +349,8 @@ private:
     void compute_connected_components();
 
     /* allocate and compute reduced graph structure; 
+     * NOTA: guarantees that the reduced edges are listed in increasing order
+     * of starting components (eases conversion to forward-star representation)
      * NOTA: parallel separation edges contribute to infinite reduced edge
      * weights, so that they will be removed during merge step */
     void compute_reduced_graph();

@@ -12,16 +12,17 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
                    cp_it_max=10, pfdr_rho=1., pfdr_cond_min=1e-2, 
                    pfdr_dif_rcd=0., pfdr_dif_tol=None, pfdr_it_max=int(1e4),
                    verbose=int(1e2), max_num_threads=0, 
-                   balance_parallel_split=True, compute_Obj=False, 
+                   balance_parallel_split=True, compute_List=False,
+                   compute_Graph=False, compute_Obj=False, 
                    compute_Time=False, compute_Dif=False):
     """
-    Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_lsx(loss, Y, first_edge,
-            adj_vertices, edge_weights=None, loss_weights=None,
-            d1_coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10, pfdr_rho=1.0,
-            pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0, pfdr_dif_tol=1e-2*cp_dif_tol,
-            pfdr_it_max=1e4, verbose=1e2, max_num_threads=0,
-            balance_parallel_split=True, compute_Obj=False, compute_Time=False,
-            compute_Dif=False)
+    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_pfdr_d1_lsx(loss, Y,
+        first_edge, adj_vertices, edge_weights=None, loss_weights=None,
+        d1_coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10, pfdr_rho=1.0,
+        pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0, pfdr_dif_tol=1e-2*cp_dif_tol,
+        pfdr_it_max=1e4, verbose=1e2, max_num_threads=0,
+        balance_parallel_split=True, compute_List=False, compute_Graph=False,
+        compute_Obj=False, compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d1 (total variation) penalization, with a 
     separable loss term and simplex constraints:
@@ -65,7 +66,7 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     hence this loss is actually equivalent to cross-entropy.
 
     INPUTS: real numeric type is either float32 or float64, not both;
-            indices numeric type is uint32.
+            indices numeric type can be int32 or uint32.
 
     NOTA: by default, components are identified using uint16 identifiers; 
     this can be easily changed in the wrapper source if more than 65535
@@ -88,10 +89,10 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting from 
             the vertex (or, if there are none, starting from the next vertex);
-            (uint32) array of length V + 1, the last value is the total number
-            of edges;
-        for each edge, 'adj_vertices' indicates its ending vertex, (uint32)
-            array of length E
+            (int 32 or uint32) array of length V + 1, the last value is the
+            total number of edges;
+        for each edge, 'adj_vertices' indicates its ending vertex, (int32 or
+            uint32) array of length E
     edge_weights - (real) array of length E or scalar for homogeneous weights
     loss_weights - weights on vertices; (real) array of length V or empty for
         no weights
@@ -124,17 +125,26 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
-    compute_Obj  - compute the objective functional along iterations 
-    compute_Time - monitor elapsing time along iterations
-    compute_Dif  - compute relative evolution along iterations 
+    compute_List  - report the list of vertices constituting each component
+    compute_Graph - get the reduced graph on the components
+    compute_Obj   - compute the objective functional along iterations 
+    compute_Time  - monitor elapsing time along iterations
+    compute_Dif   - compute relative evolution along iterations 
 
-    OUTPUTS: Obj, Time, Dif are optional, set parameters compute_Obj,
-        compute_Time, compute_Dif to True to request them
+    OUTPUTS: List, Graph, Obj, Time and Dif are optional, set parameters
+        compute_List, compute_Graph, compute_Obj, compute_Time, or
+        compute_Dif to True to request them and capture them in output
+        variables in that order
 
     Comp - assignement of each vertex to a component, (uint16) array of
         length V
-    rX - values of each component of the minimizer, (real) array of length rV;
-        the actual minimizer is then reconstructed as X = rX[Comp];
+    rX  - values of each component of the minimizer, (real) array of size
+        D-by-rV; the actual minimizer is then reconstructed as X = rX[:, Comp];
+    List - if requested, list of vertices constituting each component; python
+        list of length rV, containing (uint32) arrays of indices
+    Graph - if requested, reduced graph structure; python tuple of length 3
+        representing the graph as forward-star (see input first_edge and
+        adj_vertices) together with edge weights
     Obj - if requested, values of the objective functional along iterations;
         array of length actual number of cut-pursuit iterations performed + 1
     Time - if requested, the elapsed time along iterations; array of length
@@ -171,13 +181,15 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be a "
                         "numpy array.")
 
-    if type(first_edge) != np.ndarray or first_edge.dtype != "uint32":
+    if (type(first_edge) != np.ndarray
+        or first_edge.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit d1 loss simplex: argument 'first_edge' "
-                        "must be a numpy array of type uint32.")
+                        "must be a numpy array of type int32 or uint32.")
 
-    if type(adj_vertices) != np.ndarray or adj_vertices.dtype != "uint32":
+    if (type(adj_vertices) != np.ndarray
+        or adj_vertices.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit d1 loss simplex: argument 'adj_vertices' "
-                        "must be a numpy array of type uint32.")
+                        "must be a numpy array of type int32 or uint32.")
 
     if type(edge_weights) != np.ndarray:
         if type(edge_weights) == list:
@@ -200,8 +212,7 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     if type(d1_coor_weights) != np.ndarray:
         if type(d1_coor_weights) == list:
             raise TypeError("Cut-pursuit d1 loss simplex: argument "
-                            "'d1_coor_weights' must be a scalar or a numpy "
-                            "array.")
+                "'d1_coor_weights' must be a scalar or a numpy array.")
         elif d1_coor_weights != None:
             d1_coor_weights = np.array([d1_coor_weights], dtype=real_t)
         else:
@@ -244,13 +255,12 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
     verbose = int(verbose)
     max_num_threads = int(max_num_threads)
 
-    # Check type of all booleen arguments (AtA_if_square, compute_Obj, 
-    # compute_Time, compute_Dif)
+    # Check type of all booleen arguments
     for name, b_args in zip(
-        ["balance_parallel_split", "compute_Obj", "compute_Time", 
-         "compute_Dif"],
-        [ balance_parallel_split ,  compute_Obj ,  compute_Time , 
-          compute_Dif ]):
+        ["balance_parallel_split", "compute_List", "compute_Graph",
+         "compute_Obj", "compute_Time", "compute_Dif"],
+        [ balance_parallel_split ,  compute_List ,  compute_Graph ,
+          compute_Obj ,  compute_Time ,  compute_Dif ]):
         if type(b_args) != bool:
             raise TypeError("Cut-pursuit d1 loss simplex: argument '{0}' must "
                             "be boolean".format(name))
@@ -260,4 +270,5 @@ def cp_pfdr_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
             loss_weights, d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho,
             pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
             max_num_threads, balance_parallel_split, real_t == "float64",
-            compute_Obj, compute_Time, compute_Dif)
+            compute_List, compute_Graph, compute_Obj, compute_Time,
+            compute_Dif)

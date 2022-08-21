@@ -17,6 +17,7 @@ print_results = false;
 image_file = '../data/SheppLogan_phantom.png'
 noise_level = .2
 la_tv = 1.5*noise_level
+la_tv = 100;
 
 %%%  initialize data  %%%
 fprintf('load image and apply transformation... ');
@@ -48,8 +49,7 @@ end
 %%%  solve the optimization problem  %%%
 tic;
 options.edge_weights = edge_weights;
-options.max_num_threads = 1;
-% [Comp, rX] = cp_pfdr_d1_ql1b_mex(y, 1, first_edge, adj_vertices, options);
+options.max_num_threads = 0;
 [Comp, rX] = cp_prox_tv_mex(y, first_edge, adj_vertices, options);
 time = toc;
 x = reshape(rX(Comp + 1), size(x0)); % rX is components values, Comp is components assignment

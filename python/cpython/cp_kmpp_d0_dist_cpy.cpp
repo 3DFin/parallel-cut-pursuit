@@ -1,12 +1,12 @@
 /*=============================================================================
- * Comp, rX, [List, Obj, Time, Dif] = cp_kmpp_d0_dist_cpy(loss, Y, first_edge,
- *          adj_vertices, edge_weights, vert_weights, coor_weights, cp_dif_tol,
- *          cp_it_max, K, split_iter_num, split_damp_ratio, kmpp_init_num,
- *          kmpp_iter_num, min_comp_weight, verbose, max_num_threads,
- *          balance_parallel_split, real_is_double, compute_List, compute_Obj,
- *          compute_Time, compute_Dif)
+ * Comp, rX, [List, Graph, Obj, Time, Dif] = cp_kmpp_d0_dist_cpy(loss, Y,
+ *  first_edge, adj_vertices, edge_weights, vert_weights, coor_weights,
+ *  cp_dif_tol, cp_it_max, K, split_iter_num, split_damp_ratio, kmpp_init_num,
+ *  kmpp_iter_num, min_comp_weight, verbose, max_num_threads,
+ *  balance_parallel_split, real_is_double, compute_List, compute_Graph,
+ *  compute_Obj, compute_Time, compute_Dif)
  * 
- *  Baudoin Camille 2019, Raguet Hugo 2021
+ *  Baudoin Camille 2019, Raguet Hugo 2021, 2022
  *===========================================================================*/
 #include <cstdint>
 #define PY_SSIZE_T_CLEAN
@@ -52,7 +52,7 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
     int K, int split_iter_num, real_t split_damp_ratio, int kmpp_init_num,
     int kmpp_iter_num, real_t min_comp_weight, int verbose,
     int max_num_threads, int balance_parallel_split, int compute_List,
-    int compute_Obj, int compute_Time, int compute_Dif)
+    int compute_Graph, int compute_Obj, int compute_Time, int compute_Dif)
 {
     /**  get inputs  **/
 
@@ -119,6 +119,85 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
 
     int cp_it = cp->cut_pursuit();
 
+    /* get number of components and their lists of indices if necessary */
+    const index_t* first_vertex;
+    const index_t* comp_list;
+    comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
+
+    PyObject* py_List = nullptr;
+    if (compute_List){
+        py_List = PyList_New(rV); // list of arrays
+        for (comp_t rv = 0; rv < rV; rv++){
+            index_t comp_size = first_vertex[rv+1] - first_vertex[rv];
+            npy_intp size_py_List_rv[] = {comp_size};
+            PyArrayObject* py_List_rv = (PyArrayObject*) PyArray_Zeros(1,
+                size_py_List_rv, PyArray_DescrFromType(NPY_IND), 1);
+            index_t* List_rv = (index_t*) PyArray_DATA(py_List_rv);
+            for (index_t i = 0; i < comp_size; i++){
+                List_rv[i] = comp_list[first_vertex[rv] + i];
+            }
+            PyList_SetItem(py_List, rv, (PyObject*) py_List_rv);
+        }
+    }
+
+    /* copy reduced values */
+    real_t* cp_rX = cp->get_reduced_values();
+    npy_intp size_py_rX[] = {(npy_intp/* suppress warning*/) D, rV};
+    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
+        PyArray_DescrFromType(NPY_REAL), 1);
+    real_t* rX = (real_t*) PyArray_DATA(py_rX);
+    for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
+
+    /* retrieve reduced graph structure */
+    PyObject* py_Graph = nullptr;
+    if (compute_Graph){
+        const comp_t* reduced_edge_list;
+        const real_t* reduced_edge_weights;
+        size_t rE;
+        /* get reduced edge list */
+        rE = cp->get_reduced_graph(&reduced_edge_list, &reduced_edge_weights);
+
+        /* numpy arrays for forward-star representation and weights */
+        npy_intp size_py_red_first_edge[] = {rV + 1};
+        PyArrayObject* py_red_first_edge = (PyArrayObject*)
+            PyArray_Zeros(1, size_py_red_first_edge,
+                PyArray_DescrFromType(NPY_IND), 1);
+        index_t* red_first_edge = (index_t*) PyArray_DATA(py_red_first_edge);
+
+        npy_intp size_py_red_adj_vertices[] = {(npy_intp/* supp. warning*/)rE};
+        PyArrayObject* py_red_adj_vertices = (PyArrayObject*)
+            PyArray_Zeros(1, size_py_red_adj_vertices,
+                PyArray_DescrFromType(NPY_COMP), 1);
+        comp_t* red_adj_vertices = (comp_t*) PyArray_DATA(py_red_adj_vertices);
+
+        npy_intp size_py_red_edge_weights[] = {(npy_intp/* supp. warning*/)rE};
+        PyArrayObject* py_red_edge_weights = (PyArrayObject*)
+            PyArray_Zeros(1, size_py_red_edge_weights,
+                PyArray_DescrFromType(NPY_REAL), 1);
+        real_t* red_edge_weights = (real_t*) PyArray_DATA(py_red_edge_weights);
+
+        /* reduced edge list is guaranteed to be in increasing order of
+         * starting component; conversion to forward-star is straightforward */
+        comp_t rv = 0;
+        size_t re = 0;
+        while (re < rE || rv < rV){
+            red_first_edge[rv] = re;
+            while (re < rE && reduced_edge_list[2*re] == rv){
+                red_adj_vertices[re] = reduced_edge_list[2*re + 1];
+                red_edge_weights[re] = reduced_edge_weights[re];
+                re++;
+            }
+            rv++;
+        }
+        red_first_edge[rV] = rE;
+
+        /* gather forward-star representation and weights in python tuple */
+        py_Graph = PyTuple_New(3);
+        PyTuple_SET_ITEM(py_Graph, 0, (PyObject*) py_red_first_edge);
+        PyTuple_SET_ITEM(py_Graph, 1, (PyObject*) py_red_adj_vertices);
+        PyTuple_SET_ITEM(py_Graph, 2, (PyObject*) py_red_edge_weights);
+    }
+
     /* retrieve monitoring arrays */
     PyArrayObject* py_Obj = nullptr;
     if (compute_Obj){
@@ -149,77 +228,30 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
         for (int i = 0; i < size_py_Dif[0]; i++){ Dif_[i] = Dif[i]; }
         free(Dif);
     }
-
-    /* get number of components and their lists of indices if necessary */
-    index_t *first_vertex, *comp_list;
-    comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
-
-    PyObject* py_List = nullptr;
-    if (compute_List){
-        py_List = PyList_New(rV); // list of arrays
-        for (comp_t rv = 0; rv < rV; rv++){
-            index_t comp_size = first_vertex[rv+1] - first_vertex[rv];
-            npy_intp size_py_List_rv[] = {comp_size};
-            PyArrayObject* py_List_rv = (PyArrayObject*) PyArray_Zeros(1,
-                size_py_List_rv, PyArray_DescrFromType(NPY_IND), 1);
-            index_t* List_rv = (index_t*) PyArray_DATA(py_List_rv);
-            for (index_t i = 0; i < comp_size; i++){
-                List_rv[i] = comp_list[first_vertex[rv] + i];
-            }
-            PyList_SetItem(py_List, rv, (PyObject*) py_List_rv);
-        }
-    }
-
-    /* copy reduced values */
-    real_t* cp_rX = cp->get_reduced_values();
-    npy_intp size_py_rX[] = {(npy_intp) D, rV};
-    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
-        PyArray_DescrFromType(NPY_REAL), 1);
-    real_t* rX = (real_t*) PyArray_DATA(py_rX);
-    for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
     
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
 
     /* build output according to optional output specified */
-    if (compute_List && compute_Obj && compute_Time && compute_Dif){
-        return Py_BuildValue("OOOOOO", py_Comp, py_rX, py_List, py_Obj,
-            py_Time, py_Dif);
-    }else if (compute_List && compute_Obj && compute_Time){
-        return Py_BuildValue("OOOOO", py_Comp, py_rX, py_List, py_Obj,
-            py_Time);
-    }else if (compute_List && compute_Obj && compute_Dif){
-        return Py_BuildValue("OOOOO", py_Comp, py_rX, py_List, py_Obj, py_Dif);
-    }else if (compute_List && compute_Time && compute_Dif){
-        return Py_BuildValue("OOOOO", py_Comp, py_rX, py_List, py_Time,
-            py_Dif);
-    }else if (compute_Obj && compute_Time && compute_Dif){
-        return Py_BuildValue("OOOOO", py_Comp, py_rX, py_Obj, py_Time,
-            py_Dif);
-    }else if (compute_List && compute_Obj){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_List);
-    }else if (compute_List && compute_Time){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_List, py_Time);
-    }else if (compute_List && compute_Dif){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_List, py_Dif);
-    }else if (compute_Obj && compute_Time){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Time);
-    }else if (compute_Obj && compute_Dif){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Dif);
-    }else if (compute_Time && compute_Dif){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Time, py_Dif);
-    }else if (compute_List){
-        return Py_BuildValue("OOO", py_Comp, py_rX, py_List);
-    }else if (compute_Obj){
-        return Py_BuildValue("OOO", py_Comp, py_rX, py_Obj);
-    }else if (compute_Time){
-        return Py_BuildValue("OOO", py_Comp, py_rX, py_Time);
-    }else if (compute_Dif){
-        return Py_BuildValue("OOO", py_Comp, py_rX, py_Dif);
-    }else{
-        return Py_BuildValue("OO", py_Comp, py_rX);
-    }
+    Py_ssize_t nout = 2;
+    if (compute_List){ nout++; }
+    if (compute_Graph){ nout++; }
+    if (compute_Obj){ nout++; }
+    if (compute_Time){ nout++; }
+    if (compute_Dif){ nout++; }
+    PyObject* py_Out = PyTuple_New(nout);
+    PyTuple_SET_ITEM(py_Out, 0, (PyObject*) py_Comp);
+    PyTuple_SET_ITEM(py_Out, 1, (PyObject*) py_rX);
+    nout = 2;
+    if (compute_List){ PyTuple_SET_ITEM(py_Out, nout++, py_List); }
+    if (compute_Graph){ PyTuple_SET_ITEM(py_Out, nout++, py_Graph); }
+    if (compute_Obj){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Obj); }
+    if (compute_Time){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Time); }
+    if (compute_Dif){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Dif); }
+
+    return py_Out;
 }
+
 /* actual interface */
 #if PY_VERSION_HEX >= 0x03040000 // Py_UNUSED suppress warning from 3.4
 static PyObject* cp_kmpp_d0_dist_cpy(PyObject* Py_UNUSED(self), PyObject* args)
@@ -234,15 +266,16 @@ static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
     double loss, cp_dif_tol, split_damp_ratio, min_comp_weight;
     int cp_it_max, K, split_iter_num, kmpp_init_num, kmpp_iter_num, verbose, 
         max_num_threads, balance_parallel_split, real_is_double, compute_List,
-        compute_Obj, compute_Time, compute_Dif;
+        compute_Graph, compute_Obj, compute_Time, compute_Dif;
 
     /* parse the input, from Python Object to C PyArray, double, or int type */
-    if(!PyArg_ParseTuple(args, "dOOOOOOdiiidiidiiiiiiii", &loss, &py_Y,
+    if(!PyArg_ParseTuple(args, "dOOOOOOdiiidiidiiiiiiiii", &loss, &py_Y,
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_vert_weights,
         &py_coor_weights, &cp_dif_tol, &cp_it_max, &K, &split_iter_num, 
         &split_damp_ratio, &kmpp_init_num, &kmpp_iter_num, &min_comp_weight,
         &verbose, &max_num_threads, &balance_parallel_split, &real_is_double,
-        &compute_List, &compute_Obj, &compute_Time, &compute_Dif)){
+        &compute_List, &compute_Graph, &compute_Obj, &compute_Time,
+        &compute_Dif)){
         return NULL;
     }
 
@@ -251,15 +284,15 @@ static PyObject* cp_kmpp_d0_dist_cpy(PyObject* self, PyObject* args)
             py_adj_vertices, py_edge_weights, py_vert_weights, py_coor_weights,
             cp_dif_tol, cp_it_max, K, split_iter_num, split_damp_ratio,
             kmpp_init_num, kmpp_iter_num, min_comp_weight, verbose,
-            max_num_threads, balance_parallel_split, compute_List, compute_Obj,
-            compute_Time, compute_Dif);
+            max_num_threads, balance_parallel_split, compute_List,
+            compute_Graph,  compute_Obj, compute_Time, compute_Dif);
     }else{ /* real_t type is float */
         return cp_kmpp_d0_dist<float, NPY_FLOAT32>(loss, py_Y, py_first_edge,
             py_adj_vertices, py_edge_weights, py_vert_weights, py_coor_weights,
             cp_dif_tol, cp_it_max, K, split_iter_num, split_damp_ratio,
             kmpp_init_num, kmpp_iter_num, min_comp_weight, verbose,
             max_num_threads, balance_parallel_split, compute_List,
-            compute_Obj, compute_Time, compute_Dif);
+            compute_Graph, compute_Obj, compute_Time, compute_Dif);
     }
 }
 

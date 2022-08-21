@@ -12,10 +12,10 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
                pfdr_cond_min=1e-2, pfdr_dif_rcd=0., pfdr_dif_tol=None, 
                pfdr_it_max=int(1e4), verbose=int(1e3), max_num_threads=0,
                balance_parallel_split=True, compute_List=False,
-               compute_Subgrads=False, compute_Obj=False, compute_Time=False,
-               compute_Dif=False):
+               compute_Subgrads=False, compute_Graph, compute_Obj=False,
+               compute_Time=False, compute_Dif=False):
     """
-    Comp, rX, [List, Gtv, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
+    Comp, rX, [List, Gtv, Graph, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
             adj_vertices, edge_weights=1.0, cp_dif_tol=1e-4, cp_it_max=10,
             pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
             pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=int(1e4),
@@ -37,7 +37,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     splitting algorithm.
 
     INPUTS: real numeric type is either float32 or float64, not both;
-            indices numeric type is uint32.
+            indices numeric type can be int32 or uint32.
 
     NOTA: by default, components are identified using uint16 identifiers; 
     this can be easily changed in the wrapper source if more than 65535
@@ -56,10 +56,10 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting 
             from the vertex (or, if there are none, starting from the next 
-            vertex); (uint32) array of length V + 1, the last value is the
-            total number of edges;
-        for each edge, 'adj_vertices' indicates its ending vertex, (uint32)
-            array of length E
+            vertex); (int32 or uint32) array of length V + 1, the last value
+            is the total number of edges;
+        for each edge, 'adj_vertices' indicates its ending vertex, (int32 or
+            uint32) array of length E
     edge_weights - (real) array of length E or a scalar for homogeneous weights
     cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (in Euclidean norm) is less than dif_tol;
@@ -89,14 +89,15 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
         is balanced; WARNING: this might trade off speed against optimality
     compute_List - report the list of vertices constituting each component
     compute_Subgrads - compute the total variation subgradients
+    compute_Graph - get the reduced graph on the components
     compute_Obj - compute the objective functional along iterations 
     compute_Time - monitor elapsing time along iterations
     compute_Dif - compute relative evolution along iterations 
 
-    OUTPUTS: List, Gtv, Obj, Time and Dif are optional, set parameters
-        compute_List, compute_Subgrads, compute_Obj, compute_Time or
-        compute_Dif to True to request them and capture them in output
-        variables in that order
+    OUTPUTS: List, Gtv, Graph, Obj, Time and Dif are optional, set parameters
+        compute_List, compute_Subgrads, compute_Graph, compute_Obj,
+        compute_Time or compute_Dif to True to request them and capture them in
+        output variables in that order
 
     Comp - assignement of each vertex to a component, (uint16) array of
         length V
@@ -107,6 +108,9 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     Gtv - subgradients of the total variation penalization at solution; (real)
         array of length E; if e is the edge (u, v), the subgradient of the
         total variation penalization at vertices (u, v) is (-Gd1[e], Gd1[e])
+    Graph - if requested, reduced graph structure; python tuple of length 3
+        representing the graph as forward-star (see input first_edge and
+        adj_vertices) together with edge weights
     Obj - if requested, the values of the objective functional along
         iterations, up to the constant 1/2||Y||^2;
         array of length the actual number of iterations performed + 1;
@@ -121,7 +125,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     Piecewise Constant Functions on General Weighted Graphs, SIIMS, 10, 4,
     1724–1766, 2017.
  
-    Hugo Raguet 2021
+    Hugo Raguet 2021, 2022
     """
 
     # Check numpy arrays: Y, first_edge, adj_vertices, edge_weights, and
@@ -136,13 +140,15 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit prox TV: currently, the real numeric type"
                         " must be float32 or float64.")
 
-    if type(first_edge) != np.ndarray or first_edge.dtype != "uint32":
+    if (type(first_edge) != np.ndarray
+        or first_edge.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit prox TV: argument 'first_edge' must be a "
-                        "numpy array of type uint32.")
+                        "numpy array of type int32 or uint32.")
 
-    if type(adj_vertices) != np.ndarray or adj_vertices.dtype != "uint32":
+    if (type(adj_vertices) != np.ndarray
+        or adj_vertices.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit prox TV: argument 'adj_vertices' must be "
-                        "a numpy array of type uint32.")
+                        "a numpy array of type int32 or uint32.")
 
     if type(edge_weights) != np.ndarray:
         if type(edge_weights) == list:
@@ -191,9 +197,9 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     # compute_List, compute_Subgrads, compute_Obj, compute_Time, compute_Dif)
     for name, b_args in zip(
             ["balance_parallel_split", "compute_List", "compute_Subgrads",
-             "compute_Obj", "compute_Time", "compute_Dif"],
+             "compute_Graph", "compute_Obj", "compute_Time", "compute_Dif"],
             [ balance_parallel_split ,  compute_List ,  compute_Subgrads ,
-              compute_Obj ,  compute_Time ,  compute_Dif ]):
+              compute_Graph ,  compute_Obj ,  compute_Time ,  compute_Dif ]):
         if type(b_args) != bool:
             raise TypeError("Cut-pursuit prox TV: argument '{0}' must be "
                             "boolean".format(name))
@@ -203,4 +209,5 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
             cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
             pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
             balance_parallel_split, real_t == "float64", compute_List,
-            compute_Subgrads, compute_Obj, compute_Time, compute_Dif) 
+            compute_Subgrads, compute_Graph, compute_Obj, compute_Time,
+            compute_Dif) 

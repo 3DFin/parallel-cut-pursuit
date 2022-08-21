@@ -303,7 +303,7 @@ TPL comp_t CP_D0::compute_merge_chains()
 
     comp_t last_merge_root = MERGE_INIT;
 
-    while (true){
+    while (true){ /* merge iteratively as long as gain is positive */
  
         /**  update merge information in parallel  **/
         int num_par_thrds = last_merge_root == MERGE_INIT ?

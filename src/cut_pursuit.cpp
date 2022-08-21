@@ -126,8 +126,8 @@ TPL void CP::set_parallel_param(int max_num_threads, bool balance_par_split)
         && compute_num_threads(split_complexity()) > 1;
 }
 
-TPL comp_t CP::get_components(comp_t** comp_assign, index_t** first_vertex,
-    index_t** comp_list)
+TPL comp_t CP::get_components(const comp_t** comp_assign,
+    const index_t** first_vertex, const index_t** comp_list)
 {
     if (comp_assign){ *comp_assign = this->comp_assign; }
     if (first_vertex){ *first_vertex = this->first_vertex; }
@@ -135,8 +135,8 @@ TPL comp_t CP::get_components(comp_t** comp_assign, index_t** first_vertex,
     return this->rV;
 }
 
-TPL index_t CP::get_reduced_graph(comp_t** reduced_edges,
-    real_t** reduced_edge_weights)
+TPL index_t CP::get_reduced_graph(const comp_t** reduced_edges,
+    const real_t** reduced_edge_weights)
 {
     
     if (reduced_edges){
@@ -510,7 +510,9 @@ TPL void CP::compute_reduced_graph()
     index_t* is_isolated = reduced_edge_to;
     for (comp_t rv = 0; rv < rV; rv++){ is_isolated[rv] = ISOLATED; }
 
-    /**  get all active (cut) edges linking a component to another  **/
+    /**  get all active (cut) edges linking a component to another
+     **  store in (redundant) forward-star representation
+     **  (first_active_edge, adj_components)                        **/
     index_t* first_active_edge = (index_t*)
         malloc_check(sizeof(index_t)*(rV + ONE));
     /* count the number of such edges for each component (ind shift by one) */
@@ -550,10 +552,10 @@ TPL void CP::compute_reduced_graph()
                 index_t ae = NO_EDGE;
                 if (ru < rv){ // count only undirected edges
                     ae = first_active_edge[ru]++;
-                    adj_components[ae] = rv; 
+                    adj_components[ae] = rv;
                 }else if (rv < ru){
                     ae = first_active_edge[rv]++;
-                    adj_components[ae] = ru; 
+                    adj_components[ae] = ru;
                 }
                 if (active_edge_weights && ae != NO_EDGE){
                     /* infinite weights to parallel separation ensure merge */
@@ -574,6 +576,8 @@ TPL void CP::compute_reduced_graph()
 
     reduced_edges = (comp_t*) malloc_check(sizeof(comp_t)*2*bufsize);
     reduced_edge_weights = (real_t*) malloc_check(sizeof(real_t)*bufsize);
+
+    /**  convert to (nonredundant) edge list representation with weights  **/
 
     rE = 0; // current number of reduced edges
     index_t last_rE = 0; // keep track of number of processed edges
@@ -662,7 +666,7 @@ TPL void CP::initialize()
     compute_reduced_graph();
     rX = (value_t*) malloc_check(sizeof(value_t)*D*rV);
     solve_reduced_problem();
-    // merge(); no point in challenging assignment provided by user
+    merge();
 }
 
 TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
@@ -1040,7 +1044,8 @@ TPL index_t CP::split()
 
 TPL void CP::merge_components(comp_t& ru, comp_t& rv)
 {
-    /* ensure the smallest component will be the root of the merge chain */
+    /* ensure the component with smallest identifier will be the root of the
+     * merge chain */
     if (ru > rv){ comp_t tmp = ru; ru = rv; rv = tmp; }
     /* link both chains; update leaf of the merge chain; update root info */
     merge_chains_next[merge_chains_leaf[ru]] = rv;
@@ -1153,11 +1158,12 @@ TPL index_t CP::merge()
             }
             rv = merge_chains_next[rv];
         }
-        /* the root of each chain is the smallest component in the chain, and
-         * the current components are visited in increasing order, so now that
-         * 'rn' final components have been constructed, at least the first 'rn'
-         * current components have been copied, hence 'first_vertex' will not
-         * be accessed before position 'rn' anymore; thus modify in-place */
+        /* the root of each chain is the component with smallest id in the
+         * chain, and the current components are visited in increasing order,
+         * so now that 'rn' final components have been constructed, at least
+         * the first 'rn' current components have been copied, hence
+         * 'first_vertex' will not be accessed before position 'rn' anymore;
+         * can thus modify in-place */
         first_vertex[rn++] = first;
     }
 
@@ -1169,7 +1175,6 @@ TPL index_t CP::merge()
         sizeof(index_t)*(rV + 1));
     rX = (value_t*) realloc_check(rX, sizeof(value_t)*D*rV);
     is_saturated = (bool*) realloc_check(is_saturated, sizeof(bool)*rV); 
-
 
     /* update components assignments */
     for (index_t v = 0; v < V; v++){ 

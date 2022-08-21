@@ -13,16 +13,18 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
                     pfdr_cond_min=1e-2, pfdr_dif_rcd=0., pfdr_dif_tol=None, 
                     pfdr_it_max=int(1e4), verbose=int(1e3), 
                     max_num_threads=0, balance_parallel_split=True,
-                    Gram_if_square=True, compute_Obj=False,
-                    compute_Time=False, compute_Dif=False):
+                    Gram_if_square=True, compute_List=False,
+                    compute_Graph=False, compute_Obj=False, compute_Time=False,
+                    compute_Dif=False):
     """
-    Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_ql1b(Y | AtY, A | AtA, first_edge,
-            adj_vertices, edge_weights=None, Yl1=None, l1_weights=None,
-            low_bnd=None, upp_bnd=None, cp_dif_tol=1e-4, cp_it_max=10,
-            pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
+    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_pfdr_d1_ql1b(Y | AtY, A | AtA,
+            first_edge, adj_vertices, edge_weights=None, Yl1=None,
+            l1_weights=None, low_bnd=None, upp_bnd=None, cp_dif_tol=1e-4,
+            cp_it_max=10, pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
             pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=int(1e4),
             verbose=int(1e3), Gram_if_square=True, max_num_threads=0,
-            balance_parallel_split=True, compute_Obj=False, compute_Time=False,
+            balance_parallel_split=True, compute_List=False,
+            compute_Graph=False, compute_Obj=False, compute_Time=False,
             compute_Dif=False)
 
     Cut-pursuit algorithm with d1 (total variation) penalization, with a 
@@ -52,7 +54,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     (see below) with Y <- DDy = My and A <- D2 = M.
 
     INPUTS: real numeric type is either float32 or float64, not both;
-            indices numeric type is uint32.
+            indices numeric type can be int32 or uint32.
 
     NOTA: by default, components are identified using uint16 identifiers; 
     this can be easily changed in the wrapper source if more than 65535
@@ -83,10 +85,10 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting 
             from the vertex (or, if there are none, starting from the next 
-            vertex); (uint32) array of length V + 1, the last value is the
-            total number of edges;
-        for each edge, 'adj_vertices' indicates its ending vertex, (uint32)
-            array of length E
+            vertex); (int 32 or uint32) array of length V + 1, the last value
+            is the total number of edges;
+        for each edge, 'adj_vertices' indicates its ending vertex, (int 32 or 
+            uint32) array of length E
     edge_weights - (real) array of length E or a scalar for homogeneous weights
     Yl1 - offset for l1 penalty, (real) array of length V
     l1_weights - (real) array of length V or scalar for homogeneous weights
@@ -119,17 +121,26 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
     Gram_if_square - if A is square, set to false for direct matricial case
-    compute_Obj - compute the objective functional along iterations 
-    compute_Time - monitor elapsing time along iterations
-    compute_Dif - compute relative evolution along iterations 
+    compute_List  - report the list of vertices constituting each component
+    compute_Graph - get the reduced graph on the components
+    compute_Obj   - compute the objective functional along iterations 
+    compute_Time  - monitor elapsing time along iterations
+    compute_Dif   - compute relative evolution along iterations 
 
-    OUTPUTS: Obj, Time, Dif are optional, set parameters compute_Obj,
-        compute_Time, compute_Dif to True to request them
+    OUTPUTS: List, Graph, Obj, Time and Dif are optional, set parameters
+        compute_List, compute_Graph, compute_Obj, compute_Time, or
+        compute_Dif to True to request them and capture them in output
+        variables in that order
 
     Comp - assignement of each vertex to a component, (uint16) array of
         length V
     rX - values of each component of the minimizer, (real) array of length rV;
         the actual minimizer is then reconstructed as X = rX[Comp];
+    List - if requested, list of vertices constituting each component; python
+        list of length rV, containing (uint32) arrays of indices
+    Graph - if requested, reduced graph structure; python tuple of length 3
+        representing the graph as forward-star (see input first_edge and
+        adj_vertices) together with edge weights
     Obj - if requested, values of the objective functional along iterations;
         array of length actual number of cut-pursuit iterations performed + 1;
         NOTA: in the precomputed A^t A version, a constant 1/2||Y||^2 in the
@@ -183,19 +194,20 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         else:
             A = np.array([A], real_t)
 
-    if type(first_edge) != np.ndarray or first_edge.dtype != "uint32":
+    if (type(first_edge) != np.ndarray
+        or first_edge.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument "
-                        "'first_edge' must be a numpy array of type uint32.")
+            "'first_edge' must be a numpy array of type int32 or uint32.")
 
-    if type(adj_vertices) != np.ndarray or adj_vertices.dtype != "uint32":
+    if (type(adj_vertices) != np.ndarray
+        or adj_vertices.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument "
-                        "'adj_vertices' must be a numpy array of type uint32.")
+            "'adj_vertices' must be a numpy array of type int32 or uint32.")
 
     if type(edge_weights) != np.ndarray:
         if type(edge_weights) == list:
             raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument "
-                            "'edge_weights' must be a scalar or a numpy "
-                            "array.")
+                    "'edge_weights' must be a scalar or a numpy array.")
         elif edge_weights != None:
             edge_weights = np.array([edge_weights], dtype=real_t)
         else:
@@ -289,10 +301,10 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     # Check type of all booleen arguments (Gram_if_square, compute_Obj,
     # compute_Time, compute_Dif)
     for name, b_args in zip(
-            ["Gram_if_square", "balance_parallel_split", "compute_Obj", 
-             "compute_Time", "compute_Dif"],
-            [ Gram_if_square ,  balance_parallel_split ,  compute_Obj ,
-              compute_Time ,  compute_Dif ]):
+            ["Gram_if_square", "balance_parallel_split", "compute_List",
+             "compute_Graph", "compute_Obj", "compute_Time", "compute_Dif"],
+            [ Gram_if_square ,  balance_parallel_split ,  compute_List ,
+              compute_Graph ,  compute_Obj ,  compute_Time ,  compute_Dif ]):
         if type(b_args) != bool:
             raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument "
                             "'{0}' must be boolean".format(name))
@@ -302,4 +314,5 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
             Yl1, l1_weights, low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho,
             pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
             max_num_threads, balance_parallel_split, Gram_if_square,
-            real_t == "float64", compute_Obj, compute_Time, compute_Dif)
+            real_t == "float64", compute_List, compute_Graph, compute_Obj,
+            compute_Time, compute_Dif)

@@ -1,12 +1,12 @@
 /*=============================================================================
- * Comp, rX, [Obj, Time, Dif] = cp_pfdr_d1_lsx_cpy(loss, Y, first_edge,
- *          adj_vertices, edge_weights, loss_weights, d1_coor_weights,
- *          cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
- *          pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
- *          balance_parallel_split, real_is_double, compute_Obj, compute_Time, 
- *          compute_Dif)
+ * Comp, rX, [List, Graph, Obj, Time, Dif] = cp_pfdr_d1_lsx_cpy(loss, Y,
+ *  first_edge, adj_vertices, edge_weights, loss_weights, d1_coor_weights,
+ *  cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol,
+ *  pfdr_it_max, verbose, max_num_threads, balance_parallel_split,
+ *  real_is_double, compute_List, compute_Graph, compute_Obj, compute_Time,
+ *  compute_Dif)
  * 
- *  Baudoin Camille 2019, Raguet Hugo 2021
+ *  Baudoin Camille 2019, Raguet Hugo 2021, 2022
  *===========================================================================*/
 #include <cstdint>
 #define PY_SSIZE_T_CLEAN
@@ -25,6 +25,7 @@ using namespace std;
 /* use of unsigned iterator in parallel loops requires OpenMP 3.0;
  * although published in 2008, MSVC still does not support it as of 2020 */
     typedef int32_t index_t;
+    #define NPY_IND NPY_INT32
     /* comment the following if more than 32767 components are expected */
     typedef int16_t comp_t;
     #define NPY_COMP NPY_INT16
@@ -33,6 +34,7 @@ using namespace std;
     // #define NPY_COMP NPY_INT32
 #else
     typedef uint32_t index_t;
+    #define NPY_IND NPY_UINT32
     /* comment the following if more than 65535 components are expected */
     typedef uint16_t comp_t;
     #define NPY_COMP NPY_UINT16
@@ -49,8 +51,8 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_d1_coor_weights, real_t cp_dif_tol, int cp_it_max,
     real_t pfdr_rho, real_t pfdr_cond_min, real_t pfdr_dif_rcd,
     real_t pfdr_dif_tol, int pfdr_it_max, int verbose, int max_num_threads, 
-    int balance_parallel_split, int compute_Obj, int compute_Time, 
-    int compute_Dif)
+    int balance_parallel_split, int compute_List, int compute_Graph,
+    int compute_Obj, int compute_Time, int compute_Dif)
 {
     /**  get inputs  **/
 
@@ -116,6 +118,85 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
 
     int cp_it = cp->cut_pursuit();
 
+    /* get number of components and their lists of indices if necessary */
+    const index_t* first_vertex;
+    const index_t* comp_list;
+    comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
+
+    PyObject* py_List = nullptr;
+    if (compute_List){
+        py_List = PyList_New(rV); // list of arrays
+        for (comp_t rv = 0; rv < rV; rv++){
+            index_t comp_size = first_vertex[rv+1] - first_vertex[rv];
+            npy_intp size_py_List_rv[] = {comp_size};
+            PyArrayObject* py_List_rv = (PyArrayObject*) PyArray_Zeros(1,
+                size_py_List_rv, PyArray_DescrFromType(NPY_IND), 1);
+            index_t* List_rv = (index_t*) PyArray_DATA(py_List_rv);
+            for (index_t i = 0; i < comp_size; i++){
+                List_rv[i] = comp_list[first_vertex[rv] + i];
+            }
+            PyList_SetItem(py_List, rv, (PyObject*) py_List_rv);
+        }
+    }
+
+    /* copy reduced values */
+    real_t* cp_rX = cp->get_reduced_values();
+    npy_intp size_py_rX[] = {(npy_intp/* suppress warning*/) D, rV};
+    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
+        PyArray_DescrFromType(NPY_REAL), 1);
+    real_t* rX = (real_t*) PyArray_DATA(py_rX);
+    for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
+
+    /* retrieve reduced graph structure */
+    PyObject* py_Graph = nullptr;
+    if (compute_Graph){
+        const comp_t* reduced_edge_list;
+        const real_t* reduced_edge_weights;
+        size_t rE;
+        /* get reduced edge list */
+        rE = cp->get_reduced_graph(&reduced_edge_list, &reduced_edge_weights);
+
+        /* numpy arrays for forward-star representation and weights */
+        npy_intp size_py_red_first_edge[] = {rV + 1};
+        PyArrayObject* py_red_first_edge = (PyArrayObject*)
+            PyArray_Zeros(1, size_py_red_first_edge,
+                PyArray_DescrFromType(NPY_IND), 1);
+        index_t* red_first_edge = (index_t*) PyArray_DATA(py_red_first_edge);
+
+        npy_intp size_py_red_adj_vertices[] = {(npy_intp/* supp. warning*/)rE};
+        PyArrayObject* py_red_adj_vertices = (PyArrayObject*)
+            PyArray_Zeros(1, size_py_red_adj_vertices,
+                PyArray_DescrFromType(NPY_COMP), 1);
+        comp_t* red_adj_vertices = (comp_t*) PyArray_DATA(py_red_adj_vertices);
+
+        npy_intp size_py_red_edge_weights[] = {(npy_intp/* supp. warning*/)rE};
+        PyArrayObject* py_red_edge_weights = (PyArrayObject*)
+            PyArray_Zeros(1, size_py_red_edge_weights,
+                PyArray_DescrFromType(NPY_REAL), 1);
+        real_t* red_edge_weights = (real_t*) PyArray_DATA(py_red_edge_weights);
+
+        /* reduced edge list is guaranteed to be in increasing order of
+         * starting component; conversion to forward-star is straightforward */
+        comp_t rv = 0;
+        size_t re = 0;
+        while (re < rE || rv < rV){
+            red_first_edge[rv] = re;
+            while (re < rE && reduced_edge_list[2*re] == rv){
+                red_adj_vertices[re] = reduced_edge_list[2*re + 1];
+                red_edge_weights[re] = reduced_edge_weights[re];
+                re++;
+            }
+            rv++;
+        }
+        red_first_edge[rV] = rE;
+
+        /* gather forward-star representation and weights in python tuple */
+        py_Graph = PyTuple_New(3);
+        PyTuple_SET_ITEM(py_Graph, 0, (PyObject*) py_red_first_edge);
+        PyTuple_SET_ITEM(py_Graph, 1, (PyObject*) py_red_adj_vertices);
+        PyTuple_SET_ITEM(py_Graph, 2, (PyObject*) py_red_edge_weights);
+    }
+
     /* retrieve monitoring arrays */
     PyArrayObject* py_Obj = nullptr;
     if (compute_Obj){
@@ -146,38 +227,28 @@ static PyObject* cp_pfdr_d1_lsx(real_t loss, PyArrayObject* py_Y,
         for (int i = 0; i < size_py_Dif[0]; i++){ Dif_[i] = Dif[i]; }
         free(Dif);
     }
-
-    /* copy reduced values */
-    comp_t rV = cp->get_components();
-    real_t* cp_rX = cp->get_reduced_values();
-    npy_intp size_py_rX[] = {(npy_intp) D, rV};
-    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
-        PyArray_DescrFromType(NPY_REAL), 1);
-    real_t* rX = (real_t*) PyArray_DATA(py_rX);
-    for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
-    
+ 
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
 
     /* build output according to optional output specified */
-    if (compute_Obj && compute_Time && compute_Dif){
-        return Py_BuildValue("OOOOO", py_Comp, py_rX, py_Obj, py_Time,
-            py_Dif);
-    }else if (compute_Obj && compute_Time){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Time);
-    }else if (compute_Obj && compute_Dif){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Obj, py_Dif);
-    }else if (compute_Time && compute_Dif){
-        return Py_BuildValue("OOOO", py_Comp, py_rX, py_Time, py_Dif);
-    }else if (compute_Obj){
-        return Py_BuildValue("OOO", py_Comp, py_rX, py_Obj);
-    }else if (compute_Time){
-        return Py_BuildValue("OOO", py_Comp, py_rX, py_Time);
-    }else if (compute_Dif){
-        return Py_BuildValue("OOO", py_Comp, py_rX, py_Dif);
-    }else{
-        return Py_BuildValue("OO", py_Comp, py_rX);
-    }
+    Py_ssize_t nout = 2;
+    if (compute_List){ nout++; }
+    if (compute_Graph){ nout++; }
+    if (compute_Obj){ nout++; }
+    if (compute_Time){ nout++; }
+    if (compute_Dif){ nout++; }
+    PyObject* py_Out = PyTuple_New(nout);
+    PyTuple_SET_ITEM(py_Out, 0, (PyObject*) py_Comp);
+    PyTuple_SET_ITEM(py_Out, 1, (PyObject*) py_rX);
+    nout = 2;
+    if (compute_List){ PyTuple_SET_ITEM(py_Out, nout++, py_List); }
+    if (compute_Graph){ PyTuple_SET_ITEM(py_Out, nout++, py_Graph); }
+    if (compute_Obj){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Obj); }
+    if (compute_Time){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Time); }
+    if (compute_Dif){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Dif); }
+
+    return py_Out;
 }
 
 /* actual python interface */
@@ -194,16 +265,17 @@ static PyObject* cp_pfdr_d1_lsx_cpy(PyObject* self, PyObject* args)
     double loss, cp_dif_tol, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
         pfdr_dif_tol;  
     int cp_it_max, pfdr_it_max, verbose, max_num_threads, 
-        balance_parallel_split, real_is_double, compute_Obj, compute_Time, 
-        compute_Dif;
+        balance_parallel_split, real_is_double, compute_List, compute_Graph,
+        compute_Obj, compute_Time, compute_Dif;
 
     /* parse the input, from Python Object to C PyArray, double, or int type */
-    if(!PyArg_ParseTuple(args, "dOOOOOOdiddddiiiiiiii", &loss, &py_Y,
+    if(!PyArg_ParseTuple(args, "dOOOOOOdiddddiiiiiiiiii", &loss, &py_Y,
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_loss_weights,
         &py_d1_coor_weights, &cp_dif_tol, &cp_it_max, &pfdr_rho,
         &pfdr_cond_min, &pfdr_dif_rcd, &pfdr_dif_tol, &pfdr_it_max, &verbose,
         &max_num_threads, &balance_parallel_split, &real_is_double, 
-        &compute_Obj, &compute_Time, &compute_Dif)){
+        &compute_List, &compute_Graph, &compute_Obj, &compute_Time,
+        &compute_Dif)){
         return NULL;
     }
 
@@ -212,13 +284,14 @@ static PyObject* cp_pfdr_d1_lsx_cpy(PyObject* self, PyObject* args)
             py_adj_vertices, py_edge_weights, py_loss_weights,
             py_d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
             pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
-            balance_parallel_split, compute_Obj, compute_Time, compute_Dif);
+            balance_parallel_split, compute_List, compute_Graph, compute_Obj,
+            compute_Time, compute_Dif);
     }else{ /* real_t type is float */
         return cp_pfdr_d1_lsx<float, NPY_FLOAT32>(loss, py_Y, py_first_edge,
             py_adj_vertices, py_edge_weights, py_loss_weights,
             py_d1_coor_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
             pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
-            balance_parallel_split, compute_Obj,
+            balance_parallel_split, compute_List, compute_Graph, compute_Obj,
             compute_Time, compute_Dif);
     }
 }

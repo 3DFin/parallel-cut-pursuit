@@ -10,19 +10,19 @@ from cp_kmpp_d0_dist_cpy import cp_kmpp_d0_dist_cpy
 def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
                     vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
                     cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-                    kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight = 0.0,
+                    kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
                     verbose=True, max_num_threads=0,
                     balance_parallel_split=True, compute_List=False,
-                    compute_Obj=False, compute_Time=False, compute_Dif=False):
-
+                    compute_Graph=False, compute_Obj=False, compute_Time=False,
+                    compute_Dif=False):
     """
-    Comp, rX, [List, Obj, Time, Dif] = cp_kmpp_d0_dist(loss, Y, first_edge,
-            adj_vertices, edge_weights=None, vert_weights=None,
-            coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10, K=2,
-            split_iter_num=2, split_damp_ratio=1.0, kmpp_init_num=3,
-            kmpp_iter_num=3, min_comp_weight=0.0, verbose=True,
-            max_num_threads=0, balance_parallel_split=True, compute_List=False,
-            compute_Obj=False, compute_Time=False, compute_Dif=False)
+    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_kmpp_d0_dist(loss, Y,
+        first_edge, adj_vertices, edge_weights=None, vert_weights=None,
+        coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10, K=2,
+        split_iter_num=2, split_damp_ratio=1.0, kmpp_init_num=3,
+        kmpp_iter_num=3, min_comp_weight=0.0, verbose=True, max_num_threads=0,
+        balance_parallel_split=True, compute_List=False, compute_Obj=False,
+        compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d0 (weighted contour length) penalization, with
     a loss akin to a distance:
@@ -65,10 +65,10 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     hence this loss is actually equivalent to cross-entropy.
  
     INPUTS: real numeric type is either float32 or float64, not both;
-            indices numeric type is uint32.
+            indices numeric type can be int32 or uint32.
 
     NOTA: by default, components are identified using uint16 identifiers;
-    this can be easily changed in the wrapper source if more than 65535 
+    this can be easily changed in the module source if more than 65535 
     components are expected (recompilation is necessary)
 
     loss - 1 for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler
@@ -87,10 +87,10 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
             from a same vertex are consecutive;
         for each vertex, 'first_edge' indicates the first edge starting from 
             the vertex (or, if there are none, starting from the next vertex);
-            (uint32) array of length V+1, the last value is the total number of
-            edges;
-        for each edge, 'adj_vertices' indicates its ending vertex, (uint32)
-          array of length E
+            (int32 or uint32) array of length V+1, the last value is the
+            total number of edges;
+        for each edge, 'adj_vertices' indicates its ending vertex, (int32 or
+            uint32) array of length E
     edge_weights - (real) array of length E or scalar for homogeneous weights
     vert_weights - weights on vertices (w_v in above notations)
         (real) array of length V or empty for no weights
@@ -119,21 +119,26 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         used for parallelization with OpenMP
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
-    compute_List - report the list of vertices constituting each component
-    compute_Obj  - compute the objective functional along iterations 
-    compute_Time - monitor elapsing time along iterations
-    compute_Dif  - compute relative evolution along iterations 
+    compute_List  - report the list of vertices constituting each component
+    compute_Graph - get the reduced graph on the components
+    compute_Obj   - compute the objective functional along iterations 
+    compute_Time  - monitor elapsing time along iterations
+    compute_Dif   - compute relative evolution along iterations 
 
-    OUTPUTS: List, Obj, Time and Dif are optional, set parameters compute_List,
-        compute_Obj, compute_Time, or compute_Difto True to request them and
-        capture them in output variables in that order
+    OUTPUTS: List, Graph, Obj, Time and Dif are optional, set parameters
+        compute_List, compute_Graph, compute_Obj, compute_Time, or
+        compute_Dif to True to request them and capture them in output
+        variables in that order
 
     Comp - assignement of each vertex to a component, (uint16) array of
         length V 
-    rX  - values of each component of the minimizer, (real) array of length rV;
-        the actual minimizer is then reconstructed as X = rX[Comp];
+    rX  - values of each component of the minimizer, (real) array of size
+        D-by-rV; the actual minimizer is then reconstructed as X = rX[:, Comp];
     List - if requested, list of vertices constituting each component; python
         list of length rV, containing (uint32) arrays of indices
+    Graph - if requested, reduced graph structure; python tuple of length 3
+        representing the graph as forward-star (see input first_edge and
+        adj_vertices) together with edge weights
     Obj - if requested, values of the objective functional along iterations;
         array of length actual number of cut-pursuit iterations performed + 1
     Time - if requested, the elapsed time along iterations; array of length
@@ -151,7 +156,7 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     smoothing semantic labelings of 3D point clouds, ISPRS Journal of
     Photogrammetry and Remote Sensing, 132:102-118, 2017
 
-    Baudoin Camille 2019, Raguet Hugo 2021
+    Baudoin Camille 2019, Raguet Hugo 2021, 2022
     """
     
     # Determine the type of float argument (real_t) 
@@ -171,13 +176,15 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     # Convert in numpy array scalar entry: Y, first_edge, adj_vertices, 
     # edge_weights, vert_weights, coor_weights and define float numpy array
     # argument with the right float type, if empty:
-    if type(first_edge) != np.ndarray or first_edge.dtype != "uint32":
+    if (type(first_edge) != np.ndarray
+        or first_edge.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit d0 distance: argument 'first_edge' must "
-                        "be a numpy array of type uint32.")
+                        "be a numpy array of type int32 or uint32.")
 
-    if type(adj_vertices) != np.ndarray or adj_vertices.dtype != "uint32":
+    if (type(adj_vertices) != np.ndarray
+        or adj_vertices.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit d0 distance: argument 'adj_vertices' "
-                        "must be a numpy array of type uint32.")
+                        "must be a numpy array of type int32 or uint32.")
 
     if type(edge_weights) != np.ndarray:
         if type(edge_weights) == list:
@@ -247,10 +254,10 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     # Check type of all booleen arguments
     for name, b_args in zip(
-        ["verbose", "balance_parallel_split", "compute_Obj", "compute_Time", 
-         "compute_Dif"],
-        [ verbose ,  balance_parallel_split ,  compute_Obj ,  compute_Time , 
-          compute_Dif ]):
+        ["verbose", "balance_parallel_split", "compute_List", "compute_Graph",
+         "compute_Obj", "compute_Time", "compute_Dif"],
+        [ verbose ,  balance_parallel_split ,  compute_List ,  compute_Graph ,
+          compute_Obj ,  compute_Time ,  compute_Dif ]):
         if type(b_args) != bool:
             raise TypeError("Cut-pursuit d0 distance: argument '{0}' must be "
                             "boolean".format(name))
@@ -260,5 +267,5 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
             vert_weights, coor_weights, cp_dif_tol, cp_it_max, K,
             split_iter_num, split_damp_ratio, kmpp_init_num, kmpp_iter_num,
             min_comp_weight, verbose, max_num_threads, balance_parallel_split,
-            real_t == "float64", compute_List, compute_Obj, compute_Time,
-            compute_Dif)
+            real_t == "float64", compute_List, compute_Graph, compute_Obj,
+            compute_Time, compute_Dif)
