@@ -8,7 +8,7 @@
  *        
  * where for each vertex, x_v belongs in a possibly multidimensional space Ω,
  *       f(x) = sum_{v in V} f_v(x_v) is separable along V with f_v : Ω → ℝ
- *   and ||x||_d0 = sum_{uv in E} w_d0_uv ,
+ *   and ||x||_d0 = sum_{uv in E : xu != xv} w_d0_uv ,
  *
  * using greedy cut-pursuit approach.
  *

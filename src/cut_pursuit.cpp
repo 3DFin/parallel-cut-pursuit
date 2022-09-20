@@ -669,8 +669,11 @@ TPL void CP::initialize()
     merge();
 }
 
-TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
+TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new, 
         index_t*& first_vertex_big)
+/* rV_big will be the number of big components to be split
+   rV_new will be the number of resulting new components
+   first_vertex_big will store info on list of vertices of big components */
 {
     /**  sort components by decreasing size  **/
     if (max_num_threads > 1){ // sort even if no balancing is required
@@ -910,12 +913,12 @@ TPL int CP::balance_parallel_split(comp_t& rV_new, comp_t& rV_big,
     return num_thrds;
 }
 
-TPL void CP::revert_balance_parallel_split(comp_t rV_new, comp_t rV_big, 
+TPL void CP::revert_balance_parallel_split(comp_t rV_big, comp_t rV_new, 
     index_t* first_vertex_big)
 {
     index_t* first_vertex_bal = first_vertex; // make clear which one is which
-    comp_t rV_dif = rV_new - rV_big;
-    comp_t rV_ini = rV - rV_dif;
+    comp_t rV_dif = rV_new - rV_big; // additional components due to balancing
+    comp_t rV_ini = rV - rV_dif; // number of components prior to balancing
 
     /**  remove duplicated component values and aggregate saturation **/
     /* big components */
@@ -966,7 +969,7 @@ TPL index_t CP::split()
 
     comp_t rV_new, rV_big;
     index_t* first_vertex_big;
-    int num_thrds = balance_parallel_split(rV_new, rV_big, first_vertex_big);
+    int num_thrds = balance_parallel_split(rV_big, rV_new, first_vertex_big);
 
     /* components are processed in parallel but graph structure specifies edges
      * ends with global indexing; the following table enables constant time
@@ -1027,8 +1030,7 @@ TPL index_t CP::split()
 
     if (rV_new != rV_big){
         activation += remove_parallel_separations(rV_new);
-
-        revert_balance_parallel_split(rV_new, rV_big, first_vertex_big);
+        revert_balance_parallel_split(rV_big, rV_new, first_vertex_big);
     }
 
     /* reconstruct components assignment */

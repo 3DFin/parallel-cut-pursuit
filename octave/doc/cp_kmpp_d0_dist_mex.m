@@ -14,7 +14,7 @@ function [Comp, rX, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % where for each vertex, y_v and x_v are D-dimensional vectors, the loss is
 % either the sum of square differences or smoothed Kullback-Leibler divergence
 % (equivalent to cross-entropy in this formulation); see the 'loss' attribute,
-%   and ||x||_d0 = sum_{uv in E} w_d0_uv ,
+%   and ||x||_d0 = sum_{uv in E : xu != xv} w_d0_uv ,
 %
 % using greedy cut-pursuit approach with splitting initialized with k-means++.
 %

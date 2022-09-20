@@ -215,7 +215,7 @@ static PyObject* cp_kmpp_d0_dist(real_t loss, PyArrayObject* py_Y,
         py_Time = (PyArrayObject*) PyArray_Zeros(1, size_py_Time,
             PyArray_DescrFromType(NPY_FLOAT64), 1);
         double* Time_ = (double*) PyArray_DATA(py_Time);
-        for (int i = 0; i <= size_py_Time[0]; i++){ Time_[i] = Time[i]; }
+        for (int i = 0; i < size_py_Time[0]; i++){ Time_[i] = Time[i]; }
         free(Time);
     }
 
