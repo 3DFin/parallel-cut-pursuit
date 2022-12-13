@@ -913,6 +913,45 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
     return num_thrds;
 }
 
+TPL index_t CP::remove_parallel_separations(comp_t rV_new)
+{
+    index_t activation = 0;
+
+    /* reconstruct component assignment (only on new components) */
+    #pragma omp parallel for schedule(static) \
+        NUM_THREADS(first_vertex[rV_new], rV_new)
+    for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
+        for (index_t i = first_vertex[rv_new]; i < first_vertex[rv_new + 1];
+            i++){
+            comp_assign[comp_list[i]] = rv_new;
+        }
+    }
+
+    /* parallel separation edges are cut if at least one end vertex belongs
+     * to a nonsaturated component, to favor cutting */
+    #pragma omp parallel for schedule(static) reduction(+:activation) \
+        NUM_THREADS(E*first_vertex[rV_new]/V, rV_new)
+    for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
+        const bool sat = is_saturated[rv_new];
+        for (index_t i = first_vertex[rv_new]; i < first_vertex[rv_new + 1];
+            i++){
+            index_t v = comp_list[i];
+            for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                if (is_par_sep(e)){
+                    if (sat && is_saturated[comp_assign[adj_vertices[e]]]){
+                        bind(e);
+                    }else{
+                        cut(e);
+                        activation++;
+                    }
+                }
+            }
+        }
+    }
+
+    return activation;
+}
+
 TPL void CP::revert_balance_parallel_split(comp_t rV_big, comp_t rV_new, 
     index_t* first_vertex_big)
 {

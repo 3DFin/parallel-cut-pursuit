@@ -12,7 +12,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
                pfdr_cond_min=1e-2, pfdr_dif_rcd=0., pfdr_dif_tol=None, 
                pfdr_it_max=int(1e4), verbose=int(1e3), max_num_threads=0,
                balance_parallel_split=True, compute_List=False,
-               compute_Subgrads=False, compute_Graph, compute_Obj=False,
+               compute_Subgrads=False, compute_Graph=False, compute_Obj=False,
                compute_Time=False, compute_Dif=False):
     """
     Comp, rX, [List, Gtv, Graph, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
@@ -20,8 +20,8 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
             pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
             pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=int(1e4),
             verbose=int(1e3), max_num_threads=0, balance_parallel_split=True,
-            compute_List=False, compute_Subgrads=False, compute_Obj=False,
-            compute_Time=False, compute_Dif=False)
+            compute_List=False, compute_Subgrads=False, compute_Graph=False,
+            compute_Obj=False, compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm for proximity operator of total variation
     penalization:

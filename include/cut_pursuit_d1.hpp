@@ -79,7 +79,18 @@ private:
     const D1p d1p; // see public enum declaration
 
     /* remove or activate separating edges used for balancing parallel
-     * workload; see header `cut_pursuit.hpp` */
+     * workload, see header `cut_pursuit.hpp`;
+     * parallel separation edges should be activated if and only if the descent
+     * directions at its vertices are different; on directionnally
+     * differentiable problems, descent directions depends in theory only on
+     * the components values; since these are the same on both sides of a
+     * parallel separation, it is sometimes possible to implement the method
+     * split_component() so that the same label assignment means the same
+     * descent direction;
+     * we provide here a convenient implementation for this case, but if 
+     * split_component() provided by a derived class cannot guarantee the above
+     * it is advise to override this by calling the base method
+     * Cp<...>::remove_parallel_separations */
     index_t remove_parallel_separations(comp_t rV_new) override;
 
     /* test if two components are sufficiently close to merge */

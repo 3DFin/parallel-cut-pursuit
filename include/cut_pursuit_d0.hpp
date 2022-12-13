@@ -172,10 +172,6 @@ protected:
 
 private:
 
-    /* remove or activate separating edges used for balancing parallel
-     * workload; see header `cut_pursuit.hpp` */
-    index_t remove_parallel_separations(comp_t rV_new) override;
-
     /* compute the merge chains and return the number of effective merges */
     comp_t compute_merge_chains() override;
     /* auxiliary functions for merge */
@@ -186,9 +182,5 @@ private:
 
     /**  type resolution for base template class members  **/
     using Cp<real_t, index_t, comp_t>::maxflow_complexity;
-    using Cp<real_t, index_t, comp_t>::is_cut;
-    using Cp<real_t, index_t, comp_t>::is_par_sep;
     using Cp<real_t, index_t, comp_t>::is_bind;
-    using Cp<real_t, index_t, comp_t>::cut;
-    using Cp<real_t, index_t, comp_t>::bind;
 };

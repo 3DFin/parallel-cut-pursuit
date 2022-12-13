@@ -203,7 +203,8 @@ static void cp_prox_tv_mex(int nlhs, mxArray *plhs[], int nrhs,
     int cp_it = cp->cut_pursuit();
 
     /* get number of components and list of indices */
-    index_t *first_vertex, *comp_list;
+    const index_t* first_vertex;
+    const index_t* comp_list;
     comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
 
     /* copy reduced values */

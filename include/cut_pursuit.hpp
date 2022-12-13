@@ -209,10 +209,15 @@ protected:
 
     /* large components are split for balancing parallel workload,
      * parallel separation edges might be removed or activated;
-     * when called, first_vertex contains additional components;
-     * NOTA: separation edges which are not removed or activated delimit
-     * temporarily components that will be merged during merge step */
-    virtual index_t remove_parallel_separations(comp_t rV_new) = 0;
+     * when called, first_vertex contains additional components due to large
+     * components being split;
+     * NOTA: currently, separation edges must be either removed or activated
+     * at this step; this cannot wait for a future split step, because
+     * components list of vertex must be kept consecutive for parallel
+     * treatment of the resulting connected components, and removing parallel
+     * separation edges in a later step might connect components whose list of
+     * vertices are not consecutive */
+    virtual index_t remove_parallel_separations(comp_t rV_new);
 
     /* revert the above process;
      * no change to comp_list, only suppress elements from first_vertex */

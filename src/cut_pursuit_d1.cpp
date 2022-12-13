@@ -31,15 +31,16 @@ TPL index_t CP_D1::remove_parallel_separations(comp_t rV_new)
 
     /* parallel separation edges must be activated if and only if the descent
      * directions at its vertices are different; on directionnally
-     * differentiable problems, descent directions only depend on the
-     * components values; since they are the same on both sides of a parallel
-     * separation, it is possible to implement split_component() so that the
-     * same label assignment means the same descent direction */
+     * differentiable problems, descent directions depends in theory only on
+     * the components values; since these are the same on both sides of a
+     * parallel separation, it is sometimes possible to implement
+     * split_component() so that the same label assignment means the same
+     * descent direction */
     #pragma omp parallel for schedule(static) reduction(+:activation) \
         NUM_THREADS(E*first_vertex[rV_new]/V, rV_new)
     for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
-        for (index_t i = first_vertex[rv_new]; i < first_vertex[rv_new + 1];
-            i++){
+        for (index_t i = first_vertex[rv_new];
+             i < first_vertex[rv_new + 1]; i++){
             index_t v = comp_list[i];
             comp_t l = label_assign[v];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
