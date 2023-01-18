@@ -244,8 +244,8 @@ protected:
      *   root[rv] -> ... -> rv -> next[rv] -> ... -> leaf[rv] ;
      * NOTA: chain_end() is a special values, and:
      * - only next[rv] is always up-to-date;
-     * - root[rv] is always a preceding component in its chain, or chain_end()
-     *   if rv is a root;
+     * - root[rv] is always a strictly preceding component in its chain, or
+     *   chain_end() if rv is a root;
      * - leaf[rv] is up-to-date if rv is a root;
      * - rv is the leaf of its chain if, and only if next[rv] == chain_end();
      * an additional requirement is that the root of each chain should be the
@@ -254,9 +254,8 @@ protected:
 
     /* merge the merge chains of the two given roots;
      * the root of the resulting chain will be the component in the chains
-     * with lowest index, and assigned to the parameter ru; the root of the
-     * other chain in the merge is assigned to rv */
-    void merge_components(comp_t& ru, comp_t& rv);
+     * with lowest index, which is returned by the function */ 
+    comp_t merge_components(comp_t ru, comp_t rv);
 
     /* compute the merge chains and return the number of effective merges;
      * NOTA: the chosen reduced graph structure is just a list of edges,
@@ -380,12 +379,6 @@ TPL inline void CP::cut(index_t e)
 
 TPL inline void CP::bind(index_t e)
 { edge_status[e] = BIND; }
-
-TPL inline comp_t CP::get_merge_chain_root(comp_t rv)
-{
-    while (merge_chains_root[rv] != chain_end()){ rv = merge_chains_root[rv]; }
-    return rv;
-}
 
 TPL inline int CP::compute_num_threads(uintmax_t num_ops,
     uintmax_t max_threads)

@@ -104,24 +104,22 @@ protected:
      * to avoid unnecessary recomputation, positive merge gains and
      * corresponding values are stored;
      * to take additional information into account, override the virtual merge
-     * update methods and inherit from Merge_info structure */
+     * update methods
+     TODO: rewrite */
     struct Merge_info
     {
+        size_t D;
+
+        comp_t re; // the edge to be removed if merge 
+        comp_t ru, rv; // the components concerned by the merge
+
         real_t gain; // the gain on the functional if the components are merged
         value_t* value; // the value taken by the components if they are merged
-
+        
         Merge_info(size_t D = 0);
+        Merge_info(const Merge_info&);
         ~Merge_info();
     };
-
-    /* the merge candidate list is the array containing the information on the
-     * merge of each reduced edge :
-     *  - a null pointer if the gain is negative or not yet computed
-     *  - a pointer to a merge information if the gain is positive
-     *  - the reserved pointer value 'accepted_merge' if the candidate has been
-     *  accepted or discarded */
-    Merge_info** merge_info_list;
-    Merge_info* const accepted_merge;
 
     /* update information of the given merge candidate in the list;
      * merge information must be created with new and destroyed with delete;
@@ -129,8 +127,9 @@ protected:
      * do not create (or destroy if it exists) the merge information and flag
      * it with a null pointer;
      * NOTA: it might be necessary to take into account previous merges stored
-     * in the merge chains, see header `cut_pursuit.hpp` for details */
-    virtual void update_merge_candidate(index_t re, comp_t ru, comp_t rv) = 0;
+     * in the merge chains, see header `cut_pursuit.hpp` for details
+     TODO: rewrite */
+    virtual void update_merge_info(Merge_info&) = 0;
 
     /* rough estimate of the number of operations for updating all candidates;
      * useful for estimating the number of parallel threads */
@@ -140,8 +139,9 @@ protected:
      * the root of the resulting chain will be the component in the chains
      * with lowest index, and assigned to the parameter ru; the root of the
      * other chain in the merge is assigned to rv;
-     * see header `cut_pursuit.hpp` for details */
-    virtual void accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv);
+     * see header `cut_pursuit.hpp` for details
+     TODO: rewrite */
+    virtual comp_t accept_merge(const Merge_info&);
 
     /**  type resolution for base template class members  **/
     using Cp<real_t, index_t, comp_t>::rX;

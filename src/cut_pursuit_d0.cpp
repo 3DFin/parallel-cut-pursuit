@@ -2,6 +2,8 @@
  * Hugo Raguet 2019
  *===========================================================================*/
 #include "cut_pursuit_d0.hpp"
+#include <list>
+#include <forward_list>
 
 #define ZERO ((real_t) 0.0)
 #define ONE ((real_t) 1.0)
@@ -18,8 +20,7 @@ using namespace std;
 
 TPL CP_D0::Cp_d0(index_t V, index_t E, const index_t* first_edge,
     const index_t* adj_vertices, size_t D)
-    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D),
-      accepted_merge(&reserved_merge_info)
+    : Cp<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D)
 {
     /* ensure handling of infinite values (negation, comparisons) is safe */
     static_assert(numeric_limits<real_t>::is_iec559,
@@ -221,121 +222,128 @@ TPL void CP_D0::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
     free(altX);
 }
 
-TPL CP_D0::Merge_info::Merge_info(size_t D)
+TPL CP_D0::Merge_info::Merge_info(size_t D) : D(D)
 { value = (value_t*) malloc_check(sizeof(value_t)*D); }
+
+TPL CP_D0::Merge_info::Merge_info(const Merge_info& merge_info) :
+    D(merge_info.D), re(merge_info.re), ru(merge_info.ru), rv(merge_info.rv),
+    gain(merge_info.gain)
+{
+    value = (value_t*) malloc_check(sizeof(value_t)*D);
+    for (size_t d = 0; d < D; d++){ value[d] = merge_info.value[d]; }
+}
 
 TPL CP_D0::Merge_info::~Merge_info()
 { free(value); }
 
-TPL void CP_D0::delete_merge_candidate(index_t re)
+TPL comp_t CP_D0::accept_merge(const Merge_info& candidate)
 {
-    delete merge_info_list[re];
-    merge_info_list[re] = accepted_merge;
-}
-
-TPL void CP_D0::select_best_merge_candidate(index_t re, real_t* best_gain,
-    index_t* best_edge)
-{
-    if (merge_info_list[re] && merge_info_list[re]->gain > *best_gain){
-            *best_gain = merge_info_list[re]->gain;
-            *best_edge = re;
-    }
-}
-
-TPL void CP_D0::accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv)
-{
-    merge_components(ru, rv); // ru now the root of the merge chain
+    comp_t ru = merge_components(candidate.ru, candidate.rv);
     value_t* rXu = rX + D*ru;
-    for (size_t d = 0; d < D; d++){ rXu[d] = merge_info_list[re]->value[d]; }
+    for (size_t d = 0; d < D; d++){ rXu[d] = candidate.value[d]; }
+    return ru;
 }
 
 TPL comp_t CP_D0::compute_merge_chains()
 {
     comp_t merge_count = 0;
-   
-    merge_info_list = (Merge_info**) malloc_check(sizeof(Merge_info*)*rE);
-    for (index_t re = 0; re < rE; re++){ merge_info_list[re] = nullptr; }
 
-    real_t* best_par_gains =
-        (real_t*) malloc_check(sizeof(real_t)*omp_get_num_procs());
-    index_t* best_par_edges = 
-        (index_t*) malloc_check(sizeof(index_t)*omp_get_num_procs());
+    /* compute merge candidate lists in parallel */
+    list<Merge_info> candidates;
+    forward_list<Merge_info> neg_candidates;
+    Merge_info merge_info(D);
+    // #pragma omp parallel for schedule(static) \
+        // NUM_THREADS(update_merge_complexity(), rE)
+    for (index_t re = 0; re < rE; re++){
+        merge_info.re = re;
+        merge_info.ru = reduced_edges[TWO*re];
+        merge_info.rv = reduced_edges[TWO*re + 1];
+        update_merge_info(merge_info);
+        if (merge_info.gain > ZERO){
+            candidates.push_front(merge_info);
+        }else if (merge_info.gain > -real_inf()){
+            neg_candidates.push_front(merge_info);
+        }
+    }
 
+    /**  positive gains merges: update all gains after each merge  **/
     comp_t last_merge_root = MERGE_INIT;
+    while (!candidates.empty()){ 
+        typename list<Merge_info>::iterator best_candidate;
+        real_t best_gain = -real_inf();
 
-    while (true){ /* merge iteratively as long as gain is positive */
- 
-        /**  update merge information in parallel  **/
-        int num_par_thrds = last_merge_root == MERGE_INIT ?
-            compute_num_threads(update_merge_complexity()) :
-            /* expected fraction of merge candidates to update is the total
-             * number of edges divided by the expected number of edges linking
-             * to the last merged component; in turn, this is estimated as
-             * twice the number of edges divided by the number of components */
-            compute_num_threads(update_merge_complexity()/rV*2);
-
-        for (int thrd_num = 0; thrd_num < num_par_thrds; thrd_num++){
-            best_par_gains[thrd_num] = -real_inf();
-        }
-
-        /* differences between threads is small: using static schedule */
-        #pragma omp parallel for schedule(static) num_threads(num_par_thrds)
-        for (index_t re = 0; re < rE; re++){
-            if (merge_info_list[re] == accepted_merge){ continue; }
-            comp_t ru = reduced_edges[TWO*re];
-            comp_t rv = reduced_edges[TWO*re + 1];
-
-            if (last_merge_root != MERGE_INIT){
-                /* the roots of their respective chains might have changed */
-                ru = get_merge_chain_root(ru);
-                rv = get_merge_chain_root(rv);
-                /* check if none of them is concerned by the last merge */
-                if (last_merge_root != ru && last_merge_root != rv){
-                    select_best_merge_candidate(re,
-                        best_par_gains + omp_get_thread_num(),
-                        best_par_edges + omp_get_thread_num());
-                    continue;
-                }
-            }
-
+        for (typename list<Merge_info>::iterator
+             candidate = candidates.begin(); candidate != candidates.end(); ){
+            comp_t ru = get_merge_chain_root(candidate->ru);
+            comp_t rv = get_merge_chain_root(candidate->rv);
             if (ru == rv){ /* already merged */
-                delete_merge_candidate(re);
-            }else{ /* update information */
-                update_merge_candidate(re, ru, rv);
-                select_best_merge_candidate(re,
-                    best_par_gains + omp_get_thread_num(),
-                    best_par_edges + omp_get_thread_num());
+                candidate = candidates.erase(candidate);
+                continue;
             }
-        } // end for candidates in parallel
-
-        /**  select best candidate among parallel threads  **/
-        real_t best_gain = best_par_gains[0];
-        index_t best_edge = best_par_edges[0];
-        for (int thrd_num = 1; thrd_num < num_par_thrds; thrd_num++){
-            if (best_gain < best_par_gains[thrd_num]){
-                best_gain = best_par_gains[thrd_num];
-                best_edge = best_par_edges[thrd_num];
+            candidate->ru = ru;
+            candidate->rv = rv;
+            if (last_merge_root == ru || last_merge_root == rv){
+                update_merge_info(*candidate);
             }
+            if (candidate->gain > best_gain){
+                best_candidate = candidate;
+                best_gain = best_candidate->gain;
+            }
+            candidate++;
         }
 
-        /**  merge best candidate if best gain is positive  **/
-        /* we allow for negative gains, as long as its not negative infinity */
-        if (best_gain > -real_inf()){
-            comp_t ru = get_merge_chain_root(reduced_edges[2*best_edge]);
-            comp_t rv = get_merge_chain_root(reduced_edges[2*best_edge + 1]);
-            accept_merge_candidate(best_edge, ru, rv); // ru now the root
-            delete_merge_candidate(best_edge);
+        if (best_gain > ZERO){
+            last_merge_root = accept_merge(*best_candidate);
+            candidates.erase(best_candidate);
             merge_count++;
-            last_merge_root = ru;
         }else{
             break;
         }
-   
-    } // end merge loop
 
-    free(best_par_gains);
-    free(best_par_edges);
-    free(merge_info_list); // all merge info must have been deleted
+    } // end positive gain merge loop
+
+    /* negative gains will be allowed as long as they are not infinity */
+    for (typename list<Merge_info>::iterator
+         candidate = candidates.begin(); candidate != candidates.end(); ){
+        if (candidate->gain == -real_inf()){
+            candidate = candidates.erase(candidate);
+        }else{
+            candidate++;
+        }
+    }
+
+    /* update all negative gains and transfer to the candidates list */
+    while (!neg_candidates.empty()){
+        Merge_info& candidate = neg_candidates.front();
+        comp_t ru = get_merge_chain_root(candidate.ru);
+        comp_t rv = get_merge_chain_root(candidate.rv);
+        if (ru != rv){ /* not already merged */
+            candidate.ru = ru;
+            candidate.rv = rv;
+            update_merge_info(candidate);
+            if (candidate.gain > -real_inf()){
+                candidates.push_front(candidate);
+            }
+        }
+        neg_candidates.pop_front();
+    }
+
+    /**  negative gain merges: sort and merge in that order, no update  **/
+    candidates.sort(
+        [] (const Merge_info& mi1, const Merge_info& mi2) -> bool
+        { return mi1.gain > mi2.gain; } ); // decreasing order
+    while (!candidates.empty()){ 
+        Merge_info& candidate = candidates.front();
+        comp_t ru = get_merge_chain_root(candidate.ru);
+        comp_t rv = get_merge_chain_root(candidate.rv);
+        if (ru != rv){ /* not already merged */
+            candidate.ru = ru;
+            candidate.rv = rv;
+            accept_merge(candidate);
+            merge_count++;
+        }
+        candidates.pop_front();
+    }
 
     return merge_count;
 }

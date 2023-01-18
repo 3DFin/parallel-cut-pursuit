@@ -138,21 +138,25 @@ private:
     bool is_split_value(real_t altX) override; // flag with infinity
 
     /**  merging components **/
+    using typename Cp_d0<real_t, index_t, comp_t>::Merge_info;
 
     /* update information of the given merge candidate in the list;
      * merge information must be created with new and destroyed with delete;
      * negative gain values might still get accepted; for inacceptable gain,
      * do not create (or destroy if it exists) the merge information and flag
-     * it with a null pointer */
-    void update_merge_candidate(index_t re, comp_t ru, comp_t rv) override;
+     * it with a null pointer
+     TODO: rewrite */
+    void update_merge_info(Merge_info&) override;
 
     /* rough estimate of the number of operations for updating all candidates;
-     * useful for estimating the number of parallel threads */
+     * useful for estimating the number of parallel threads
+     TODO: change name */
     size_t update_merge_complexity() override;
 
     /* accept the merge candidate and return the component root of the
-     * resulting merge chain */
-    void accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv) override;
+     * resulting merge chain
+     TODO: rewrite */
+    comp_t accept_merge(const Merge_info&) override;
 
     index_t merge() override; // override for freeing comp_weights
 
@@ -164,9 +168,6 @@ private:
     /**  type resolution for base template class members  **/
     using Cp_d0<real_t, index_t, comp_t>::K;
     using Cp_d0<real_t, index_t, comp_t>::split_iter_num;
-    using typename Cp_d0<real_t, index_t, comp_t>::Merge_info;
-    using Cp_d0<real_t, index_t, comp_t>::merge_info_list;
-    using Cp_d0<real_t, index_t, comp_t>::accepted_merge;
     using Cp<real_t, index_t, comp_t>::D;
     using Cp<real_t, index_t, comp_t>::rX;
     using Cp<real_t, index_t, comp_t>::last_rX;

@@ -1083,7 +1083,24 @@ TPL index_t CP::split()
     return activation;
 }
 
-TPL void CP::merge_components(comp_t& ru, comp_t& rv)
+TPL comp_t CP::get_merge_chain_root(comp_t rv)
+{
+    /* find the root */
+    comp_t ru = rv;
+    while (merge_chains_root[ru] != chain_end()){ ru = merge_chains_root[ru]; }
+    /* update intermediary steps */
+    if (ru != rv){
+        comp_t rw = merge_chains_root[rv];
+        while (rw != ru){
+            merge_chains_root[rv] = ru;
+            rv = rw;
+            rw = merge_chains_root[rv];
+        }
+    }
+    return ru;
+}
+
+TPL comp_t CP::merge_components(comp_t ru, comp_t rv)
 {
     /* ensure the component with smallest identifier will be the root of the
      * merge chain */
@@ -1093,6 +1110,7 @@ TPL void CP::merge_components(comp_t& ru, comp_t& rv)
     merge_chains_leaf[ru] = merge_chains_leaf[rv];
     merge_chains_root[rv] = merge_chains_root[merge_chains_leaf[rv]] = ru;
     /* saturation considerations are taken care of in merge method */
+    return ru; // root of the resulting merge chain
 }
 
 TPL index_t CP::merge()
