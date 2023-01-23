@@ -301,7 +301,8 @@ TPL void CP_D0_DIST::update_merge_info(Merge_info& merge_info)
             + comp_weights[rv]*(distance(rXv, rXv) - distance(rXv, value));
     }
 
-    if (gain > ZERO || wru < min_comp_weight || wrv < min_comp_weight){
+    if (gain > ZERO || comp_weights[ru] < min_comp_weight
+                    || comp_weights[rv] < min_comp_weight){
         merge_info.gain = gain;
     }else{
         merge_info.gain = -real_inf();

@@ -521,7 +521,7 @@ TPL void CP::compute_reduced_graph()
         comp_t ru = comp_assign[v];
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
             if (!is_bind(e) && EDGE_WEIGHTS_(e) > ZERO){ 
-                comp_t rv = comp_assign[adj_vertices[e]]; 
+                comp_t rv = comp_assign[adj_vertices[e]];
                 if (ru != rv){
                     /* a nonzero edge involving ru and rv exists */
                     is_isolated[ru] = is_isolated[rv] = NOT_ISOLATED;
@@ -1263,7 +1263,9 @@ TPL index_t CP::merge()
                  * might not properly form new components yet and must be
                  * kept for later; the component must also be desaturated */
                     if (last_rv == last_comp_assign[adj_vertices[e]]){ 
-                        if (is_cut(e)){ continue; } // do not bind
+                        // if (is_cut(e)){ continue; } // do not bind
+                        // TODO: find a way to keep them
+                        // answer: update before, in order to compare roots
                         if (is_saturated[rv]){
                             is_saturated[rv] = false;
                             desaturated_comp++;
