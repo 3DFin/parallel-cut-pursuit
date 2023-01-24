@@ -339,8 +339,11 @@ TPL comp_t CP_D0::compute_merge_chains()
         if (ru != rv){ /* not already merged */
             candidate.ru = ru;
             candidate.rv = rv;
-            accept_merge(candidate);
-            merge_count++;
+            update_merge_info(candidate);
+            if (candidate.gain > -real_inf()){
+                accept_merge(candidate);
+                merge_count++;
+            }
         }
         candidates.pop_front();
     }
