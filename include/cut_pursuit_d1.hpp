@@ -49,7 +49,7 @@ protected:
     /* for multidimensional data, weights the coordinates in the lp norms;
      * all weights must be strictly positive, and it is advised to normalize
      * the weights so that the first value is unity */
-    const real_t *coor_weights;
+    const real_t* coor_weights;
 
     /* compute graph total variation; use reduced edges and reduced weights */
     real_t compute_graph_d1();

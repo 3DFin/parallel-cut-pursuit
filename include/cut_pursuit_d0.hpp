@@ -67,15 +67,15 @@ protected:
     real_t compute_objective() override;
 
     /**  greedy splitting  **/
+    comp_t K; // number of alternative values in the split
+    int split_iter_num; // number of partition-and-update iterations
+    real_t split_damp_ratio; // split damping along iterations
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
     uintmax_t split_complexity() override;
     void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
         override;
 
-    comp_t K; // number of alternative values in the split
-    int split_iter_num; // number of partition-and-update iterations
-    real_t split_damp_ratio; // split damping along iterations
 
     /* manage alternative values for a given component;
      * altX is a D-by-K array containing alternatives;

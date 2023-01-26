@@ -123,7 +123,8 @@ TPL void CP_PROX_TV::split_component(comp_t rv,
     const index_t* comp_list_rv = comp_list + first_vertex[rv];
 
     /**  the cut is essentially +1 vs -1
-     **  actual derivative value is twice the cut cost plus a constant  */
+     **  the actual derivative value is twice the cut cost minus the sum of
+     **  the absolute values of all coordinates of the gradient  */
 
     real_t rXv = rX[rv];
 

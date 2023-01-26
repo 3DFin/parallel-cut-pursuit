@@ -84,6 +84,9 @@ public:
             std::numeric_limits<real_t>::epsilon());
     }
 
+    void set_split_param(comp_t K = 2, int split_iter_num = 2,
+        real_t split_damp_ratio = 1.0);
+
     void set_parallel_param(int max_num_threads,
         bool balance_par_split = true);
     /* overload for default max_num_threads parameter */
@@ -183,11 +186,16 @@ protected:
     bool monitor_evolution;
 
     /**  split components with graph cuts and activate edges, in parallel  **/
+    comp_t K; // number of alternative values in the split
+    int split_iter_num; // number of partition-and-update iterations
+    real_t split_damp_ratio; // split damping along iterations
 
     virtual index_t split();
 
-    virtual void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
-        = 0;
+    virtual void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow);
+
+    virtual real_t vert_split_cost(index_t v, value_t* value) = 0;
+    virtual real_t edge_split_cost(index_t e, value_t* value) = 0;
 
     /* methods for checking and setting edge status */
     bool is_cut(index_t e); // check if edge e is cut (active)

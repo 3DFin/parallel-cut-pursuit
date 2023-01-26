@@ -61,6 +61,9 @@ TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
     dif_tol = ZERO;
     eps = numeric_limits<real_t>::epsilon();
     monitor_evolution = false;
+    K = 2;
+    split_iter_num = 2;
+    split_damp_ratio = ONE;
 
     max_num_threads = omp_get_max_threads();
     balance_par_split = max_num_threads > 1 &&
@@ -116,6 +119,33 @@ TPL void CP::set_cp_param(real_t dif_tol, int it_max, int verbose, real_t eps)
     this->it_max = it_max;
     this->verbose = verbose;
     this->eps = ZERO < dif_tol && dif_tol < eps ? dif_tol : eps;
+}
+
+TPL void CP::set_split_param(comp_t K, int split_iter_num,
+    real_t split_damp_ratio)
+{
+    if (split_iter_num < 1){
+        cerr << "Cut-pursuit: there must be at least one iteration in the "
+            "split (" << split_iter_num << " specified)." << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if (K < 2){
+        cerr << "Cut-pursuit: there must be at least two alternative values"
+            "in the split (" << K << " specified)." << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if (split_damp_ratio <= 0 || split_damp_ratio > ONE){
+        cerr << "Cut-pursuit: split damping ratio must be between zero "
+            "excluded and one included (" << split_damp_ratio << " specified)."
+            << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    this->K = K;
+    this->split_iter_num = split_iter_num;
+    this->split_damp_ratio = split_damp_ratio;
 }
 
 TPL void CP::set_parallel_param(int max_num_threads, bool balance_par_split)
@@ -1000,6 +1030,132 @@ TPL void CP::revert_balance_parallel_split(comp_t rV_big, comp_t rV_new,
         sizeof(index_t)*(rV_ini + 1));
     free(first_vertex_big);
     rV = rV_ini;
+}
+
+TPL void CP::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
+{
+    value_t* splitX = (value_t*) malloc_check(sizeof(value_t)*D*K);
+
+    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+    const index_t* comp_list_rv = comp_list + first_vertex[rv];
+
+    real_t damping = split_damp_ratio;
+    for (int split_it = 0; split_it < split_iter_num; split_it++){
+        damping += (ONE - split_damp_ratio)/split_iter_num;
+
+        if (split_it == 0){ init_split_values(rv, splitX); }
+        else{ update_split_values(rv, splitX); }
+
+        bool no_reassignment = true;
+
+        if (K == 2){ /* one graph cut is enough */
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                /* unary cost: choosing the second value against the first */
+                maxflow->terminal_capacity(i) =
+                    split_cost(v, splitX + D) - split_cost(v, splitX);
+            }
+
+            /* TODO: set edge capacities within each component */
+            index_t e_in_comp = 0;
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+                    if (is_bind(e)){
+                        real_t cap = damping*EDGE_WEIGHTS_(e);
+                        maxflow->set_edge_capacities(e_in_comp++, cap, cap);
+                    }
+                }
+            }
+
+            /* find min cut and set assignment accordingly */
+            maxflow->maxflow();
+
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                if (maxflow->is_sink(i) != label_assign[v]){
+                    label_assign[v] = maxflow->is_sink(i);
+                    no_reassignment = false;
+                }
+            }
+
+        }else{ /* iterate over all K alternative values */
+            for (comp_t k = 0; k < K; k++){
+    
+            /* check if alternative k has still vertices assigned to it */
+            if (!is_split_value(splitX[D*k])){ continue; }
+
+            /* set the source/sink capacities */
+            bool all_assigned_k = true;
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                comp_t l = label_assign[v];
+                /* unary cost for changing current value to k-th value */
+                if (l == k){
+                    maxflow->terminal_capacity(i) = ZERO;
+                }else{
+                    maxflow->terminal_capacity(i) = fv(v, splitX + D*k) -
+                        fv(v, splitX + D*l);
+                    all_assigned_k = false;
+                }
+            }
+            if (all_assigned_k){ continue; }
+
+            /* set d0 edge capacities within each component */
+            index_t e_in_comp = 0;
+            for (index_t i = 0; i < comp_size; i++){
+                index_t u = comp_list_rv[i];
+                comp_t lu = label_assign[u];
+                for (index_t e = first_edge[u]; e < first_edge[u + 1]; e++){
+                    if (!is_bind(e)){ continue; }
+                    index_t v = adj_vertices[e];
+                    comp_t lv = label_assign[v];
+                    /* horizontal and source/sink capacities are modified 
+                     * according to Kolmogorov & Zabih (2004); in their
+                     * notations, functional E(u,v) is decomposed as
+                     *
+                     * E(0,0) | E(0,1)    A | B
+                     * --------------- = -------
+                     * E(1,0) | E(1,1)    C | D
+                     *                         0 | 0      0 | D-C    0 |B+C-A-D
+                     *                 = A + --------- + -------- + -----------
+                     *                       C-A | C-A    0 | D-C    0 |   0
+                     *
+                     *            constant +      unary terms     + binary term
+                     */
+                    /* A = E(0,0) is the cost of the current assignment */
+                    real_t A = lu == lv ? ZERO : damping*EDGE_WEIGHTS_(e);
+                    /* B = E(0,1) is the cost of changing lv to k */
+                    real_t B = lu == k ? ZERO : damping*EDGE_WEIGHTS_(e);
+                    /* C = E(1,0) is the cost of changing lu to k */
+                    real_t C = lv == k ? ZERO : damping*EDGE_WEIGHTS_(e);
+                    /* D = E(1,1) = 0 is for changing both lu, lv to k */
+                    /* set weights in accordance with orientation u -> v */
+                    maxflow->terminal_capacity(i) += C - A;
+                    maxflow->terminal_capacity(index_in_comp[v]) -= C;
+                    maxflow->set_edge_capacities(e_in_comp++, B + C - A, ZERO);
+                }
+            }
+
+            /* find min cut and update assignment accordingly */
+            maxflow->maxflow();
+
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                if (maxflow->is_sink(i) && label_assign[v] != k){
+                    label_assign[v] = k;
+                    no_reassignment = false;
+                }
+            }
+
+            } // end for k
+        } // end if K == 2
+
+        if (no_reassignment){ break; }
+
+    } // end for split_it
+
+    free(splitX);
 }
 
 TPL index_t CP::split()
