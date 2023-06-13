@@ -16,7 +16,7 @@ os.chdir(os.path.realpath(os.path.dirname(__file__)))
 sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
                                               "wrappers"))
 
-from cp_pfdr_d1_lsx import cp_pfdr_d1_lsx 
+from cp_d1_lsx import cp_d1_lsx 
 
 ###  classes involved in the task  ###
 classNames = ["road", "vegetation", "facade", "hardscape",
@@ -60,8 +60,9 @@ del predk, truek
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX = cp_pfdr_d1_lsx(loss, y, first_edge, adj_vertices,
-                          edge_weights=homo_d1_weight, pfdr_rho=pfdr_rho)
+Comp, rX = cp_d1_lsx(loss, y, first_edge, adj_vertices, K=2,
+                     edge_weights=homo_d1_weight, pfdr_rho=pfdr_rho,
+                     max_num_threads=1)
 it2 = time.time()
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX

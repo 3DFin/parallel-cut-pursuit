@@ -57,7 +57,7 @@ os.chdir(os.path.realpath(os.path.dirname(__file__)))
 sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
                                               "wrappers"))
 
-from cp_kmpp_d0_dist import cp_kmpp_d0_dist
+from cp_d0_dist import cp_d0_dist
 
 ##  problem parameters
 Df = 1 # dimension of points features; unity eases graphical representation
@@ -93,13 +93,12 @@ fine_to_coarse = []
 loss = 1 # quadratic fidelity term
 coor_weights = np.concatenate((np.ones(Df), spatial_weight*np.ones(Ds)))
 for l in range(len(regularizations)):
-    Comp, rX, List, Graph = cp_kmpp_d0_dist(loss, values[l],
-                            graph[l][0], graph[l][1],
-                            edge_weights=edge_weights[l]*regularizations[l],
-                            vert_weights=comp_weights[l],
-                            coor_weights=coor_weights,
-                            min_comp_weight=min_comp_weights[l],
-                            compute_List=True, compute_Graph=True)
+    Comp, rX, List, Graph = cp_d0_dist(loss, values[l],
+        graph[l][0], graph[l][1],
+        edge_weights=edge_weights[l]*regularizations[l],
+        vert_weights=comp_weights[l], coor_weights=coor_weights,
+        min_comp_weight=min_comp_weights[l], compute_List=True,
+        compute_Graph=True)
     values.append(rX)
     graph.append((Graph[0], Graph[1].astype("uint32")))
     if comp_weights[l] is None:

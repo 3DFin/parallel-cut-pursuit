@@ -1,10 +1,8 @@
 /*=============================================================================
- * Hugo Raguet 2018
+ * Hugo Raguet 2021, 2023
  *===========================================================================*/
 #include <cmath>
 #include "cp_prox_tv.hpp"
-#include "pfdr_d1_ql1b.hpp"
-#include "wth_element.hpp"
 
 #define ZERO ((real_t) 0.0) // avoid conversions
 #define HALF ((real_t) 0.5) // avoid conversions
@@ -108,14 +106,6 @@ TPL index_t CP_PROX_TV::split()
     return activation;
 }
 
-TPL uintmax_t CP_PROX_TV::split_complexity()
-{
-    uintmax_t complexity = maxflow_complexity(); // graph cut
-    complexity += V; // account for gradient and final labeling
-    complexity += E; // edges capacities
-    return complexity*(V - saturated_vert)/V; // account saturation linearly
-}
-
 TPL void CP_PROX_TV::split_component(comp_t rv,
     Maxflow<index_t, real_t>* maxflow)
 {
@@ -149,7 +139,7 @@ TPL void CP_PROX_TV::split_component(comp_t rv,
             /* in most cases, both sides of a parallel separation
              * prefer the same descent direction, so no additional capacity;
              * this favors cutting, usually not detrimental to optimality */
-            /* }else if (is_par_sep(e)){
+            /* }else if (is_separation(e)){
                 maxflow->terminal_capacity(i) += EDGE_WEIGHTS_(e); */
             }
         }

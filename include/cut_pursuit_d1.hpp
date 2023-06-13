@@ -1,6 +1,6 @@
 /*=============================================================================
  * Derived class for cut-pursuit algorithm with d1 (total variation) 
- * penalization
+ * penalization on directionnaly differentiable problems
  *
  * Reference: H. Raguet and L. Landrieu, Cut-Pursuit Algorithm for Regularizing
  * Nonsmooth Functionals with Graph Total Variation.
@@ -45,20 +45,44 @@ public:
     void set_edge_weights(const real_t* edge_weights = nullptr,
         real_t homo_edge_weight = 1.0, const real_t* coor_weights = nullptr);
 
+    /* overload for forcing some values when D = 1 */
+    void set_split_param(index_t max_split_size, comp_t K = 2,
+        int split_iter_num = 1, real_t split_damp_ratio = 1.0,
+        int split_values_init_num = 1, int split_values_iter_num = 1);
+
 protected:
     /* for multidimensional data, weights the coordinates in the lp norms;
      * all weights must be strictly positive, and it is advised to normalize
      * the weights so that the first value is unity */
     const real_t* coor_weights;
 
+    /** split  **/
+
+    real_t* G; // store gradient of smooth part
+
+    using typename Cp<real_t, index_t, comp_t>::Split_info;
+
+    /* override for product with the gradient */
+    real_t vert_split_cost(const Split_info& split_info, index_t v, comp_t k)
+        const override;
+    /* factor product with difference */
+    real_t vert_split_cost(const Split_info& split_info, index_t v, comp_t k,
+        comp_t l) const override;
+
+    /* override for computing relative l2 norm evolution */
+    real_t compute_evolution() const override;
+
     /* compute graph total variation; use reduced edges and reduced weights */
-    real_t compute_graph_d1();
+    real_t compute_graph_d1() const;
 
     /**  type resolution for base template class members  **/
-    using Cp<real_t, index_t, comp_t>::rX;
     using Cp<real_t, index_t, comp_t>::last_rX;
+    using Cp<real_t, index_t, comp_t>::last_comp_assign;
+    using Cp<real_t, index_t, comp_t>::rX;
     using Cp<real_t, index_t, comp_t>::eps;
     using Cp<real_t, index_t, comp_t>::dif_tol;
+    using Cp<real_t, index_t, comp_t>::split_iter_num;
+    using Cp<real_t, index_t, comp_t>::K;
     using Cp<real_t, index_t, comp_t>::V;
     using Cp<real_t, index_t, comp_t>::E;
     using Cp<real_t, index_t, comp_t>::D;
@@ -69,18 +93,54 @@ protected:
     using Cp<real_t, index_t, comp_t>::first_vertex;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::label_assign;
-    using Cp<real_t, index_t, comp_t>::is_par_sep;
+    using Cp<real_t, index_t, comp_t>::is_separation;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::reduced_edges;
     using Cp<real_t, index_t, comp_t>::malloc_check;
     using Cp<real_t, index_t, comp_t>::realloc_check;
+    using Cp<real_t, index_t, comp_t>::is_saturated;
+    using Cp<real_t, index_t, comp_t>::saturated_comp;
+    using Cp<real_t, index_t, comp_t>::saturated_vert;
+    using Cp<real_t, index_t, comp_t>::homo_edge_weight;
+    using Cp<real_t, index_t, comp_t>::edge_weights;
 
 private:
     const D1p d1p; // see public enum declaration
 
-    /* remove or activate separating edges used for balancing parallel
-     * workload, see header `cut_pursuit.hpp`;
-     * parallel separation edges should be activated if and only if the descent
+    /**  split  **/
+
+    /* override for computing the gradient */
+    index_t split() override;
+
+    virtual void compute_grad() = 0; // compute gradient of smooth part
+
+    /* override for D = 1 : set {-1, +1} and omit competing value k = 0 for
+     * binary cut; assumes differentiability */
+    Split_info initialize_split_info(comp_t rv) override;
+    /* override the setting and update of split values for using opposite of
+     * the gradient; add a projection on the unit ball, with virtualization for
+     * possible further specializations; in particular, if no descent direction
+     * can be found, set to zero */
+    void set_split_value(Split_info& split_info, comp_t k, index_t v) const
+        override;
+protected:
+    virtual void project_descent_direction(Split_info& split_info, comp_t k)
+        const;
+private:
+    void update_split_info(Split_info& split_info) const override;
+
+    /* override for counting no k-means when D = 1 */
+    uintmax_t split_values_complexity() const override;
+    /* override for ommiting one graph cut when D = 1 */
+    uintmax_t split_complexity() const override;
+
+    /* override for computing D11 or D12 norm */
+    real_t edge_split_cost(const Split_info& split_info, index_t e, comp_t lu,
+        comp_t lv) const override;
+
+    /* remove or activate separating edges used for balancing split workload,
+     * see header `cut_pursuit.hpp`;
+     * separation edges should be activated if and only if the descent
      * directions at its vertices are different; on directionnally
      * differentiable problems, descent directions depends in theory only on
      * the components values; since these are the same on both sides of a
@@ -89,9 +149,11 @@ private:
      * descent direction;
      * we provide here a convenient implementation for this case, but if 
      * split_component() provided by a derived class cannot guarantee the above
-     * it is advise to override this by calling the base method
-     * Cp<...>::remove_parallel_separations */
-    index_t remove_parallel_separations(comp_t rV_new) override;
+     * it is advised to override this in derived class by calling the base
+     * method CP::remove_balance_separations */
+    index_t remove_balance_separations(comp_t rV_new) override;
+
+    /**  merge  **/
 
     /* test if two components are sufficiently close to merge */
     bool is_almost_equal(comp_t ru, comp_t rv);
@@ -99,7 +161,12 @@ private:
     /* compute the merge chains and return the number of effective merges */
     comp_t compute_merge_chains() override;
 
+    /* override for checking value evolution of saturated components;
+     * precision can be increased by decreasing dif_tol if necessary */
+    index_t merge() override;
+
     /**  type resolution for base template class members  **/
+    using Cp<real_t, index_t, comp_t>::maxflow_complexity;
     using Cp<real_t, index_t, comp_t>::cut;
     using Cp<real_t, index_t, comp_t>::bind;
     using Cp<real_t, index_t, comp_t>::merge_components;

@@ -1,6 +1,6 @@
-  #-------------------------------------------------------------------------%
-  #  script for illustrating cp_kmpp_d0_dist on labeling of 3D point cloud  %
-  #-------------------------------------------------------------------------%
+    #--------------------------------------------------------------------%
+    #  script for illustrating cp_d0_dist on labeling of 3D point cloud  %
+    #--------------------------------------------------------------------%
 # References:
 # L. Landrieu and G. Obozinski, Cut Pursuit: fast algorithms to learn
 # piecewise constant functions on general weighted graphs, SIAM Journal on
@@ -21,14 +21,14 @@ os.chdir(os.path.realpath(os.path.dirname(__file__)))
 sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
                                               "wrappers"))
 
-from cp_kmpp_d0_dist import cp_kmpp_d0_dist 
+from cp_d0_dist import cp_d0_dist 
 
 ###  classes involved in the task  ###
 classNames = ["road", "vegetation", "facade", "hardscape",
         "scanning artifacts", "cars"]
 classId = np.arange(1, 7, dtype="uint8")
 
-###  parameters; see documentations of cp_kmpp_d0_dist  ###
+###  parameters; see documentations of cp_d0_dist  ###
 # cp_dif_tol = 1e-3
 # cp_it_max = 10
 # K = 2
@@ -40,9 +40,6 @@ classId = np.arange(1, 7, dtype="uint8")
 # balance_parallel_split = True
 
 ###  initialize data  ###
-# For details on the data and parameters, see H. Raguet, A Note on the
-# Forward-Douglas--Rachford Splitting for Monotone Inclusion and Convex
-# Optimization Optimization Letters, 2018, 1-24
 mat = scipy.io.loadmat("../data/labeling_3D.mat", squeeze_me=True)
 loss = mat["loss"]
 y = mat["y"]
@@ -65,8 +62,8 @@ del predk, truek
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX = cp_kmpp_d0_dist(loss, y, first_edge, adj_vertices,
-                           edge_weights=homo_d0_weight)
+Comp, rX = cp_d0_dist(loss, y, first_edge, adj_vertices,
+    edge_weights=homo_d0_weight)
 it2 = time.time()
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX

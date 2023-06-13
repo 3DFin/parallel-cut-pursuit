@@ -18,7 +18,7 @@
  * Piecewise Constant Functions on General Weighted Graphs, SIAM Journal on 
  * Imaging Sciences, 2017, 10, 1724-1766
  *
- * Hugo Raguet 2021
+ * Hugo Raguet 2021, 2023
  *===========================================================================*/
 #pragma once
 #include "cut_pursuit_d1.hpp"
@@ -83,12 +83,8 @@ private:
     /**  cut-pursuit steps  **/
 
     /* split */
-    /* rough estimate of the number of operations for split step;
-     * useful for estimating the number of parallel threads */
-    uintmax_t split_complexity() override;
-    void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
-        override;
-    index_t split() override; // overload for computing gradient
+
+    void compute_grad() override;
 
     /* compute reduced values */
     void solve_reduced_problem() override;
@@ -105,7 +101,7 @@ private:
     using Cp<real_t, index_t, comp_t>::monitor_evolution;
     using Cp<real_t, index_t, comp_t>::is_cut;
     using Cp<real_t, index_t, comp_t>::is_bind;
-    using Cp<real_t, index_t, comp_t>::is_par_sep;
+    using Cp<real_t, index_t, comp_t>::is_separation;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::saturated_comp;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
