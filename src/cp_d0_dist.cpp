@@ -88,7 +88,7 @@ TPL void CP_D0_DIST::set_split_param(index_t max_split_size, comp_t K,
     int split_values_iter_num)
 {
     Cp<real_t, index_t, comp_t>::set_split_param(max_split_size, K,
-        split_iter_numn split_damp_ratio, split_values_init_num,
+        split_iter_num, split_damp_ratio, split_values_init_num,
         split_values_iter_num);
 }
 
@@ -176,62 +176,49 @@ TPL void CP_D0_DIST::update_split_info(Split_info& split_info) const
     free(total_weights);
 }
 
-TPL void CP_D0_DIST::update_merge_candidate(index_t re, comp_t ru, comp_t rv)
+TPL void CP_D0_DIST::update_merge_info(Merge_info& merge_info)
 {
-    const real_t* rXu = rX + D*ru;
-    const real_t* rXv = rX + D*rv;
-    real_t wru = comp_weights[ru];
-    real_t wrv = comp_weights[rv];
+    comp_t ru = merge_info.ru;
+    comp_t rv = merge_info.rv;
+    real_t edge_weight = reduced_edge_weights[merge_info.re];
+
+    real_t* rXu = rX + D*ru;
+    real_t* rXv = rX + D*rv;
+    real_t wru = comp_weights[ru]/(comp_weights[ru] + comp_weights[rv]);
+    real_t wrv = comp_weights[rv]/(comp_weights[ru] + comp_weights[rv]);
+
+    real_t* value = merge_info.value;
+    for (size_t d = 0; d < D; d++){ value[d] = wru*rXu[d] + wrv*rXv[d]; }
+
+    real_t gain;
 
     if (loss == quadratic_loss()){
-        real_t gain = reduced_edge_weights[re]
-            - wru*wrv/(wru + wrv)*distance(rXu, rXv);
-
-        if (gain > ZERO || wru < min_comp_weight || wrv < min_comp_weight){
-            if (!merge_info_list[re]){
-                merge_info_list[re] = new Merge_info(D);
-            }
-            merge_info_list[re]->gain = gain;
-            wru /= (comp_weights[ru] + comp_weights[rv]);
-            wrv /= (comp_weights[ru] + comp_weights[rv]);
-            for (size_t d = 0; d < D; d++){
-                merge_info_list[re]->value[d] = wru*rXu[d] + wrv*rXv[d];
-            }
-        }else if (merge_info_list[re]){
-            delete merge_info_list[re];
-            merge_info_list[re] = nullptr;
-        }
+        gain = edge_weight - comp_weights[ru]*wrv*distance(rXu, rXv);
     }else{
-        if (!merge_info_list[re]){ merge_info_list[re] = new Merge_info(D); }
-        real_t* value = merge_info_list[re]->value;
-
-        wru /= (comp_weights[ru] + comp_weights[rv]);
-        wrv /= (comp_weights[ru] + comp_weights[rv]);
-        for (size_t d = 0; d < D; d++){ value[d] = wru*rXu[d] + wrv*rXv[d]; }
-
         /* in the following some computations might be saved by factoring
          * multiplications and logarithms, at the cost of readability */
-        merge_info_list[re]->gain = reduced_edge_weights[re]
+        gain = edge_weight
             + comp_weights[ru]*(distance(rXu, rXu) - distance(rXu, value))
             + comp_weights[rv]*(distance(rXv, rXv) - distance(rXv, value));
+    }
 
-        if (merge_info_list[re]->gain <= ZERO &&
-            comp_weights[ru] >= min_comp_weight &&
-            comp_weights[rv] >= min_comp_weight){
-            delete merge_info_list[re];
-            merge_info_list[re] = nullptr;
-        }
+    if (gain > ZERO || comp_weights[ru] < min_comp_weight
+                    || comp_weights[rv] < min_comp_weight){
+        merge_info.gain = gain;
+    }else{
+        merge_info.gain = -real_inf();
     }
 }
 
 TPL size_t CP_D0_DIST::update_merge_complexity()
 { return rE*2*D; /* each update is only linear in D */ }
 
-TPL void CP_D0_DIST::accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv)
+TPL comp_t CP_D0_DIST::accept_merge(const Merge_info& candidate)
 {
-    Cp_d0<real_t, index_t, comp_t>::accept_merge_candidate(re, ru, rv);
-        // ru now the root of the merge chain
+    comp_t ru = Cp_d0<real_t, index_t, comp_t>::accept_merge(candidate);
+    comp_t rv = ru == candidate.ru ? candidate.rv : candidate.ru;
     comp_weights[ru] += comp_weights[rv];
+    return ru;
 }
 
 TPL index_t CP_D0_DIST::merge()

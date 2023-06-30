@@ -31,7 +31,7 @@ classId = np.arange(1, 7, dtype="uint8")
 ###  parameters; see documentations of cp_d0_dist  ###
 # cp_dif_tol = 1e-3
 # cp_it_max = 10
-# K = 2
+K = 3
 # split_iter_num = 2
 # kmpp_init_num = 3
 # kmpp_iter_num = 3
@@ -63,7 +63,7 @@ del predk, truek
 ###  solve the optimization problem  ###
 it1 = time.time()
 Comp, rX = cp_d0_dist(loss, y, first_edge, adj_vertices,
-    edge_weights=homo_d0_weight)
+    edge_weights=homo_d0_weight, K=K)
 it2 = time.time()
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX

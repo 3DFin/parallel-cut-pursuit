@@ -99,9 +99,10 @@ TPL comp_t CP_D0::compute_merge_chains()
     /* compute merge candidate lists in parallel */
     list<Merge_info> candidates;
     forward_list<Merge_info> neg_candidates;
+    // #pragma omp parallel NUM_THREADS(update_merge_complexity(), rE)
+    // { cannot populate lists in parallel
     Merge_info merge_info(D);
-    // #pragma omp parallel for schedule(static) \
-        // NUM_THREADS(update_merge_complexity(), rE)
+    // #pragma omp for schedule(static)
     for (index_t re = 0; re < rE; re++){
         merge_info.re = re;
         merge_info.ru = reduced_edges[TWO*re];
@@ -113,6 +114,7 @@ TPL comp_t CP_D0::compute_merge_chains()
             neg_candidates.push_front(merge_info);
         }
     }
+    // }
 
     /**  positive gains merges: update all gains after each merge  **/
     comp_t last_merge_root = MERGE_INIT;
