@@ -58,22 +58,23 @@ public:
 
     using Pcd_prox<real_t>::set_name;
 
-    /* when Lipschitzianity of the gradient of f should be estimated:
-     * USER is automatically set when Lipschitz info is set by the user, 
-     * ONCE keeps info between reconditioning (saves computations),
-     * EACH recomputes at each reconditioning (saves memory, default) */
-    enum Lipschcomput {USER, ONCE, EACH};
-
     /**  methods for manipulating parameters  **/
 
-    void set_relaxation(real_t rho = 1.);
+    void set_relaxation(real_t rho = 1.0);
 
     /* information on Lipschitzianity provided by user */
-    void set_lipschitz_param(const real_t* L = nullptr, real_t l = 0.,
-        Condshape lshape = MULTIDIM);
+    void set_lipschitz_param(const real_t* L, real_t l, Condshape lshape);
+
+    /* when Lipschitzianity of the gradient of f should be estimated:
+     * USER is automatically set when Lipschitz info is set by the user, 
+     * ONCE keeps info between reconditioning (saves computations and enables
+     *  weighting of the iterate evolution by the Lipschitz metric, default),
+     * EACH recomputes at each reconditioning (saves memory but do cannot
+     *  weights iterate evolution by the Lipschitz metric) */
+    enum Lipschcomput {USER, ONCE, EACH};
 
     /* overload for specifying computation of Lipschitz coefficients */
-    void set_lipschitz_param(Lipschcomput lipschcomput);
+    void set_lipschitz_param(Lipschcomput lipschcomput = ONCE);
 
     /* retrieving and setting auxiliary variables might be usefull for warm
      * restart; NOTA:
@@ -109,7 +110,7 @@ protected:
      * otherwise 'l' is a Lipschitz constant of the gradient */
     const real_t* L;
     real_t l;
-    Lipschcomput lipschcomput; // see public declaration 
+    Lipschcomput lipschcomput; // see public declarations
     /* nonconst pointer to L in case Lipschitz metric must be computed */
     real_t* Lmut;
 
@@ -131,9 +132,9 @@ protected:
      * the derived class are responsible for allocating them */
     real_t *Z_Id, *Id_W;
 
-    const Condshape gashape; // see public declaration 
-    const Condshape wshape; // see public declaration 
-    Condshape lshape; // see public declaration 
+    const Condshape gashape; // see public declarations
+    const Condshape wshape; // see public declarations
+    Condshape lshape; // see public declarations
 
     /**  preconditioning steps  **/
 
@@ -181,6 +182,9 @@ protected:
     void main_iteration() override;
 
     real_t compute_objective() override;
+
+    /* weight l2 norm by Lipschitz metric if available */
+    real_t compute_evolution() override;
 
     /**  type resolution for base template class members  **/
     using Pcd_prox<real_t>::X;

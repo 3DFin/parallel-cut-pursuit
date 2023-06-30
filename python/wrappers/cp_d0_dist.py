@@ -5,24 +5,24 @@ import sys
 sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
                                               "../bin"))
 
-from cp_kmpp_d0_dist_cpy import cp_kmpp_d0_dist_cpy
+from cp_d0_dist_cpy import cp_d0_dist_cpy
 
-def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
-                    vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
-                    cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
-                    kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
-                    verbose=True, max_num_threads=0,
-                    balance_parallel_split=True, compute_List=False,
-                    compute_Graph=False, compute_Obj=False, compute_Time=False,
-                    compute_Dif=False):
+def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
+               vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
+               cp_it_max=10, K=2, split_iter_num=2, split_damp_ratio=1.0,
+               kmpp_init_num=3, kmpp_iter_num=3, min_comp_weight=0.0,
+               verbose=True, max_num_threads=0, max_split_size=None,
+               balance_parallel_split=True, compute_List=False,
+               compute_Graph=False, compute_Obj=False, compute_Time=False,
+               compute_Dif=False):
     """
-    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_kmpp_d0_dist(loss, Y,
+    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_d0_dist(loss, Y,
         first_edge, adj_vertices, edge_weights=None, vert_weights=None,
         coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10, K=2,
         split_iter_num=2, split_damp_ratio=1.0, kmpp_init_num=3,
         kmpp_iter_num=3, min_comp_weight=0.0, verbose=True, max_num_threads=0,
-        balance_parallel_split=True, compute_List=False, compute_Obj=False,
-        compute_Time=False, compute_Dif=False)
+        max_split_size=None, balance_parallel_split=True, compute_List=False,
+        compute_Obj=False, compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d0 (weighted contour length) penalization, with
     a loss akin to a distance:
@@ -117,6 +117,9 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     verbose - if true, display information on the progress
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
+    max_split_size - maximum number of vertices allowed in connected component
+        passed to a split problem; make split of very large components faster,
+        but might induced suboptimal artificial cuts
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
     compute_List  - report the list of vertices constituting each component
@@ -224,8 +227,7 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
                          "should contain |V| + 1 = {0} elements, "
                          "but {1} are given".format(V + 1, first_edge.size))
  
-    # Check type of all numpy.array arguments of type float (Y, edge_weights,
-    # vert_weights, coor_weights) 
+    # Check type of all numpy.array arguments of type float
     for name, ar_args in zip(
             ["Y", "edge_weights", "vert_weights", "coor_weights"],
             [ Y ,  edge_weights ,  vert_weights ,  coor_weights ]):
@@ -238,19 +240,22 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be in "
                         "column-major order (F-contigous).")
 
-    # Convert in float64 all float arguments if needed (loss, cp_dif_tol) 
+    # Convert in float64 all float arguments
     loss = float(loss)
     cp_dif_tol = float(cp_dif_tol)
     split_damp_ratio = float(split_damp_ratio)
      
-    # Convert all int arguments (cp_it_max, K, split_iter_num, kmpp_init_num, 
-    # kmpp_iter_num, verbose) in ints: 
+    # Convert all int arguments: 
     cp_it_max = int(cp_it_max)
     K = int(K)
     split_iter_num = int(split_iter_num)
     kmpp_init_num = int(kmpp_init_num)
     kmpp_iter_num = int(kmpp_iter_num)
     max_num_threads = int(max_num_threads)
+    if max_split_size is None:
+        max_split_size = V
+    else:
+        max_split_size = int(max_split_size)
 
     # Check type of all booleen arguments
     for name, b_args in zip(
@@ -263,9 +268,9 @@ def cp_kmpp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
                             "boolean".format(name))
 
     # Call wrapper python in C  
-    return cp_kmpp_d0_dist_cpy(loss, Y, first_edge, adj_vertices, edge_weights,
-            vert_weights, coor_weights, cp_dif_tol, cp_it_max, K,
-            split_iter_num, split_damp_ratio, kmpp_init_num, kmpp_iter_num,
-            min_comp_weight, verbose, max_num_threads, balance_parallel_split,
-            real_t == "float64", compute_List, compute_Graph, compute_Obj,
-            compute_Time, compute_Dif)
+    return cp_d0_dist_cpy(loss, Y, first_edge, adj_vertices, edge_weights,
+        vert_weights, coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
+        split_damp_ratio, kmpp_init_num, kmpp_iter_num, min_comp_weight,
+        verbose, max_num_threads, max_split_size, balance_parallel_split,
+        real_t == "float64", compute_List, compute_Graph, compute_Obj,
+        compute_Time, compute_Dif)

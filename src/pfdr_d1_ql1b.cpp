@@ -305,12 +305,6 @@ TPL void PFDR_D1_QL1B::initialize_iterate()
 
 TPL void PFDR_D1_QL1B::preconditioning(bool init)
 {
-    /* if evolution on the iterates is to be computed, keep the
-     * Lispschitz metric in order to weight the norms */
-    if (dif_tol > ZERO || dif_rcd > ZERO || iterate_evolution){
-        if (lipschcomput == EACH){ lipschcomput = ONCE; }
-    }
-
     Pfdr_d1<real_t, vertex_t>::preconditioning(init);
 
     if (init){ /* reinitialize according to penalizations */
@@ -341,21 +335,6 @@ TPL void PFDR_D1_QL1B::main_iteration()
     Pfdr<real_t, vertex_t>::main_iteration();
     
     apply_A();
-}
-
-TPL real_t PFDR_D1_QL1B::compute_evolution()
-{
-    real_t dif = ZERO;
-    real_t amp = ZERO;
-    #pragma omp parallel for schedule(static) NUM_THREADS(V) \
-        reduction(+:dif, amp)
-    for (vertex_t v = 0; v < V; v++){
-        real_t d = last_X[v] - X[v];
-        dif += lshape == MONODIM ? L[v]*d*d : d*d;
-        amp += lshape == MONODIM ? L[v]*X[v]*X[v] : X[v]*X[v];
-        last_X[v] = X[v];
-    }
-    return sqrt(amp) > eps ? sqrt(dif/amp) : sqrt(dif)/eps;
 }
 
 /**  instantiate for compilation  **/

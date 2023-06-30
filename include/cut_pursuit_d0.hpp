@@ -52,43 +52,26 @@ public:
      * getting the corresponding pointer member and setting it to null
      * beforehand */
 
-    void set_split_param(comp_t K = 2, int split_iter_num = 2,
-        real_t split_damp_ratio = 1.0);
-
 protected:
     /* compute the functional f at a single vertex */
-    virtual real_t fv(index_t v, const value_t* Xv) = 0; 
+    virtual real_t fv(index_t v, const value_t* Xv) const = 0; 
 
     /* compute graph contour length; use reduced edges and reduced weights */
-    real_t compute_graph_d0();
+    real_t compute_graph_d0() const;
 
     /* compute objective functional */
-    virtual real_t compute_f();
-    real_t compute_objective() override;
+    virtual real_t compute_f() const;
+    real_t compute_objective() const override;
 
     /**  greedy splitting  **/
-    /* rough estimate of the number of operations for split step;
-     * useful for estimating the number of parallel threads */
-    uintmax_t split_complexity() override;
-    void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
-        override;
 
-    comp_t K; // number of alternative values in the split
-    int split_iter_num; // number of partition-and-update iterations
-    real_t split_damp_ratio; // split damping along iterations
-
-    /* manage alternative values for a given component;
-     * altX is a D-by-K array containing alternatives;
-     * initialize usually with k-means;
-     * update usually use some kind of averaging, and must flag in some way
-     * alternative values which are no longer competing (i.e. associated to no
-     * vertex), which can be checked with is_split_value */
-    virtual void init_split_values(comp_t rv, value_t* altX) = 0;
-    virtual void update_split_values(comp_t rv, value_t* altX) = 0;
-    virtual bool is_split_value(value_t altX) = 0;
-    /* rough estimate of the number of operations for initializing and
-     * updating the split values */
-    virtual uintmax_t split_values_complexity() = 0;
+    /* compute unary cost of split value k at vertex v in component rv */
+    using typename Cp<real_t, index_t, comp_t>::Split_info;
+    real_t vert_split_cost(const Split_info& split_info, index_t v,
+        comp_t k) const override;
+    /* compute binary cost of choosing alternatives lu and lv at edge e */
+    real_t edge_split_cost(const Split_info& split_info, index_t e,
+        comp_t lu, comp_t lv) const override;
 
     /**  merging components  **/
 
@@ -144,30 +127,26 @@ protected:
     virtual comp_t accept_merge(const Merge_info&);
 
     /**  type resolution for base template class members  **/
-    using Cp<real_t, index_t, comp_t>::rX;
-    using Cp<real_t, index_t, comp_t>::last_rX;
+    using Cp<real_t, index_t, comp_t>::K;
+    using Cp<real_t, index_t, comp_t>::split_iter_num;
+    using Cp<real_t, index_t, comp_t>::split_damp_ratio;
+    using Cp<real_t, index_t, comp_t>::split_values_init_num;
+    using Cp<real_t, index_t, comp_t>::split_values_iter_num;
     using Cp<real_t, index_t, comp_t>::V;
     using Cp<real_t, index_t, comp_t>::E;
     using Cp<real_t, index_t, comp_t>::D;
-    using Cp<real_t, index_t, comp_t>::first_edge;
-    using Cp<real_t, index_t, comp_t>::adj_vertices;
-    using Cp<real_t, index_t, comp_t>::edge_weights;
-    using Cp<real_t, index_t, comp_t>::homo_edge_weight;
     using Cp<real_t, index_t, comp_t>::rV;
     using Cp<real_t, index_t, comp_t>::rE;
-    using Cp<real_t, index_t, comp_t>::comp_assign;
-    using Cp<real_t, index_t, comp_t>::label_assign;
+    using Cp<real_t, index_t, comp_t>::rX;
+    using Cp<real_t, index_t, comp_t>::edge_weights;
+    using Cp<real_t, index_t, comp_t>::homo_edge_weight;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
-    using Cp<real_t, index_t, comp_t>::index_in_comp;
-    using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::reduced_edges;
-    using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
     using Cp<real_t, index_t, comp_t>::merge_components;
     using Cp<real_t, index_t, comp_t>::malloc_check;
-    using Cp<real_t, index_t, comp_t>::realloc_check;
     using Cp<real_t, index_t, comp_t>::real_inf;
 
 private:
@@ -179,8 +158,4 @@ private:
     void select_best_merge_candidate(index_t re, real_t* best_gain,
         index_t* best_edge);
     Merge_info reserved_merge_info;
-
-    /**  type resolution for base template class members  **/
-    using Cp<real_t, index_t, comp_t>::maxflow_complexity;
-    using Cp<real_t, index_t, comp_t>::is_bind;
 };

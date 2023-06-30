@@ -5,7 +5,7 @@
  * Piecewise Constant Functions on General Weighted Graphs, SIAM Journal on 
  * Imaging Sciences, 2017, 10, 1724-1766
  *
- * Hugo Raguet 2018, 2020
+ * Hugo Raguet 2018, 2020, 2022
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,7 +45,6 @@ class Cp
 public:
     /**  constructor, destructor  **/
 
-    /* only creates flow graph structure */
     Cp(index_t V, index_t E, const index_t* first_edge, 
         const index_t* adj_vertices, size_t D = 1);
 
@@ -59,7 +58,7 @@ public:
 
     /**  manipulate private members pointers and values  **/
 
-    void reset_edges(); // flag all edges as not active
+    void reset_edges(); // bind all edges
 
     /* if 'edge_weights' is null, homogeneously equal to 'homo_edge_weight' */
     void set_edge_weights(const real_t* edge_weights = nullptr,
@@ -84,12 +83,17 @@ public:
             std::numeric_limits<real_t>::epsilon());
     }
 
+    /* tune split parameters; set max_split_size to V for no max */
+    void set_split_param(index_t max_split_size, comp_t K = 2,
+        int split_iter_num = 1, real_t split_damp_ratio = 1.0,
+        int split_values_init_num = 1, int split_values_iter_num = 1);
+
     void set_parallel_param(int max_num_threads,
-        bool balance_par_split = true);
+        bool balance_parallel_split = true);
     /* overload for default max_num_threads parameter */
-    void set_parallel_param(bool balance_par_split)
+    void set_parallel_param(bool balance_parallel_split)
     {
-        set_parallel_param(omp_get_max_threads(), balance_par_split);
+        set_parallel_param(omp_get_max_threads(), balance_parallel_split);
     }
 
     /* the 'get' methods takes pointers to pointers as arguments; a null means
@@ -100,7 +104,7 @@ public:
 
     comp_t get_components(const comp_t** comp_assign = nullptr,
         const index_t** first_vertex = nullptr,
-        const index_t** comp_list = nullptr);
+        const index_t** comp_list = nullptr) const;
 
     /* return the number of reduced edges */
     index_t get_reduced_graph(const comp_t** reduced_edges = nullptr,
@@ -108,7 +112,7 @@ public:
 
     /* retrieve the reduced iterate (values of the components);
      * WARNING: reduced values are free()'d by destructor */
-    value_t* get_reduced_values();
+    const value_t* get_reduced_values() const;
 
     /* set the reduced iterate (values of the components);
      * WARNING: if not set to null before deletion of the main cp object,
@@ -134,22 +138,20 @@ protected:
      * - for each edge, 'adj_vertices' indicates its ending vertex */
     const index_t *first_edge, *adj_vertices; 
     
-    const real_t *edge_weights;
-    real_t homo_edge_weight;
-
-    comp_t saturated_vert; // number of vertices within saturated components
+    const real_t *edge_weights; // array of length E, weights of edges
+    real_t homo_edge_weight; // homogeneous weights, set edge_weights to null
 
     /* dimension of the data; total size signal is V*D */
     const size_t D;
 
     /**  reduced graph  **/
 
+    /* last_* are used to identify saturated components and to compute 
+     * iterate evolution */
     comp_t rV, last_rV; // number of components (reduced vertices)
     value_t *rX, *last_rX; // reduced iterate (values of the components)
     index_t rE; // number of reduced edges
-    /* assignment of each vertex to a component;
-     * last_[rV|rX] are used both for identifying saturated components
-     * and computing iterate evolution */
+    /* assignment of each vertex to a component */
     comp_t* comp_assign, *last_comp_assign;
     /* list the vertices of each components:
      * - vertices are gathered in 'comp_list' so that all vertices belonging
@@ -163,6 +165,7 @@ protected:
     /* components saturation */
     bool* is_saturated;
     comp_t saturated_comp; // number of saturated components
+    index_t saturated_vert; // number of vertices within saturated components
     /* reduced connectivity
      * reduced edges represented with edges list (array of size twice the 
      * number of reduced edges, consecutive indices are linked components)
@@ -179,55 +182,101 @@ protected:
      * subroutine, controlling the number of subiterations between prints */
     int verbose; 
 
-    /* for stopping criterion or component saturation */
-    bool monitor_evolution;
-
-    /**  split components with graph cuts and activate edges, in parallel  **/
+    /**  split components with graph cuts  **/
+    struct Split_info {
+        comp_t rv; // component to split
+        comp_t K; // number of alternative values in the component's split
+        /* first alternative to compete, useful to avoid competing with a value
+         * already assigned to all vertices, or for single cut with K = 2 */
+        comp_t first_k; 
+        value_t* sX; // D-by-K array with alternative values in the split
+        Split_info(comp_t rv);
+        ~Split_info();
+    };
+    comp_t K; // maximum number of alternative values in any component's split
+    int split_iter_num; // number of partition-and-update iterations
+    real_t split_damp_ratio; // split damping along iterations
+    /* number of repetitions in case of stochastic split values computation */
+    int split_values_init_num;
+    int split_values_iter_num;
 
     virtual index_t split();
 
-    virtual void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
-        = 0;
+    virtual void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow);
 
-    /* methods for checking and setting edge status */
-    bool is_cut(index_t e); // check if edge e is cut (active)
-    bool is_bind(index_t e); // check if edge e is binding (inactive)
-    bool is_par_sep(index_t e); // check if edge e is a parallel cut separation
-    void cut(index_t e); // flag a cut (active) edge
-    void bind(index_t e); // flag a binding (inactive) edge
+    /* initialize candidate split values, schedule and assignments;
+     * base class version implements a kmeans++, with distances replaced by
+     * split costs, and centroids assignments and updates made purely virtual
+     * for specializing data and computations */
+    virtual Split_info initialize_split_info(comp_t rv);
+    /* make split value k that would optimaly fit vertex v */
+    virtual void set_split_value(Split_info& split_info, comp_t k, index_t v)
+        const = 0;
+    /* usually some kind of averaging; must remove alternative values which are
+     * no longer interesting (e.g. associated to no vertex) */
+    virtual void update_split_info(Split_info& split_info) const = 0;
+    /* rough estimate of the number of operations for initializing the split
+     * values and all subsequent updates */
+    virtual uintmax_t split_values_complexity() const;
+    /* compute unary cost of split value k at vertex v in component rv;
+     * can be +infinity, not -infinity */
+    virtual real_t vert_split_cost(const Split_info& split_info, index_t v,
+        comp_t k) const = 0;
+    /* overload for possibly saving computations for the difference when
+     * choosing alternative k against alternative l */
+    virtual real_t vert_split_cost(const Split_info& split_info, index_t v,
+        comp_t k, comp_t l) const;
+    /* compute binary cost of choosing alternatives lu and lv at edge e */
+    virtual real_t edge_split_cost(const Split_info& split_info, index_t e,
+        comp_t lu, comp_t lv) const = 0;    
 
-    /* split large components for balancing parallel workload:
+    /* methods for setting and checking edge status */
+    bool is_cut(index_t e) const // check if edge e is cut (active)
+        { return edge_status[e] == CUT; }
+    bool is_bind(index_t e) const // check if edge e is binding (inactive)
+        { return edge_status[e] == BIND; }
+    bool is_separation(index_t e) const // check if edge is a separation
+        { return edge_status[e] == SEPARATION; }
+    void cut(index_t e) // flag a cut (active) edge
+        { edge_status[e] = CUT; }
+    void bind(index_t e) // flag a binding (inactive) edge
+        { edge_status[e] = BIND; }
+    void separate(index_t e) // flag a balancing separation edge
+        { edge_status[e] = SEPARATION; }
+
+    /* split large components for balancing split, either for parallelism or
+     * for preventing bad maxflow performance on huge components;
      * new components are computed by breadth-first search, restarting when a
      * maximum size is reached;
      * reorder comp_list and populate first vertex accordingly;
      * rV_new is the number of components resulting from such split;
      * rV_big is the number of large original components split this way;
      * first_vertex_big holds the first vertices of components split this way;
-     * return the number of useful parallel threads */
-    int balance_parallel_split(comp_t& rV_new, comp_t& rV_big, 
+     * returns the number of useful parallel threads */
+    int balance_split(comp_t& rV_new, comp_t& rV_big,
         index_t*& first_vertex_big);
 
-    /* large components are split for balancing parallel workload,
-     * parallel separation edges might be removed or activated;
+    /* after splitting, separation edges must be removed or activated;
      * when called, first_vertex contains additional components due to large
-     * components being split;
+     * components being split by balance_split();
      * NOTA: currently, separation edges must be either removed or activated
      * at this step; this cannot wait for a future split step, because
      * components list of vertex must be kept consecutive for parallel
      * treatment of the resulting connected components, and removing parallel
      * separation edges in a later step might connect components whose list of
      * vertices are not consecutive */
-    virtual index_t remove_parallel_separations(comp_t rV_new);
+    virtual index_t remove_balance_separations(comp_t rV_new);
 
     /* revert the above process;
      * no change to comp_list, only suppress elements from first_vertex */
-    void revert_balance_parallel_split(comp_t rV_new, comp_t rV_big,
+    void revert_balance_split(comp_t rV_new, comp_t rV_big,
         index_t* first_vertex_big);
 
     /* rough estimate of the number of operations for split step;
      * useful for estimating the number of parallel threads */
-    uintmax_t maxflow_complexity(); // just for a graph cut; heuristic
-    virtual uintmax_t split_complexity() = 0;
+    uintmax_t maxflow_complexity() const
+        { return (uintmax_t) 2*E + V; } // just for a graph cut; heuristic
+    virtual uintmax_t split_complexity() const;
 
     /* prefered alternative value for each vertex */
     comp_t*& label_assign = comp_assign; // reuse the same storage
@@ -242,12 +291,12 @@ protected:
      * represented by arrays of length rV 'merge_chains_root', '_next' and
      * '_leaf'; merge chain involving component rv follows the scheme
      *   root[rv] -> ... -> rv -> next[rv] -> ... -> leaf[rv] ;
-     * NOTA: chain_end() is a special values, and:
+     * NOTA: CHAIN_END is a special values, and:
      * - only next[rv] is always up-to-date;
      * - root[rv] is always a strictly preceding component in its chain, or
-     *   chain_end() if rv is a root;
+     *   CHAIN_END if rv is a root;
      * - leaf[rv] is up-to-date if rv is a root;
-     * - rv is the leaf of its chain if, and only if next[rv] == chain_end();
+     * - rv is the leaf of its chain if, and only if next[rv] == CHAIN_END;
      * an additional requirement is that the root of each chain should be the
      * component in the chain with lowest index */
     comp_t get_merge_chain_root(comp_t rv);
@@ -267,17 +316,21 @@ protected:
     /* main routine using the above to perform the merge step */
     virtual index_t merge();
 
-    /**  monitoring evolution; set monitor_evolution to true  **/
+    /**  monitoring evolution  **/
 
-    /* compute relative iterate evolution;
-     * for continuously differentiable problems, saturation is tested here */
-    virtual real_t compute_evolution(bool compute_dif) = 0;
+    /* test if computation of evolution is required */
+    bool monitor_evolution() const
+        { return dif_tol > (real_t) 0.0 || iterate_evolution; }
+
+    /* compute relative iterate evolution */
+    virtual real_t compute_evolution() const = 0;
 
     /* compute objective functional, often on the reduced problem objects */
-    virtual real_t compute_objective() = 0;
+    virtual real_t compute_objective() const = 0;
 
     /* allocate memory and fail with error message if not successful */
-    static void* malloc_check(size_t size){
+    static void* malloc_check(size_t size)
+    {
         void *ptr = malloc(size);
         if (!ptr){
             std::cerr << "Cut-pursuit: not enough memory." << std::endl;
@@ -287,7 +340,8 @@ protected:
     }
 
     /* simply free if size is zero */
-    static void* realloc_check(void* ptr, size_t size){
+    static void* realloc_check(void* ptr, size_t size)
+    {
         if (!size){
            free(ptr); 
            return nullptr; 
@@ -303,9 +357,13 @@ protected:
     /**  control parallelization  **/
     int max_num_threads; // maximum number of parallel threads 
     /* take into account max_num_threads attribute */
-    int compute_num_threads(uintmax_t num_ops, uintmax_t max_threads);
+    int compute_num_threads(uintmax_t num_ops, uintmax_t max_threads) const
+    {
+        int num_threads = ::compute_num_threads(num_ops, max_threads);
+        return num_threads < max_num_threads ? num_threads : max_num_threads;
+    }
     /* overload for max_threads defaulting to num_ops */
-    int compute_num_threads(uintmax_t num_ops)
+    int compute_num_threads(uintmax_t num_ops) const
     { return compute_num_threads(num_ops, num_ops); }
 
     /* representing infinite values (has_infinity checked by constructor) */
@@ -313,12 +371,13 @@ protected:
 
 private:
     enum Edge_status : char // requires C++11 to ensure 1 byte
-        {BIND, CUT, PAR_SEP};
+        {BIND, CUT, SEPARATION};
     Edge_status* edge_status; // edge activation
 
     /* parameters */
     int it_max; // maximum number of cut-pursuit iterations
-    bool balance_par_split; // switch controling parallel split balancing
+    bool balance_parallel_split; // switch parallel split balancing
+    index_t max_split_size; // ensure maxflow not working on components too big
 
     /* monitoring */
     real_t* objective_values;
@@ -328,15 +387,12 @@ private:
     /* during the merging step, merged components are stored as chains */
     comp_t *merge_chains_root, *merge_chains_next, *merge_chains_leaf;
 
-    /* special value: no component can have this identifier */
-    static comp_t chain_end() { return std::numeric_limits<comp_t>::max(); }
+    double monitor_time(std::chrono::steady_clock::time_point start) const;
 
-    double monitor_time(std::chrono::steady_clock::time_point start);
-
-    void print_progress(int it, real_t dif, double t);
+    void print_progress(int it, real_t dif, double t) const;
 
     /* set components assignment and values (and allocate them if needed);
-     * assumes that no edge of the graph are active when it is called */
+     * assumes that no edge of the graph are cut when it is called */
     void initialize();
 
     /* initialize with components specified in 'comp_assign' */
@@ -359,36 +415,3 @@ private:
      * weights, so that they will be removed during merge step */
     void compute_reduced_graph();
 };
-
-#define TPL template <typename real_t, typename index_t, typename comp_t, \
-    typename value_t>
-#define CP Cp<real_t, index_t, comp_t, value_t>
-
-/***  inline methods in relation with main graph  ***/
-TPL inline bool CP::is_cut(index_t e)
-{ return edge_status[e] == CUT; }
-
-TPL inline bool CP::is_par_sep(index_t e)
-{ return edge_status[e] == PAR_SEP; }
-
-TPL inline bool CP::is_bind(index_t e)
-{ return edge_status[e] == BIND; }
-
-TPL inline void CP::cut(index_t e)
-{ edge_status[e] = CUT; }
-
-TPL inline void CP::bind(index_t e)
-{ edge_status[e] = BIND; }
-
-TPL inline int CP::compute_num_threads(uintmax_t num_ops,
-    uintmax_t max_threads)
-{
-    int num_threads = ::compute_num_threads(num_ops, max_threads);
-    return num_threads < max_num_threads ? num_threads : max_num_threads;
-}
-
-TPL inline uintmax_t CP::maxflow_complexity()
-{ return (uintmax_t) 2*E + V; } // just for a graph cut; heuristic
-
-#undef TPL
-#undef CP

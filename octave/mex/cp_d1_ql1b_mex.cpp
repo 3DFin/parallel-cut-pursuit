@@ -1,5 +1,5 @@
 /*=============================================================================
- * [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y | AtY, A | AtA,
+ * [Comp, rX, Obj, Time, Dif] = cp_d1_ql1b_mex(Y | AtY, A | AtA,
  *      first_edge, adj_vertices, [options])
  *
  * options is a struct with any of the following fields [with default values]:
@@ -8,15 +8,17 @@
  *      upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
  *      pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
  *      pfdr_dif_tol [1e-2*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
- *      max_num_threads [none], balance_parallel_split [true],
- *      Gram_if_square [true]
+ *      Gram_if_square [true], max_num_threads [none],
+ *      max_split_size [none], balance_parallel_split [true],
+ *      compute_List [false], compute_Graph [false], compute_Obj [false],
+ *      compute_Time [false], compute_Dif [false]
  * 
- *  Hugo Raguet 2016, 2018, 2019, 2020
+ *  Hugo Raguet 2016, 2018, 2019, 2020, 2023
  *===========================================================================*/
 #include <cstdint>
 #include <cstring>
 #include "mex.h"
-#include "cp_pfdr_d1_ql1b.hpp"
+#include "cp_d1_ql1b.hpp"
 
 using namespace std;
 
@@ -63,7 +65,9 @@ static void check_opts(const mxArray* options)
     const char* opts_names[] = {"edge_weights", "Yl1", "l1_weights", "low_bnd",
         "upp_bnd", "cp_dif_tol", "cp_it_max", "pfdr_rho", "pfdr_cond_min",
         "pfdr_dif_rcd", "pfdr_dif_tol", "pfdr_it_max", "verbose",
-        "max_num_threads", "balance_parallel_split", "Gram_if_square"};
+        "Gram_if_square", "max_num_threads", "max_split_size",
+        "balance_parallel_split", "compute_List", "compute_Graph",
+        "compute_Obj", "compute_Time", "compute_Dif"};
 
     const int num_given_opts = mxGetNumberOfFields(options);
 
@@ -110,7 +114,7 @@ static mxArray* resize_and_create_mxRow(type_t* buffer, size_t size,
 
 /* template for handling both single and double precisions */
 template <typename real_t, mxClassID mxREAL_CLASS>
-static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
+static void cp_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     const mxArray *prhs[])
 {
     /***  get inputs  ***/
@@ -214,21 +218,33 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     int GET_SCAL_OPT(pfdr_it_max, 1e4);
     int GET_SCAL_OPT(verbose, 1e3);
     int GET_SCAL_OPT(max_num_threads, 0);
+    int GET_SCAL_OPT(max_split_size, V);
     bool GET_SCAL_OPT(balance_parallel_split, true);
+    bool GET_SCAL_OPT(compute_List, false);
+    bool GET_SCAL_OPT(compute_Graph, false);
+    bool GET_SCAL_OPT(compute_Obj, false);
+    bool GET_SCAL_OPT(compute_Time, false);
+    bool GET_SCAL_OPT(compute_Dif, false);
 
     /***  prepare output; rX (plhs[1]) is created later  ***/
 
     plhs[0] = mxCreateNumericMatrix(1, V, mxCOMP_CLASS, mxREAL);
     comp_t *Comp = (comp_t*) mxGetData(plhs[0]);
 
-    real_t* Obj = nlhs > 2 ?
-        (real_t*) mxMalloc(sizeof(real_t)*(cp_it_max + 1)) : nullptr;
-    double* Time = nlhs > 3 ?
-        (double*) mxMalloc(sizeof(double)*(cp_it_max + 1)) : nullptr;
-    real_t *Dif = nlhs > 4 ?
-        (real_t*) mxMalloc(sizeof(real_t)*cp_it_max) : nullptr;
+    real_t* Obj = nullptr;
+    if (compute_Obj){
+        Obj = (real_t*) mxMalloc(sizeof(real_t)*(cp_it_max + 1));
+    }
 
-    /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
+    double* Time = nullptr;
+    if (compute_Time){
+        (double*) mxMalloc(sizeof(double)*(cp_it_max + 1));
+    }
+
+    real_t* Dif = nullptr;
+    if (compute_Dif){ Dif = (real_t*) mxMalloc(sizeof(real_t)*cp_it_max); }
+
+    /***  cut-pursuit  ***/
 
     Cp_d1_ql1b<real_t, index_t, comp_t> *cp =
         new Cp_d1_ql1b<real_t, index_t, comp_t>
@@ -239,6 +255,7 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     cp->set_l1(l1_weights, homo_l1_weights, Yl1);
     cp->set_bounds(low_bnd, homo_low_bnd, upp_bnd, homo_upp_bnd);
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
+    cp->set_split_param(max_split_size);
     cp->set_pfdr_param(pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_it_max,
         pfdr_dif_tol);
     cp->set_parallel_param(max_num_threads, balance_parallel_split);
@@ -248,25 +265,105 @@ static void cp_pfdr_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     int cp_it = cp->cut_pursuit();
 
+    /* get number of components and their lists of indices if necessary */
+    const index_t* first_vertex;
+    const index_t* comp_list;
+    comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
+
+    mxArray* mx_List = nullptr;
+    if (compute_List){
+        mx_List = mxCreateCellMatrix(1, rV); // list of arrays
+        for (comp_t rv = 0; rv < rV; rv++){
+            index_t comp_size = first_vertex[rv+1] - first_vertex[rv];
+            mxArray* mx_List_rv = mxCreateNumericMatrix(1, V, mxINDEX_CLASS,
+                mxREAL);
+            index_t* List_rv = (index_t*) mxGetData(mx_List_rv);
+            for (index_t i = 0; i < comp_size; i++){
+                List_rv[i] = comp_list[first_vertex[rv] + i];
+            }
+            void mxSetCell(mx_List, rv, mx_List_rv);
+        }
+    }
+
     /* copy reduced values */
     comp_t rV = cp->get_components();
     real_t* cp_rX = cp->get_reduced_values();
     plhs[1] = mxCreateNumericMatrix(rV, 1, mxREAL_CLASS, mxREAL);
     real_t* rX = (real_t*) mxGetData(plhs[1]);
     for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
+
+    cp->set_components(0, nullptr); // prevent Comp to be free()'d
+    delete cp;
+
+    /* retrieve reduced graph structure */
+    mxArray* mx_Graph = nullptr;
+    if (compute_Graph){
+        const comp_t* reduced_edge_list;
+        const real_t* reduced_edge_weights;
+        size_t rE;
+        /* get reduced edge list */
+        rE = cp->get_reduced_graph(&reduced_edge_list, &reduced_edge_weights);
+
+        /* mex arrays for forward-star representation and weights */
+        mxArray* mx_red_first_edge = mxCreateNumericMatrix(1, rV + 1,
+            mxINDEX_CLASS, mxREAL);
+        index_t* red_first_edge = (index_t*) mxGetData(mx_red_first_edge);
+
+        mxArray* mx_red_adj_vertices = mxCreateNumericMatrix(1, rE,
+            mxCOMP_CLASS, mxREAL);
+        comp_t* red_adj_vertices = (comp_t*) mxGetData(mx_red_adj_vertices);
+
+        mxArray* mx_red_edge_weights = mxCreateNumericMatrix(1, rE,
+            mxREAL_CLASS, mxREAL);
+        real_t* red_edge_weights = (real_t*) mxGetData(mx_red_edge_weights);
+
+        /* reduced edge list is guaranteed to be in increasing order of
+         * starting component; conversion to forward-star is straightforward */
+        comp_t rv = 0;
+        size_t re = 0;
+        while (re < rE || rv < rV){
+            red_first_edge[rv] = re;
+            while (re < rE && reduced_edge_list[2*re] == rv){
+                red_adj_vertices[re] = reduced_edge_list[2*re + 1];
+                red_edge_weights[re] = reduced_edge_weights[re];
+                re++;
+            }
+            rv++;
+        }
+        red_first_edge[rV] = rE;
+
+        /* gather forward-star representation and weights in mex cell array */
+        mx_Graph = mxCreateCellMatrix(1, 3);
+        mxSetCell(mx_Graph, 0, mx_red_first_edge);
+        mxSetCell(mx_Graph, 1, mx_red_adj_vertices);
+        mxSetCell(mx_Graph, 2, mx_red_edge_weights);
+    }
     
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
 
-    /**  resize monitoring arrays and assign to outputs  **/
-    if (nlhs > 2){
-        plhs[2] = resize_and_create_mxRow(Obj, cp_it + 1, mxREAL_CLASS);
+    /**  assign optional outputs and resize monitoring arrays if necessary  **/
+    int nout = 2;
+    if (compute_List){ nout++; }
+    if (compute_Graph){ nout++; }
+    if (compute_Obj){ nout++; }
+    if (compute_Time){ nout++; }
+    if (compute_Dif){ nout++; }
+    if (nlhs != nout){
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
+                "requested %i outputs, but %i captured", nout, nlhs);
     }
-    if (nlhs > 3){
-        plhs[3] = resize_and_create_mxRow(Time, cp_it + 1, mxDOUBLE_CLASS);
+    nout = 2;
+    if (compute_List){ plhs[nout++] = mx_List; }
+    if (compute_Graph){ plhs[nout++] = mx_Graph); }
+    if (compute_Obj){
+        plhs[nout++] = resize_and_create_mxRow(Obj, cp_it + 1, mxREAL_CLASS);
     }
-    if (nlhs > 4){
-        plhs[4] = resize_and_create_mxRow(Dif, cp_it, mxREAL_CLASS);
+    if (compute_Time){
+        plhs[nout++] = resize_and_create_mxRow(Time, cp_it+1, mxDOUBLE_CLASS);
+    }
+    if (compute_Dif){
+        plhs[nout++] = resize_and_create_mxRow(Dif, cp_it, mxREAL_CLASS);
     }
 
 }
@@ -282,8 +379,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     if ((!mxIsEmpty(prhs[0]) && mxIsDouble(prhs[0])) ||
         (mxIsEmpty(prhs[0]) && mxIsDouble(mxGetField(prhs[4], 0, "Yl1")))){
-        cp_pfdr_d1_ql1b_mex<double, mxDOUBLE_CLASS>(nlhs, plhs, nrhs, prhs);
+        cp_d1_ql1b_mex<double, mxDOUBLE_CLASS>(nlhs, plhs, nrhs, prhs);
     }else{
-        cp_pfdr_d1_ql1b_mex<float, mxSINGLE_CLASS>(nlhs, plhs, nrhs, prhs);
+        cp_d1_ql1b_mex<float, mxSINGLE_CLASS>(nlhs, plhs, nrhs, prhs);
     }
 }

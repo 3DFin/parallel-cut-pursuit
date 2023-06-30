@@ -16,10 +16,10 @@ import re
 
 ###  targets and compile options  ###
 to_compile = [ # comment undesired extension modules
-    # "cp_pfdr_d1_ql1b_cpy",
-    # "cp_pfdr_d1_lsx_cpy",
-    "cp_kmpp_d0_dist_cpy",
-    # "cp_prox_tv_cpy"
+    "cp_d1_ql1b_cpy",
+    "cp_d1_lsx_cpy",
+    "cp_d0_dist_cpy",
+    "cp_prox_tv_cpy"
 ]
 include_dirs = [numpy.get_include(), # find the Numpy headers
                 "../include"]
@@ -64,12 +64,12 @@ for shared_obj in to_compile:
 
 ###  compilation  ###
 
-name = "cp_pfdr_d1_ql1b_cpy"
+name = "cp_d1_ql1b_cpy"
 if name in to_compile:
     mod = Extension(
             name,
             # list source files
-            ["cpython/cp_pfdr_d1_ql1b_cpy.cpp", "../src/cp_pfdr_d1_ql1b.cpp",
+            ["cpython/cp_d1_ql1b_cpy.cpp", "../src/cp_d1_ql1b.cpp",
              "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
              "../src/maxflow.cpp", "../src/pfdr_d1_ql1b.cpp",
              "../src/matrix_tools.cpp", "../src/pfdr_graph_d1.cpp", 
@@ -80,12 +80,12 @@ if name in to_compile:
     setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
 
 
-name = "cp_pfdr_d1_lsx_cpy"
+name = "cp_d1_lsx_cpy"
 if name in to_compile:
     mod = Extension(
             name,
             # list source files
-            ["cpython/cp_pfdr_d1_lsx_cpy.cpp", "../src/cp_pfdr_d1_lsx.cpp",
+            ["cpython/cp_d1_lsx_cpy.cpp", "../src/cp_d1_lsx.cpp",
              "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
              "../src/maxflow.cpp", "../src/pfdr_d1_lsx.cpp",
              "../src/proj_simplex.cpp", "../src/pfdr_graph_d1.cpp",
@@ -96,12 +96,12 @@ if name in to_compile:
     setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
 
 
-name = "cp_kmpp_d0_dist_cpy"
+name = "cp_d0_dist_cpy"
 if name in to_compile:
     mod = Extension(
             name,
             # list source files
-            ["cpython/cp_kmpp_d0_dist_cpy.cpp", "../src/cp_kmpp_d0_dist.cpp",
+            ["cpython/cp_d0_dist_cpy.cpp", "../src/cp_d0_dist.cpp",
              "../src/cut_pursuit_d0.cpp", "../src/cut_pursuit.cpp",
              "../src/maxflow.cpp"], 
             include_dirs=include_dirs,

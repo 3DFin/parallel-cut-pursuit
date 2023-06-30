@@ -5,27 +5,26 @@ import sys
 sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
                                               "../bin"))
 
-from cp_pfdr_d1_ql1b_cpy import cp_pfdr_d1_ql1b_cpy
+from cp_d1_ql1b_cpy import cp_d1_ql1b_cpy
 
-def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None, 
-                    Yl1=None, l1_weights=None, low_bnd=None, upp_bnd=None, 
-                    cp_dif_tol=1e-4, cp_it_max=10, pfdr_rho=1., 
-                    pfdr_cond_min=1e-2, pfdr_dif_rcd=0., pfdr_dif_tol=None, 
-                    pfdr_it_max=int(1e4), verbose=int(1e3), 
-                    max_num_threads=0, balance_parallel_split=True,
-                    Gram_if_square=True, compute_List=False,
-                    compute_Graph=False, compute_Obj=False, compute_Time=False,
-                    compute_Dif=False):
+def cp_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None, 
+               Yl1=None, l1_weights=None, low_bnd=None, upp_bnd=None, 
+               cp_dif_tol=1e-4, cp_it_max=10, pfdr_rho=1., pfdr_cond_min=1e-2,
+               pfdr_dif_rcd=0., pfdr_dif_tol=None, pfdr_it_max=int(1e4),
+               verbose=int(1e3), max_num_threads=0, max_split_size=None,
+               balance_parallel_split=True, Gram_if_square=True,
+               compute_List=False, compute_Graph=False, compute_Obj=False,
+               compute_Time=False, compute_Dif=False):
     """
-    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_pfdr_d1_ql1b(Y | AtY, A | AtA,
+    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_d1_ql1b(Y | AtY, A | AtA,
             first_edge, adj_vertices, edge_weights=None, Yl1=None,
             l1_weights=None, low_bnd=None, upp_bnd=None, cp_dif_tol=1e-4,
             cp_it_max=10, pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
             pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=int(1e4),
             verbose=int(1e3), Gram_if_square=True, max_num_threads=0,
-            balance_parallel_split=True, compute_List=False,
-            compute_Graph=False, compute_Obj=False, compute_Time=False,
-            compute_Dif=False)
+            max_split_size=None, balance_parallel_split=True,
+            compute_List=False, compute_Graph=False, compute_Obj=False,
+            compute_Time=False, compute_Dif=False)
 
     Cut-pursuit algorithm with d1 (total variation) penalization, with a 
     quadratic functional, l1 penalization and box constraints:
@@ -118,6 +117,9 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         PFDR iterations
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
+    max_split_size - maximum number of vertices allowed in connected component
+        passed to a split problem; make split of very large components faster,
+        but might induced suboptimal artificial cuts
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
     Gram_if_square - if A is square, set to false for direct matricial case
@@ -263,8 +265,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
                          "'first_edge' should contain |V| + 1 = {0} elements, "
                          "but {1} are given.".format(V + 1, first_edge.size))
  
-    # Check type of all numpy.array arguments of type float (Y, A, 
-    # edge_weights, Yl1, l1_weights, low_bnd, upp_bnd) 
+    # Check type of all numpy.array arguments of type float
     for name, ar_args in zip(
             ["Y", "A", "edge_weights", "Yl1", "l1_weights", "low_bnd",
              "upp_bnd"],
@@ -274,7 +275,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
             raise TypeError("argument '{0}' must be of type '{1}'"
                             .format(name, real_t))
 
-    # Check fortran continuity of all multidimensional numpy.array arguments
+    # Check fortran continuity of all multidimensional numpy array arguments
     if not(Y.flags["F_CONTIGUOUS"]):
         raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument 'Y' "
                         "must be in column-major order (F-contigous).")
@@ -282,8 +283,7 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit d1 quadratic l1 bounds: argument 'A' "
                         "must be in column-major order (F-contigous).")
 
-    # Convert in float64 all float arguments if needed (cp_dif_tol, pfdr_rho, 
-    # pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol) 
+    # Convert in float64 all float arguments
     if pfdr_dif_tol is None:
         pfdr_dif_tol = 1e-2*cp_dif_tol
     cp_dif_tol = float(cp_dif_tol)
@@ -292,14 +292,17 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
     pfdr_dif_rcd = float(pfdr_dif_rcd)
     pfdr_dif_tol = float(pfdr_dif_tol)
      
-    # Convert all int arguments (cp_it_max, pfdr_it_max, verbose) in ints: 
+    # Convert all int arguments
     cp_it_max = int(cp_it_max)
     pfdr_it_max = int(pfdr_it_max)
     verbose = int(verbose)
     max_num_threads = int(max_num_threads)
+    if max_split_size is None:
+        max_split_size = V
+    else:
+        max_split_size = int(max_split_size)
 
-    # Check type of all booleen arguments (Gram_if_square, compute_Obj,
-    # compute_Time, compute_Dif)
+    # Check type of all booleen arguments
     for name, b_args in zip(
             ["Gram_if_square", "balance_parallel_split", "compute_List",
              "compute_Graph", "compute_Obj", "compute_Time", "compute_Dif"],
@@ -310,9 +313,9 @@ def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
                             "'{0}' must be boolean".format(name))
     
     # Call wrapper python in C  
-    return cp_pfdr_d1_ql1b_cpy(Y, A, first_edge, adj_vertices, edge_weights,
-            Yl1, l1_weights, low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho,
-            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
-            max_num_threads, balance_parallel_split, Gram_if_square,
-            real_t == "float64", compute_List, compute_Graph, compute_Obj,
-            compute_Time, compute_Dif)
+    return cp_d1_ql1b_cpy(Y, A, first_edge, adj_vertices, edge_weights,
+        Yl1, l1_weights, low_bnd, upp_bnd, cp_dif_tol, cp_it_max, pfdr_rho,
+        pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
+        max_num_threads, max_split_size, balance_parallel_split,
+        Gram_if_square, real_t == "float64", compute_List, compute_Graph,
+        compute_Obj, compute_Time, compute_Dif)

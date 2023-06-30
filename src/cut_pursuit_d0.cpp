@@ -28,37 +28,12 @@ TPL CP_D0::Cp_d0(index_t V, index_t E, const index_t* first_edge,
 
     K = 2;
     split_iter_num = 2;
-    split_damp_ratio = ONE;
+    split_damp_ratio = 1.0;
+    split_values_init_num = 3;
+    split_values_iter_num = 3;
 }
 
-TPL void CP_D0::set_split_param(comp_t K, int split_iter_num,
-    real_t split_damp_ratio)
-{
-    if (split_iter_num < 1){
-        cerr << "Cut-pursuit d0: there must be at least one iteration in the "
-            "split (" << split_iter_num << " specified)." << endl;
-        exit(EXIT_FAILURE);
-    }
-
-    if (K < 2){
-        cerr << "Cut-pursuit d0: there must be at least two alternative values"
-            "in the split (" << K << " specified)." << endl;
-        exit(EXIT_FAILURE);
-    }
-
-    if (split_damp_ratio <= 0 || split_damp_ratio > ONE){
-        cerr << "Cut-pursuit d0: split damping ratio must be between zero "
-            "excluded and one included (" << split_damp_ratio << " specified)."
-            << endl;
-        exit(EXIT_FAILURE);
-    }
-
-    this->K = K;
-    this->split_iter_num = split_iter_num;
-    this->split_damp_ratio = split_damp_ratio;
-}
-
-TPL real_t CP_D0::compute_graph_d0()
+TPL real_t CP_D0::compute_graph_d0() const
 {
     real_t weighted_contour_length = ZERO;
     #pragma omp parallel for schedule(static) NUM_THREADS(rE) \
@@ -69,7 +44,7 @@ TPL real_t CP_D0::compute_graph_d0()
     return weighted_contour_length;
 }
 
-TPL real_t CP_D0::compute_f()
+TPL real_t CP_D0::compute_f() const
 {
     real_t f = ZERO;
     #pragma omp parallel for schedule(dynamic) NUM_THREADS(D*V, rV) \
@@ -83,144 +58,17 @@ TPL real_t CP_D0::compute_f()
     return f;
 }
 
-TPL real_t CP_D0::compute_objective()
+TPL real_t CP_D0::compute_objective() const
 { return compute_f() + compute_graph_d0(); } // f(x) + ||x||_d0
 
-TPL uintmax_t CP_D0::split_complexity()
-{
-    uintmax_t complexity = maxflow_complexity(); // graph cut
-    complexity += D*V; // account for distance difference and final labeling
-    complexity += E; // edges capacities
-    if (K > 2){ complexity *= K; } // K alternative labels
-    complexity *= split_iter_num; // repeated
-    complexity += split_values_complexity(); // init and update
-    return complexity*(V - saturated_vert)/V; // account saturation linearly
-}
+TPL real_t CP_D0::vert_split_cost(const Split_info& split_info, index_t v,
+        comp_t k) const
+{ return fv(v, split_info.sX + D*k); }
 
-TPL void CP_D0::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
-{
-    value_t* altX = (value_t*) malloc_check(sizeof(value_t)*D*K);
-
-    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
-    const index_t* comp_list_rv = comp_list + first_vertex[rv];
-
-    real_t damping = split_damp_ratio;
-    for (int split_it = 0; split_it < split_iter_num; split_it++){
-        damping += (ONE - split_damp_ratio)/split_iter_num;
-
-        if (split_it == 0){ init_split_values(rv, altX); }
-        else{ update_split_values(rv, altX); }
-
-        bool no_reassignment = true;
-
-        if (K == 2){ /* one graph cut is enough */
-            for (index_t i = 0; i < comp_size; i++){
-                index_t v = comp_list_rv[i];
-                /* unary cost for choosing the second alternative */
-                maxflow->terminal_capacity(i) = fv(v, altX + D) - fv(v, altX);
-            }
-
-            /* set d0 edge capacities within each component */
-            index_t e_in_comp = 0;
-            for (index_t i = 0; i < comp_size; i++){
-                index_t v = comp_list_rv[i];
-                for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                    if (is_bind(e)){
-                        real_t cap = damping*EDGE_WEIGHTS_(e);
-                        maxflow->set_edge_capacities(e_in_comp++, cap, cap);
-                    }
-                }
-            }
-
-            /* find min cut and set assignment accordingly */
-            maxflow->maxflow();
-
-            for (index_t i = 0; i < comp_size; i++){
-                index_t v = comp_list_rv[i];
-                if (maxflow->is_sink(i) != label_assign[v]){
-                    label_assign[v] = maxflow->is_sink(i);
-                    no_reassignment = false;
-                }
-            }
-
-        }else{ /* iterate over all K alternative values */
-            for (comp_t k = 0; k < K; k++){
-    
-            /* check if alternative k has still vertices assigned to it */
-            if (!is_split_value(altX[D*k])){ continue; }
-
-            /* set the source/sink capacities */
-            bool all_assigned_k = true;
-            for (index_t i = 0; i < comp_size; i++){
-                index_t v = comp_list_rv[i];
-                comp_t l = label_assign[v];
-                /* unary cost for changing current value to k-th value */
-                if (l == k){
-                    maxflow->terminal_capacity(i) = ZERO;
-                }else{
-                    maxflow->terminal_capacity(i) = fv(v, altX + D*k) -
-                        fv(v, altX + D*l);
-                    all_assigned_k = false;
-                }
-            }
-            if (all_assigned_k){ continue; }
-
-            /* set d0 edge capacities within each component */
-            index_t e_in_comp = 0;
-            for (index_t i = 0; i < comp_size; i++){
-                index_t u = comp_list_rv[i];
-                comp_t lu = label_assign[u];
-                for (index_t e = first_edge[u]; e < first_edge[u + 1]; e++){
-                    if (!is_bind(e)){ continue; }
-                    index_t v = adj_vertices[e];
-                    comp_t lv = label_assign[v];
-                    /* horizontal and source/sink capacities are modified 
-                     * according to Kolmogorov & Zabih (2004); in their
-                     * notations, functional E(u,v) is decomposed as
-                     *
-                     * E(0,0) | E(0,1)    A | B
-                     * --------------- = -------
-                     * E(1,0) | E(1,1)    C | D
-                     *                         0 | 0      0 | D-C    0 |B+C-A-D
-                     *                 = A + --------- + -------- + -----------
-                     *                       C-A | C-A    0 | D-C    0 |   0
-                     *
-                     *            constant +      unary terms     + binary term
-                     */
-                    /* A = E(0,0) is the cost of the current assignment */
-                    real_t A = lu == lv ? ZERO : damping*EDGE_WEIGHTS_(e);
-                    /* B = E(0,1) is the cost of changing lv to k */
-                    real_t B = lu == k ? ZERO : damping*EDGE_WEIGHTS_(e);
-                    /* C = E(1,0) is the cost of changing lu to k */
-                    real_t C = lv == k ? ZERO : damping*EDGE_WEIGHTS_(e);
-                    /* D = E(1,1) = 0 is for changing both lu, lv to k */
-                    /* set weights in accordance with orientation u -> v */
-                    maxflow->terminal_capacity(i) += C - A;
-                    maxflow->terminal_capacity(index_in_comp[v]) -= C;
-                    maxflow->set_edge_capacities(e_in_comp++, B + C - A, ZERO);
-                }
-            }
-
-            /* find min cut and update assignment accordingly */
-            maxflow->maxflow();
-
-            for (index_t i = 0; i < comp_size; i++){
-                index_t v = comp_list_rv[i];
-                if (maxflow->is_sink(i) && label_assign[v] != k){
-                    label_assign[v] = k;
-                    no_reassignment = false;
-                }
-            }
-
-            } // end for k
-        } // end if K == 2
-
-        if (no_reassignment){ break; }
-
-    } // end for split_it
-
-    free(altX);
-}
+/* compute binary cost of choosing alternatives lu and lv at edge e */
+TPL real_t CP_D0::edge_split_cost(const Split_info& split_info, index_t e,
+    comp_t lu, comp_t lv) const
+{ return lu == lv ? ZERO : EDGE_WEIGHTS_(e); }
 
 TPL CP_D0::Merge_info::Merge_info(size_t D) : D(D)
 { value = (value_t*) malloc_check(sizeof(value_t)*D); }

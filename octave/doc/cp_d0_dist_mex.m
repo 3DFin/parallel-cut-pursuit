@@ -1,7 +1,6 @@
-function [Comp, rX, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
-    first_edge, adj_vertices, options)
+function varargout = cp_d0_dist_mex(loss, Y, first_edge, adj_vertices, options)
 %
-%        [Comp, rX, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y,
+%        [Comp, rX, [List, Graph, Obj, Time, Dif]] = cp_d0_dist_mex(loss, Y,
 %   first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d0 (weighted contour length) penalization, with a
@@ -71,7 +70,9 @@ function [Comp, rX, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 %     cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [2],
 %     split_damp_ratio [1.0], kmpp_init_num [3], kmpp_iter_num [3],
 %     min_comp_weight [0.0], verbose [true], max_num_threads [none],
-%     balance_parallel_split [true]
+%     max_split_size [none], balance_parallel_split [true],
+%     compute_List [false], compute_Obj [false], compute_Time [false]
+%     compute_Dif [false]
 % edge_weights - (real) array of length E or scalar for homogeneous weights
 % vert_weights - weights on vertices (w_v above); (real) array of length V
 % coor_weights - weights on coordinates (m_d above); (real) array of length D
@@ -95,20 +96,37 @@ function [Comp, rX, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % verbose - if nonzero, display information on the progress
 % max_num_threads - if greater than zero, set the maximum number of threads
 %     used for parallelization with OpenMP
+% max_split_size - maximum number of vertices allowed in connected component
+%     passed to a split problem; make split of very large components faster,
+%     but might induced suboptimal artificial cuts
 % balance_parallel_split - if true, the parallel workload of the split step 
 %     is balanced; WARNING: this might trade off speed against optimality
+% compute_List  - report the list of vertices constituting each component
+% compute_Graph - get the reduced graph on the components
+% compute_Obj   - compute the objective functional along iterations 
+% compute_Time  - monitor elapsing time along iterations
+% compute_Dif   - compute relative evolution along iterations 
 %
-% OUTPUTS: indices start at 0
+% OUTPUTS: List, Graph, Obj, Time and Dif are optional, set parameters
+%   compute_List, compute_Graph, compute_Obj, compute_Time, or
+%   compute_Dif to True to request them and capture them in output
+%   variables in that order;
+%   NOTA: indices start at 0
 %
 % Comp - assignement of each vertex to a component, (uint16) array of length V
-% rX - values of each component of the minimizer, (real) array of length rV;
-%     the actual minimizer can be reconstructed with X = rX(Comp + 1);
-% Obj - the values of the objective functional along iterations;
-%     array of length number of iterations performed + 1
+% rX   - values of each component of the minimizer, (real) array of size
+%     D-by-rV; the actual minimizer is then reconstructed as X = rX(:, Comp+1);
+% List - if requested, list of vertices constituting each component; cell array
+%     of length rV, containing (uint32) arrays of indices
+% Graph - if requested, reduced graph structure; cell array of length 3
+%     representing the graph as forward-star (see input first_edge and
+%     adj_vertices) together with edge weights
+% Obj  - the values of the objective functional along iterations;
+%     array of length number of cut-pursuit iterations performed + 1
 % Time - if requested, the elapsed time along iterations;
-%     array of length number of iterations performed + 1
+%     array of length number of cut-pursuit iterations performed + 1
 % Dif  - if requested, the iterate evolution along iterations;
-%     array of length number of iterations performed
+%     array of length number of cut-pursuit iterations performed
 % 
 % Parallel implementation with OpenMP API.
 %
@@ -120,4 +138,4 @@ function [Comp, rX, Obj, Time, Dif] = cp_kmpp_d0_dist_mex(loss, Y, ...
 % smoothing semantic labelings of 3D point clouds, ISPRS Journal of
 % Photogrammetry and Remote Sensing, 132:102-118, 2017
 %
-% Hugo Raguet 2019, 2020
+% Hugo Raguet 2019, 2020, 2023

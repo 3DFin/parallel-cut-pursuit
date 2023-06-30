@@ -112,7 +112,7 @@ private:
     /* hessian of separable loss */
     void compute_hess_f() override;
 
-    /* compute Lipschitz metric of quadratic functional */
+    /* compute Lipschitz metric of the loss */
     void compute_lipschitz_metric() override;
 
     /* compute the gradient of the separable functional in Pfdr::Ga_grad_f */
@@ -124,7 +124,7 @@ private:
 
     void preconditioning(bool init) override; // add some precomputations
 
-    /* relative iterate evolution in l1 norm and components saturation */
+    /* relative iterate evolution in l1 norm */
     real_t compute_evolution() override;
 
     /**  type resolution for base template class members  **/

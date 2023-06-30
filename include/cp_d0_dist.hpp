@@ -23,7 +23,7 @@
  * smoothing semantic labelings of 3D point clouds, ISPRS Journal of
  * Photogrammetry and Remote Sensing, 132:102-118, 2017
  *
- * Hugo Raguet 2019
+ * Hugo Raguet 2019, 2022, 2023
  *===========================================================================*/
 #pragma once
 #include <cmath>
@@ -68,7 +68,10 @@ public:
         const real_t* coor_weights = nullptr)
         { set_loss(loss, nullptr, vert_weights, coor_weights); }
 
-    void set_kmpp_param(int kmpp_init_num = 3, int kmpp_iter_num = 3);
+    /* overload base method for higher init and iter num */
+    void set_split_param(index_t max_split_size, comp_t K = 2,
+        int split_iter_num = 1, real_t split_damp_ratio = 1.0,
+        int split_values_init_num = 3, int split_values_iter_num = 3);
 
     void set_min_comp_weight(real_t min_comp_weight = 1.0);
 
@@ -109,10 +112,10 @@ private:
 
     /* compute the functional f at a single vertex */
     /* NOTA: not actually a metric, in spite of its name */
-    real_t distance(const real_t* Xv, const real_t* Yv);
-    real_t fv(index_t v, const real_t* Xv) override;
+    real_t distance(const real_t* Xv, const real_t* Yv) const;
+    real_t fv(index_t v, const real_t* Xv) const override;
     /* override for storing values (used for iterate evolution) */
-    real_t compute_f() override;
+    real_t compute_f() const override;
     real_t fXY; // dist(X, Y), reinitialized when freeing rX
     real_t fYY; // dist(Y, Y), reinitialized when modifying the loss
 
@@ -125,72 +128,57 @@ private:
 
     /**  greedy splitting  **/
 
-    int kmpp_init_num; // number of random k-means initializations
-    int kmpp_iter_num; // number of k-means iterations
-
-    real_t component_average(comp_t rv, real_t* avgXv);
-
-    /* rough estimate of the number of operations for initializing and
-     * updating the split values */
-    uintmax_t split_values_complexity() override;
-    void init_split_values(comp_t rv, real_t* altX) override; // k-means ++
-    void update_split_values(comp_t rv, real_t* altX) override; // average
-    bool is_split_value(real_t altX) override; // flag with infinity
+    /* override for setting observation Yv */
+    using typename Cp<real_t, index_t, comp_t>::Split_info;
+    void set_split_value(Split_info& split_info, comp_t k, index_t v) const
+        override;
+    /* override for average of observations Y */
+    void update_split_info(Split_info& split_info) const override;
 
     /**  merging components **/
-    using typename Cp_d0<real_t, index_t, comp_t>::Merge_info;
 
     /* update information of the given merge candidate in the list;
      * merge information must be created with new and destroyed with delete;
      * negative gain values might still get accepted; for inacceptable gain,
      * do not create (or destroy if it exists) the merge information and flag
-     * it with a null pointer
-     TODO: rewrite */
-    void update_merge_info(Merge_info&) override;
+     * it with a null pointer */
+    void update_merge_candidate(index_t re, comp_t ru, comp_t rv) override;
 
     /* rough estimate of the number of operations for updating all candidates;
-     * useful for estimating the number of parallel threads
-     TODO: change name */
+     * useful for estimating the number of parallel threads */
     size_t update_merge_complexity() override;
 
     /* accept the merge candidate and return the component root of the
-     * resulting merge chain
-     TODO: rewrite */
-    comp_t accept_merge(const Merge_info&) override;
+     * resulting merge chain */
+    void accept_merge_candidate(index_t re, comp_t& ru, comp_t& rv) override;
 
     index_t merge() override; // override for freeing comp_weights
 
     /**  monitoring evolution  **/
 
-   /* relative relative iterate evolution in l2 norm; parameters not used */
-    real_t compute_evolution(bool compute_dif) override;
+    /* iterate evolution in terms of distance relative to distance to Y */
+    real_t compute_evolution() const override;
 
     /**  type resolution for base template class members  **/
-    using Cp_d0<real_t, index_t, comp_t>::K;
-    using Cp_d0<real_t, index_t, comp_t>::split_iter_num;
-    using Cp<real_t, index_t, comp_t>::D;
-    using Cp<real_t, index_t, comp_t>::rX;
-    using Cp<real_t, index_t, comp_t>::last_rX;
-    using Cp<real_t, index_t, comp_t>::saturated_comp;
+    using typename Cp_d0<real_t, index_t, comp_t>::Merge_info;
+    using Cp_d0<real_t, index_t, comp_t>::merge_info_list;
+    using Cp<real_t, index_t, comp_t>::set_split_param;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;
     using Cp<real_t, index_t, comp_t>::eps;
+    using Cp<real_t, index_t, comp_t>::D;
     using Cp<real_t, index_t, comp_t>::V;
-    using Cp<real_t, index_t, comp_t>::E;
-    using Cp<real_t, index_t, comp_t>::first_edge;
-    using Cp<real_t, index_t, comp_t>::adj_vertices; 
-    using Cp<real_t, index_t, comp_t>::edge_weights;
-    using Cp<real_t, index_t, comp_t>::homo_edge_weight;
     using Cp<real_t, index_t, comp_t>::rV;
     using Cp<real_t, index_t, comp_t>::rE;
+    using Cp<real_t, index_t, comp_t>::rX;
+    using Cp<real_t, index_t, comp_t>::last_rX;
+    using Cp<real_t, index_t, comp_t>::monitor_evolution;
     using Cp<real_t, index_t, comp_t>::comp_assign;
     using Cp<real_t, index_t, comp_t>::label_assign;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
-    using Cp<real_t, index_t, comp_t>::index_in_comp;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::is_saturated;
-    using Cp<real_t, index_t, comp_t>::verbose;
     using Cp<real_t, index_t, comp_t>::malloc_check;
     using Cp<real_t, index_t, comp_t>::real_inf;
 };

@@ -1,8 +1,9 @@
 /*=============================================================================
- * Hugo Raguet 2018
+ * Hugo Raguet 2018, 2020, 2021, 2023
  *===========================================================================*/
 #include <cmath>
-#include "cp_pfdr_d1_lsx.hpp"
+#include <algorithm>
+#include "cp_d1_lsx.hpp"
 #include "omp_num_threads.hpp"
 #include "matrix_tools.hpp"
 #include "pfdr_d1_lsx.hpp"
@@ -33,12 +34,14 @@ TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
     loss = linear_loss();
     loss_weights = nullptr;
 
+    K = 2;
+    split_iter_num = 1;
+    split_damp_ratio = 1.0;
+    split_values_init_num = 2;
+    split_values_iter_num = 2;
+
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
     pfdr_dif_tol = 1e-2*dif_tol; pfdr_it = pfdr_it_max = 1e4;
-
-    /* with a separable loss, components are only coupled by total variation
-     * and it makes sense to consider nonevolving components as saturated */
-    monitor_evolution = true;
 }
 
 TPL void CP_D1_LSX::set_loss(real_t loss, const real_t* Y,
@@ -143,21 +146,8 @@ TPL void CP_D1_LSX::solve_reduced_problem()
     }
 }
 
-TPL uintmax_t CP_D1_LSX::split_complexity()
+TPL void CP_D1_LSX::compute_grad()
 {
-    uintmax_t complexity = maxflow_complexity(); // graph cut
-    complexity += V; // account for gradient and labeling
-    complexity += 2*E; // edges capacities
-    complexity *= D - 1; // D - 1 alternative ascent coordinates
-    return complexity*(V - saturated_vert)/V; // account saturation linearly
-}
-
-TPL index_t CP_D1_LSX::split()
-{
-    /* NOTA: gradient could be computed only componentwise within method
-     * split_component(), thus saving space but maybe losing speed */
-    grad = (real_t*) malloc_check(sizeof(real_t)*D*V);
-
     const real_t c = (ONE - loss), q = loss/D, r = q/c; // useful for KLs
 
     uintmax_t num_ops = D*(V - saturated_vert)*
@@ -168,18 +158,20 @@ TPL index_t CP_D1_LSX::split()
         comp_t rv = comp_assign[v];
         if (is_saturated[rv]){ continue; }
 
-        real_t* gradv = grad + D*v;
-        real_t* rXv = rX + D*rv;
+        real_t* Gv = G + D*v;
+        const real_t* rXv = rX + D*rv;
 
         /**  gradient of differentiable loss term  **/
         const real_t* Yv = Y + D*v;
-        for (size_t d = 0; d < D; d++){
-            if (loss == linear_loss()){ /* grad = - w Y */
-                gradv[d] = -LOSS_WEIGHTS_(v)*Yv[d];
-            }else if (loss == quadratic_loss()){ /* grad = w(X - Y) */
-                gradv[d] = LOSS_WEIGHTS_(v)*(rXv[d] - Yv[d]);
-            }else{ /* dKLs/dx_k = -(1-s)(s/D + (1-s)y_k)/(s/D + (1-s)x_k) */
-                gradv[d] = -LOSS_WEIGHTS_(v)*(q + c*Yv[d])/(r + rXv[d]);
+        if (loss == linear_loss()){ /* grad = - w Y */
+            for (size_t d = 0; d < D; d++){ Gv[d] = -LOSS_WEIGHTS_(v)*Yv[d]; }
+        }else if (loss == quadratic_loss()){ /* grad = w(X - Y) */
+            for (size_t d = 0; d < D; d++){ 
+                Gv[d] = LOSS_WEIGHTS_(v)*(rXv[d] - Yv[d]);
+            }
+        }else{ /* dKLs/dx_k = -(1-s)(s/D + (1-s)y_k)/(s/D + (1-s)x_k) */
+            for (size_t d = 0; d < D; d++){ 
+                Gv[d] = -LOSS_WEIGHTS_(v)*(q + c*Yv[d])/(r + rXv[d]);
             }
         }
     }
@@ -187,168 +179,197 @@ TPL index_t CP_D1_LSX::split()
     /**  differentiable d1 contribution  **/ 
     /* cannot parallelize with graph structure available here */
     for (index_t v = 0; v < V; v++){
-        real_t* rXv = rX + D*comp_assign[v];
-        real_t* gradv = grad + D*v;
+        const real_t* rXv = rX + D*comp_assign[v];
+        real_t* Gv = G + D*v;
         for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
             if (is_cut(e)){
                 index_t u = adj_vertices[e];
-                real_t* rXu = rX + D*comp_assign[u];
-                real_t* gradu = grad + D*u; 
+                const real_t* rXu = rX + D*comp_assign[u];
+                real_t* Gu = G + D*u; 
                 for (size_t d = 0; d < D; d++){
                     real_t grad_d1 = EDGE_WEIGHTS_(e)*COOR_WEIGHTS_(d);
                     if (rXv[d] - rXu[d] > eps){
-                        gradv[d] += grad_d1;
-                        gradu[d] -= grad_d1;
+                        Gv[d] += grad_d1;
+                        Gu[d] -= grad_d1;
                     }else if (rXu[d] - rXv[d] > eps){
-                        gradu[d] += grad_d1;
-                        gradv[d] -= grad_d1;
+                        Gu[d] += grad_d1;
+                        Gv[d] -= grad_d1;
                     }
-                    /* equality of _some_ coordinates constitutes a source
-                     * of nondifferentiability; this is actually not taken
-                     * into account, see below */
+            /* strictly speaking, in the d11 case, equality of some coordinates
+             * constitutes a source of nondifferentiability; this is actually
+             * not taken into account, favoring split */
                 }
             }
         }
     }
-
-    index_t activation = Cp<real_t, index_t, comp_t>::split();
-
-    free(grad);
-    return activation;
 }
 
-TPL void CP_D1_LSX::split_component(comp_t rv,
-    Maxflow<index_t, real_t>* maxflow)
+TPL real_t CP_D1_LSX::vert_split_cost(const Split_info& split_info, index_t v,
+    comp_t k) const
 {
-    /**  directions are searched in the set \prod_v Dv, where for each vertex,
-     * Dv = {1d - 1dmv in R^D | d in {1,...,D}}, with dmv in argmax_d' {x_vd'}
-     * that is to say dmv is a coordinate with maximum value, and it is tested
-     * against all alternative coordinates; an approximate solution is
-     * searched with one alpha-expansion cycle  **/
-
-    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
-    const index_t* comp_list_rv = comp_list + first_vertex[rv];
-
-    /* find coordinate with maximum value */
-    comp_t dmv = 0;
-    real_t* rXv = rX + rv*D;
-    real_t max = rXv[0];
-    for (comp_t d = 1; d < D; d++){ if (rXv[d] > max){ max = rXv[dmv = d]; } }
-
-    /* initialize best ascent coordinate at the coordinate with maximum
-     * value, corresponding to a null descent direction (1dmv - 1dmv) */
-    for (index_t i = 0; i < comp_size; i++){
-        label_assign[comp_list_rv[i]] = dmv;
+    /* infinite cost for leaving the simplex */
+    const real_t* rXv = rX + D*split_info.rv;
+    const real_t* sXk = split_info.sX + D*k;
+    for (size_t d = 0; d < D; d++){
+        if ((rXv[d] <= eps && sXk[d] < -eps)
+            || (rXv[d] >= ONE - eps && sXk[d] > eps))
+        { return real_inf(); }
     }
 
-    /* iterate over all D - 1 alternative ascent coordinates */
-    for (comp_t d_alt = 1; d_alt < D; d_alt++){
-        /* actual ascent direction */
-        comp_t d = d_alt == dmv ? 0 : d_alt;
-
-        /* set the source/sink capacities */
-        for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list_rv[i];
-            real_t* gradv = grad + v*D;
-            /* unary cost for changing current dir_v to 1d - 1dmv */
-            maxflow->terminal_capacity(i) = gradv[d] - gradv[label_assign[v]];
-        }
-
-        /* set d1 edge capacities within each component;
-         * strictly speaking, active edges should not be directly ignored,
-         * because _some_ neighboring coordinates can still be equal, yielding
-         * nondifferentiability and thus corresponding to positive capacities;
-         * however, such capacities are somewhat cumbersome to compute, and 
-         * more importantly max flows cannot be easily computed in parallel,
-         * since the components would not be independent anymore;
-         * we thus stick with the current heuristic for now */
-        index_t e_in_comp = 0;
-        for (index_t i = 0; i < comp_size; i++){
-            index_t u = comp_list_rv[i];
-            for (index_t e = first_edge[u]; e < first_edge[u + 1]; e++){
-                if (!is_bind(e)){ continue; }
-                index_t v = adj_vertices[e];
-                /* horizontal and source/sink capacities are modified 
-                 * according to Kolmogorov & Zabih (2004); in their
-                 * notations, functional E(u,v) is decomposed as
-                 *
-                 * E(0,0) | E(0,1)    A | B
-                 * --------------- = -------
-                 * E(1,0) | E(1,1)    C | D
-                 *                         0 | 0      0 | D-C    0 |B+C-A-D
-                 *                 = A + --------- + -------- + -----------
-                 *                       C-A | C-A    0 | D-C    0 |   0
-                 *
-                 *            constant +      unary terms     + binary term
-                 */
-                /* current ascent coordinate */
-                comp_t du = label_assign[u];
-                comp_t dv = label_assign[v];
-                /* A = E(0,0) is the cost of the current ascent coords */
-                real_t A = du == dv ? ZERO : EDGE_WEIGHTS_(e)
-                    *(COOR_WEIGHTS_(du) + COOR_WEIGHTS_(dv));
-                /* B = E(0,1) is the cost of changing dv to d */
-                real_t B = du == d ? ZERO : EDGE_WEIGHTS_(e)
-                    *(COOR_WEIGHTS_(du) + COOR_WEIGHTS_(d));
-                /* C = E(1,0) is the cost of changing du to d */
-                real_t C = dv == d ? ZERO : EDGE_WEIGHTS_(e)
-                    *(COOR_WEIGHTS_(dv) + COOR_WEIGHTS_(d));
-                /* D = E(1,1) = 0 is for changing both du and dv to d */
-                /* set weights in accordance with orientation u -> v */
-                maxflow->terminal_capacity(i) += C - A;
-                maxflow->terminal_capacity(index_in_comp[v]) -= C;
-                maxflow->set_edge_capacities(e_in_comp++, B + C - A, ZERO);
-            }
-        }
-
-        /* find min cut and update best ascent coordinates accordingly */
-        maxflow->maxflow();
-        
-        for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list_rv[i];
-            if (maxflow->is_sink(i)){ label_assign[v] = d; }
-        }
-    } // end for d_alt
+    return Cp_d1<real_t, index_t, comp_t>::vert_split_cost(split_info, v, k);
 }
 
-TPL real_t CP_D1_LSX::compute_evolution(bool compute_dif)
+TPL real_t CP_D1_LSX::vert_split_cost(const Split_info& split_info, index_t v,
+    comp_t k, comp_t l) const
 {
-    index_t num_ops = compute_dif ? D*(V - saturated_vert) : D*saturated_comp;
-    real_t dif = ZERO;
-    /* auxiliary variable for parallel region */
-    comp_t saturated_comp_par = 0; 
-    index_t saturated_vert_par = 0;
-    #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
-        reduction(+:dif, saturated_comp_par, saturated_vert_par)
+    if (k == l){ return ZERO; }
+
+    /* infinite cost for leaving the simplex */
+    const real_t* rXv = rX + D*split_info.rv;
+    const real_t* sXk = split_info.sX + D*k;
+    const real_t* sXl = split_info.sX + D*l;
+    for (size_t d = 0; d < D; d++){
+        if (rXv[d] <= eps){
+            if (sXk[d] < -eps){ return real_inf(); }
+            else if (sXl[d] < -eps){ return -real_inf(); }
+        }else if (rXv[d] >= ONE - eps){
+            if (sXk[d] > eps){ return real_inf(); }
+            else if (sXl[d] > eps){ return -real_inf(); }
+        }
+    }
+
+    return Cp_d1<real_t, index_t, comp_t>::vert_split_cost(split_info, v, k,
+        l);
+}
+
+TPL void CP_D1_LSX::project_descent_direction(Split_info& split_info, comp_t k)
+    const
+{
+    /* make suitable descent direction for staying in the standard simplex
+     *      Δ_D = {x ∈ ℝ^D | ∀d 0 ≤ x_d ≤ 1,  and  ∑_d x_d = 1}
+     * so "project" sXk
+     *      argmin_x ⟨x, - sXk⟩
+     * under the following constraints:
+     *      ║x║ ≤ 1,
+     *      ∑_d x_d = 0, 
+     *      ∀d, rXv_d = 0 ⇒ x_d ≥ 0
+     *      ∀d, rXv_d = 1 ⇒ x_d ≤ 0
+     * optimality conditions read as
+     *      - sXk + λx + μ 1 + ν = 0                    (1)
+     * where
+     *      λ ≥ 0 if x ≠ 0,
+     *      μ ∈ ℝ, 1 stands for (1, ..., 1)
+     *      ∀d, v_d ≤ 0 if rXv_d = 0 and x_d = 0
+     *          v_d ≥ 0 if rXv_d = 1 and x_d = 0
+     *          ν_d = 0 otherwise
+     * in particular, with
+     *      I0 = {d | rXv_d = 0 and x_d = 0}
+     *      I1 = {d | rXv_d = 1 and x_d = 0}
+     *      I- = {1,...,d}\(I0 υ I1)
+     *          (nota: |I1| = 0 or 1 because rXv ∈ Δ_D)
+     * μ must satisfy
+     *      ∀d ∈ I0, ν_d = sXk_d - μ ≤ 0, so μ ≥ sXk_d,
+     *      ∀d ∈ I1, ν_d = sXk_d - μ ≥ 0, so μ ≤ sXk_d, (2)
+     *      if I- ≠ ∅, μ = ∑_{d ∈ I-} sXk_d / |I-|
+     * so this problem amounts to finding I0 and I1 so that the above
+     * is satisfied; λ is deduced by normalizing sXk - μ - ν obtained from (1);
+     * sort {sXk_d | rXv_d = 0} and {sXk_d | rXv_d = 1} and remove iteratively
+     * the index of the current maximum from I0 or minimum from I1 while
+     * maintaining the mean m over I-, until (2) is satisfied with μ = m */
+    const real_t* rXv = rX + D*split_info.rv;
+    real_t* sXk = split_info.sX + D*k;
+    size_t* I = (size_t*) malloc_check(sizeof(size_t)*D);
+    size_t nI0 = 0, nI1 = 0, nI_ = 0;
+    real_t m = ZERO;
+    for (size_t d = 0; d < D; d++){
+        if (rXv[d] <= eps){ I[nI0++] = d; }
+        else if (rXv[d] >= ONE - eps){ I[D - ++nI1] = d; }
+        else { m += rXv[d]; nI_++; }
+    }
+    sort(I, I + nI0,
+        [sXk] (comp_t d1, comp_t d2) -> bool { return sXk[d1] < sXk[d2]; });
+    if (nI1){ 
+        /* |I1| is actually 0 or 1 because rXv ∈ Δ_D; if |I1| = 1, then rXv is
+         * all 0 except one 1 ; at this stage |I0| = D - 1 and |I-| = 0 so m is
+         * ill-defined */
+        if (sXk[I[nI0 - 1]] <= sXk[I[D - 1]]){
+        /* specific but common case: sXk_d is greatest where rXv_d = 1;
+         * (2) is satisfied with any μ ∈ [max{sXk_d|rXv_d=0}, sXk_{d:rXv_d=1}]
+         * and x = 0, that is no admissible descent direction exists */
+            for (size_t d = 0; d < D; d++){ sXk[d] = ZERO; }
+            free(I); return;
+        } /* else, indices of sXk_d = 1 and the largest sX_d = 0 are in I- */
+        m = sXk[I[--nI0]] + sXk[I[D - 1]];
+        nI_ = 2;
+    }
+    while (nI0-- && m/nI_ < sXk[I[nI0]]){ m += sXk[I[nI0]]; nI_++; }
+    m /= nI_;
+    /* now μ = m satisfies (2), deduce corresponding un-normalized x */
+    for (size_t d = 0; d < D; d++){
+        if (rXv[d] <= eps && sXk[d] <= m){ sXk[d] = ZERO; }
+        else if (rXv[d] >= ONE - eps && sXk[d] >= m){ sXk[d] = ZERO; }
+        else { sXk[d] -= m; }
+    }
+    /* normalize */
+    Cp_d1<real_t, index_t, comp_t>::project_descent_direction(split_info, k);
+    free(I);
+}
+
+TPL index_t CP_D1_LSX::merge()
+{
+    index_t deactivation = Cp<real_t, index_t, comp_t>::merge();
+
+    /* desaturate components with value evolving more than tolerance */
+    index_t desaturated_vert = 0;
+    comp_t desaturated_comp = 0;
+    #pragma omp parallel for schedule(static) NUM_THREADS(D*saturated_comp) \
+        reduction(+:desaturated_vert, desaturated_comp)
     for (comp_t rv = 0; rv < rV; rv++){
-        real_t* rXv = rX + rv*D;
         if (is_saturated[rv]){
-            real_t* lrXv = last_rX +
-                last_comp_assign[comp_list[first_vertex[rv]]]*D;
-            real_t rv_dif = ZERO;
-            for (size_t d = 0; d < D; d++){ rv_dif += abs(lrXv[d] - rXv[d]); }
-            if (rv_dif > dif_tol){
+            const real_t* rXv = rX + D*rv;
+            const real_t* lrXv = last_rX +
+                D*last_comp_assign[comp_list[first_vertex[rv]]];
+            real_t dif = ZERO;
+            for (size_t d = 0; d < D; d++){ dif += abs(rXv[d] - lrXv[d]); }
+            if (dif > dif_tol){
                 is_saturated[rv] = false;
-            }else{
-                saturated_comp_par++;
-                saturated_vert_par += first_vertex[rv + 1] - first_vertex[rv];
-            }
-            if (compute_dif){
-                dif += rv_dif*(first_vertex[rv + 1] - first_vertex[rv]);
-            }
-        }else if (compute_dif){
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                real_t* lrXv = last_rX + last_comp_assign[comp_list[i]]*D;
-                for (size_t d = 0; d < D; d++){ dif += abs(lrXv[d] - rXv[d]); }
+                desaturated_comp++;
+                desaturated_vert += first_vertex[rv + 1] - first_vertex[rv];
             }
         }
     }
-    saturated_comp = saturated_comp_par;
-    saturated_vert = saturated_vert_par;
-    return compute_dif ? dif/V : real_inf();
+    saturated_comp -= desaturated_comp;
+    saturated_vert -= desaturated_vert;
+
+    return deactivation;
 }
 
-TPL real_t CP_D1_LSX::compute_objective()
+TPL real_t CP_D1_LSX::compute_evolution() const
+{
+    index_t num_ops = D*(V - saturated_vert);
+    real_t dif = ZERO;
+    #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
+        reduction(+:dif)
+    for (comp_t rv = 0; rv < rV; rv++){
+        const real_t* rXv = rX + D*rv;
+        if (is_saturated[rv]){
+            const real_t* lrXv = last_rX +
+                 D*last_comp_assign[comp_list[first_vertex[rv]]];
+            real_t dif_rv = ZERO;
+            for (size_t d = 0; d < D; d++){ dif_rv += abs(rXv[d] - lrXv[d]); }
+            dif += dif_rv*(first_vertex[rv + 1] - first_vertex[rv]);
+        }else{
+            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
+                real_t* lrXv = last_rX + D*last_comp_assign[comp_list[i]];
+                for (size_t d = 0; d < D; d++){ dif += abs(rXv[d] - lrXv[d]); }
+            }
+        }
+    }
+    return dif/V;
+}
+
+
+TPL real_t CP_D1_LSX::compute_objective() const
 /* unfortunately, at this point one does not have access to the reduced objects
  * computed in the routine solve_reduced_problem() */
 {
@@ -368,7 +389,7 @@ TPL real_t CP_D1_LSX::compute_objective()
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:obj)
         for (index_t v = 0; v < V; v++){
-            real_t* rXv = rX + comp_assign[v]*D;
+            const real_t* rXv = rX + comp_assign[v]*D;
             const real_t* Yv = Y + v*D;
             real_t dif2 = ZERO;
             for (size_t d = 0; d < D; d++){
@@ -383,7 +404,7 @@ TPL real_t CP_D1_LSX::compute_objective()
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:obj) 
         for (index_t v = 0; v < V; v++){
-            real_t* rXv = rX + comp_assign[v]*D;
+            const real_t* rXv = rX + comp_assign[v]*D;
             const real_t* Yv = Y + v*D;
             real_t KLs = ZERO;
             for (size_t d = 0; d < D; d++){

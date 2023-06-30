@@ -1,8 +1,8 @@
 /*=============================================================================
- * Hugo Raguet 2018
+ * Hugo Raguet 2018, 2020, 2023
  *===========================================================================*/
 #include <cmath>
-#include "cp_pfdr_d1_ql1b.hpp"
+#include "cp_d1_ql1b.hpp"
 #include "pfdr_d1_ql1b.hpp"
 #include "wth_element.hpp"
 
@@ -33,13 +33,14 @@ TPL CP_D1_QL1B::Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
     low_bnd = nullptr; homo_low_bnd = -real_inf();
     upp_bnd = nullptr; homo_upp_bnd = real_inf();
 
+    K = 2;
+    split_iter_num = 1;
+    split_damp_ratio = 1.0;
+    split_values_init_num = 1;
+    split_values_iter_num = 1;
+
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
     pfdr_dif_tol = 1e-2*dif_tol; pfdr_it = pfdr_it_max = 1e4;
-
-    /* it makes sense to consider nonevolving components as saturated;
-     * beware of coupling when using complicated operator A though,
-     * precision can be increased by decreasing dif_tol if necessary */
-    monitor_evolution = true;
 }
 
 TPL CP_D1_QL1B::~Cp_d1_ql1b(){ free(R); }
@@ -341,12 +342,9 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
     free(rl1_weights); free(rlow_bnd); free(rupp_bnd);
 }
 
-TPL index_t CP_D1_QL1B::split()
+TPL void CP_D1_QL1B::compute_grad()
 {
-    /* NOTA: gradient could be computed only componentwise within method
-     * split_component(), thus saving space but maybe losing speed */
-    grad = (real_t*) malloc_check(sizeof(real_t)*V);
-    for (index_t v = 0; v < V; v++){ grad[v] = ZERO; }
+    for (index_t v = 0; v < V; v++){ G[v] = ZERO; }
 
     uintmax_t Vns = V - saturated_vert;
     uintmax_t num_ops = Vns*(N == Gram_full() ? V : N == Gram_diag() ? 1 : N);
@@ -360,7 +358,7 @@ TPL index_t CP_D1_QL1B::split()
         /**  gradient of quadratic term  **/ 
         if (!is_Gram(N)){ /* direct matricial case, grad = -(A^t) R */
             const real_t* Av = A + N*v;
-            for (matrix_index_t n = 0; n < N; n++){ grad[v] -= Av[n]*R[n]; }
+            for (matrix_index_t n = 0; n < N; n++){ G[v] -= Av[n]*R[n]; }
         }else if (N == Gram_full()){ /* grad = (A^t A)*X - A^t Y  */
             const real_t* Av = A + (size_t) V*v;
             for (comp_t ru = 0; ru < rV; ru++){
@@ -370,19 +368,19 @@ TPL index_t CP_D1_QL1B::split()
                     i++){ /* sum column wise, by symmetry */
                     avru += Av[comp_list[i]]; 
                 }
-                grad[v] += avru*rX[ru];
+                G[v] += avru*rX[ru];
             }
-            grad[v] -= Y_(v);
+            G[v] -= Y_(v);
         }else if (A){ /* diagonal case, grad = (A^t A) X - A^t Y */
-            grad[v] += A[v]*rX[rv] - Y_(v);
+            G[v] += A[v]*rX[rv] - Y_(v);
         }else if (a){ /* identity matrix */
-            grad[v] += rX[rv] - Y_(v);
+            G[v] += rX[rv] - Y_(v);
         }
 
         /**  differentiable l1 contribution  **/
         if (l1_weights || homo_l1_weight){
-            if (rX[rv] > Yl1_(v)){ grad[v] += L1_WEIGHTS_(v); }
-            else if (rX[rv] < Yl1_(v)){ grad[v] -= L1_WEIGHTS_(v); }
+            if (rX[rv] >= Yl1_(v) + eps){ G[v] += L1_WEIGHTS_(v); }
+            else if (rX[rv] <= Yl1_(v) - eps){ G[v] -= L1_WEIGHTS_(v); }
         }
     }
 
@@ -395,168 +393,105 @@ TPL index_t CP_D1_QL1B::split()
                 index_t u = adj_vertices[e];
                 real_t grad_d1 = rXv > rX[comp_assign[u]] ?
                     EDGE_WEIGHTS_(e) : -EDGE_WEIGHTS_(e);
-                grad[v] += grad_d1;
-                grad[u] -= grad_d1;
+                G[v] += grad_d1;
+                G[u] -= grad_d1;
             }
         }
     }
-
-    index_t activation = Cp<real_t, index_t, comp_t>::split();
-
-    free(grad);
-    return activation;
 }
 
-TPL uintmax_t CP_D1_QL1B::split_complexity()
+TPL typename CP_D1_QL1B::Split_info
+    CP_D1_QL1B::initialize_split_info(comp_t rv)
 {
-    uintmax_t complexity = maxflow_complexity(); // graph cut
-    complexity += V; // account for gradient, l1, bounds and final labeling
-    complexity += E; // edges capacities
-    if (l1_weights || homo_l1_weight || low_bnd || upp_bnd ||
-        homo_low_bnd != -real_inf() || homo_upp_bnd != real_inf()){
-        complexity *= 2; // nondifferentiability: two cuts
+    Split_info split_info(rv);
+    split_info.first_k = 1; // only 1 or 2 graph cuts anyway
+    real_t* sX = split_info.sX = (real_t*) malloc_check(sizeof(real_t)*3);
+
+    comp_t k = 0;
+    real_t rXv = rX[rv];
+
+    /* test if -1 is a candidate: at least one vertex not on lower bound */
+    if (!low_bnd && rXv > homo_low_bnd + eps){
+        sX[k] = -1.0; k++;
+    }else if (low_bnd){
+        index_t i = first_vertex[rv];
+        while (i < first_vertex[rv + 1] && rXv <= low_bnd[comp_list[i]] + eps){
+            i++;
+        }
+        if (i < first_vertex[rv + 1]){ sX[k] = -1.0; k++; }
     }
-    return complexity*(V - saturated_vert)/V; // account saturation linearly
-}
 
-TPL void CP_D1_QL1B::split_component(comp_t rv,
-    Maxflow<index_t, real_t>* maxflow)
-{
+    /* test if 0 is a candidate: at least one vertex on nondifferentiability */
+    if (rXv <= homo_low_bnd + eps || rXv >= homo_upp_bnd - eps){
+        sX[k] = ZERO; k++;
+    }else if (l1_weights || homo_l1_weight || low_bnd || upp_bnd){
+        index_t i = first_vertex[rv];
+        bool diff = true;
+        while (i < first_vertex[rv + 1] && diff){
+            index_t v = comp_list[i];
+            if (l1_weights || homo_l1_weight){
+                diff = abs(rXv - Yl1_(v)) > eps;
+            }
+            if (low_bnd){ diff = diff && rXv > low_bnd[v] + eps; }
+            if (upp_bnd){ diff = diff && rXv < upp_bnd[v] - eps; }
+            i++;
+        }
+        if (!diff){ sX[k] = ZERO; k++; }
+    }
+
+    /* test if +1 is a candidate: at least one vertex not on upper bound */
+    if (!upp_bnd && rXv < homo_upp_bnd - eps){
+        sX[k] = 1.0; k++;
+    }else if (upp_bnd){
+        index_t i = first_vertex[rv];
+        while (i < first_vertex[rv + 1] && rXv >= upp_bnd[comp_list[i]] - eps){
+            i++;
+        }
+        if (i < first_vertex[rv + 1]){ sX[k] = 1.0; k++; }
+    }
+
+    split_info.K = k;
+
+    /* assign all vertex to first value */
     for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-        label_assign[comp_list[i]] = 0;
+         label_assign[comp_list[i]] = 0; 
     }
 
-    /**  first cut +1 versus 0; second cut -1 versus 0  **/
-    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
-    const index_t* comp_list_rv = comp_list + first_vertex[rv];
-
-    for (comp_t dir = 1; dir <= 2; dir++){
-
-    /* set gradient terminal capacities */
-    if (dir == 1){
-        for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list_rv[i];
-            maxflow->terminal_capacity(i) = grad[v];
-        }
-    }else{
-        for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list_rv[i];
-            maxflow->terminal_capacity(i) = -grad[v];
-        }
-    }
-
-    /* l1 contribution */
-    if (l1_weights || homo_l1_weight){ 
-        for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list_rv[i];
-            if (rX[rv] == Yl1_(v)){
-                maxflow->terminal_capacity(i) += L1_WEIGHTS_(v);
-            }
-        }
-    }
-
-    /* box constraint contribution is infinite at the boundary */
-    if (dir == 1 && upp_bnd){
-        for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list_rv[i];
-            if (rX[rv] == upp_bnd[v]){
-                maxflow->terminal_capacity(i) = real_inf();
-            }
-        }
-    }else if (dir == 1 && homo_upp_bnd < real_inf() && rX[rv] == homo_upp_bnd){
-        continue; // no value can increase
-    }else if (dir == 2 && low_bnd){
-        for (index_t i = 0; i < comp_size; i++){
-            index_t v = comp_list_rv[i];
-            if (rX[rv] == low_bnd[v]){
-                maxflow->terminal_capacity(i) = real_inf();
-            }
-        }
-    }else if (dir == 2 && homo_low_bnd > -real_inf()
-              && rX[rv] == homo_low_bnd){
-        continue; // no value can decrease
-    }
-
-    /* set the d1 edge capacities */
-    index_t e_in_comp = 0;
-    for (index_t i = 0; i < comp_size; i++){
-        index_t v = comp_list_rv[i];
-        for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_bind(e)){
-                maxflow->set_edge_capacities(e_in_comp++, EDGE_WEIGHTS_(e),
-                    EDGE_WEIGHTS_(e));
-            } /* in most cases, both sides of a parallel separation
-               * prefer the same descent direction, no additional capacity;
-               * this favors cutting, usually not detrimental to optimality */
-            /* else if (is_par_sep(e)){
-                maxflow->terminal_capacity(i) += EDGE_WEIGHTS_(e);
-            } */
-        }
-    }
-
-    /* find min cut and assign label accordingly */
-    maxflow->maxflow();
-
-    for (index_t i = 0; i < comp_size; i++){
-        index_t v = comp_list_rv[i];
-        if (maxflow->is_sink(i)){ label_assign[v] = dir; }
-    }
-
-    /* when no nondifferentiable part exists besides the total variation, 
-     * only one cut is required (+1 vs -1), equivalent to the first one */
-    if (!l1_weights && !homo_l1_weight && !low_bnd && !upp_bnd &&
-        homo_low_bnd == -real_inf() && homo_upp_bnd == real_inf()){
-        return;
-    }
-       
-    } // end for dir
+    return split_info;
 }
 
-TPL real_t CP_D1_QL1B::compute_evolution(bool compute_dif)
+TPL real_t CP_D1_QL1B::vert_split_cost(const Split_info& split_info, index_t v,
+    comp_t k) const
 {
-    index_t num_ops = compute_dif ? (V - saturated_vert) : saturated_comp;
-    real_t dif = ZERO, amp = ZERO;
-    /* auxiliary variable for parallel region */
-    comp_t saturated_comp_par = 0; 
-    index_t saturated_vert_par = 0;
-    #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
-        reduction(+:dif, amp, saturated_comp_par, saturated_vert_par)
-    for (comp_t rv = 0; rv < rV; rv++){
-        real_t rXv = rX[rv];
-        if (is_saturated[rv]){
-            real_t lrXv = last_rX[
-                last_comp_assign[comp_list[first_vertex[rv]]] ];
-            real_t rv_dif = abs(rXv - lrXv);
-            if (rv_dif > abs(rX[rv])*dif_tol){
-                is_saturated[rv] = false;
-            }else{
-                saturated_comp_par++;
-                saturated_vert_par += first_vertex[rv + 1] - first_vertex[rv];
-            }
-            if (compute_dif){
-                dif += rv_dif*rv_dif*(first_vertex[rv + 1] - first_vertex[rv]);
-                amp += rXv*rXv*(first_vertex[rv + 1] - first_vertex[rv]);
-            }
-        }else if (compute_dif){
-            for (index_t v = first_vertex[rv]; v < first_vertex[rv + 1]; v++){
-                real_t lrXv = last_rX[last_comp_assign[comp_list[v]]];
-                dif += (rXv - lrXv)*(rXv - lrXv);
-            }
-            amp += rXv*rXv*(first_vertex[rv + 1] - first_vertex[rv]);
-        }
-    }
-    saturated_comp = saturated_comp_par;
-    saturated_vert = saturated_vert_par;
-    if (compute_dif){
-        dif = sqrt(dif);
-        amp = sqrt(amp);
-        return amp > eps ? dif/amp : dif/eps;
-    }else{
+    real_t sXk = split_info.sX[k];
+    if (sXk == ZERO){ return ZERO; }
+
+    real_t rXv = rX[split_info.rv];
+
+    /* infinite cost for leaving the boundaries */
+    if (upp_bnd && rXv >= upp_bnd[v] - eps && sXk == (real_t) 1.0){
         return real_inf();
+    }else if (low_bnd && rXv <= low_bnd[v] + eps && sXk == (real_t) -1.0){
+        return real_inf();
+    } /* homogeneous bounds cannot be violated by a valid descent direction */
+
+    real_t c = sXk*G[v]; // differentiable contribution
+
+     /* l1 contribution */
+    if ((l1_weights || homo_l1_weight) && abs(rXv - Yl1_(v)) <= eps){
+        c += L1_WEIGHTS_(v);
     }
+
+    return c;
 }
 
-TPL real_t CP_D1_QL1B::compute_objective()
+TPL real_t CP_D1_QL1B::vert_split_cost(const Split_info& split_info, index_t v,
+    comp_t k, comp_t l) const
+{
+    return Cp<real_t, index_t, comp_t>::vert_split_cost(split_info, v, k, l);
+}
+
+TPL real_t CP_D1_QL1B::compute_objective() const
 /* unfortunately, at this point one does not have access to the reduced objects
  * computed in the routine solve_reduced_problem() */
 {

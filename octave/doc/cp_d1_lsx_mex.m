@@ -1,7 +1,6 @@
-function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
-    first_edge, adj_vertices, options)
+function varargout = cp_d1_lsx_mex(loss, Y, first_edge, adj_vertices, options)
 %
-%        [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y,
+%        [Comp, rX, [List, Graph, Obj, Time, Dif]] = cp_d1_lsx_mex(loss, Y,
 %   first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d1 (total variation) penalization, with a
@@ -71,9 +70,13 @@ function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %         of length E
 % options - structure with any of the following fields [with default values]:
 %     edge_weights [1.0], loss_weights [none], d1_coor_weights [none],
-%     cp_dif_tol [1e-3], cp_it_max [10], pfdr_rho [1.0], pfdr_cond_min [1e-2],
+%     cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [1],
+%     split_damp_ratio [1.0], split_values_init_num [2],
+%     split_values_iter_num [2], pfdr_rho [1.0], pfdr_cond_min [1e-2],
 %     pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-2*cp_dif_tol], pfdr_it_max [1e4],
-%     verbose [1e2], max_num_threads [none], balance_parallel_split [true]
+%     verbose [1e2], max_num_threads [none], max_split_size [none],
+%     balance_parallel_split [true], compute_List [false], compute_Obj [false],
+%     compute_Time [false], compute_Dif [false]
 % edge_weights - (real) array of length E, or scalar for homogeneous weights
 % loss_weights - weights on vertices; (real) array of length V
 % d1_coor_weights - for multidimensional data, weights the coordinates in the
@@ -86,6 +89,16 @@ function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %     longer computational time and more final components
 % cp_it_max - maximum number of iterations (graph cut and subproblem);
 %     10 cuts solve accurately most problems
+% K - number of alternative descent directions considered in the split step
+% split_iter_num - number of partition-and-update iterations in the split step
+% split_damp_ratio - edge weights damping for favoring splitting; edge
+%     weights increase in linear progression along partition-and-update
+%     iterations, from this ratio up to original value; real scalar between 0
+%     and 1, the latter meaning no damping
+% split_values_init_num - number of random initializations when looking for
+%     descent directions in the split step
+% split_values_iter_num - number of refining iterations when looking for
+%     descent directions in the split step
 % pfdr_rho - relaxation parameter, 0 < rho < 2;
 %     1 is a conservative value; 1.5 often speeds up convergence
 % pfdr_cond_min - stability of preconditioning; 0 < cond_min < 1;
@@ -100,24 +113,41 @@ function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 %     1e-2*cp_dif_tol is a conservative value
 % pfdr_it_max - maximum number of iterations;
 %     1e4 iterations provides enough precision for most subproblems
-% max_num_threads - if greater than zero, set the maximum number of threads
-%     used for parallelization with OpenMP
-% balance_parallel_split - if true, the parallel workload of the split step 
-%     is balanced; WARNING: this might trade off speed against optimality
 % verbose - if nonzero, display information on the progress, every 'verbose'
 %     PFDR iterations
+% max_num_threads - if greater than zero, set the maximum number of threads
+%     used for parallelization with OpenMP
+% max_split_size - maximum number of vertices allowed in connected component
+%     passed to a split problem; make split of very large components faster,
+%     but might induced suboptimal artificial cuts
+% balance_parallel_split - if true, the parallel workload of the split step 
+%     is balanced; WARNING: this might trade off speed against optimality
+% compute_List  - report the list of vertices constituting each component
+% compute_Graph - get the reduced graph on the components
+% compute_Obj   - compute the objective functional along iterations 
+% compute_Time  - monitor elapsing time along iterations
+% compute_Dif   - compute relative evolution along iterations 
 %
-% OUTPUTS: indices start at 0
+% OUTPUTS: List, Graph, Obj, Time and Dif are optional, set parameters
+%   compute_List, compute_Graph, compute_Obj, compute_Time, or
+%   compute_Dif to True to request them and capture them in output
+%   variables in that order;
+%   NOTA: indices start at 0
 %
 % Comp - assignement of each vertex to a component, (uint16) array of length V
-% rX - values of each component of the minimizer, (real) array of length rV;
-%     the actual minimizer can be reconstructed with X = rX(Comp + 1)
+% rX   - values of each component of the minimizer, (real) array of size
+%     D-by-rV; the actual minimizer is then reconstructed as X = rX(:, Comp+1);
+% List - if requested, list of vertices constituting each component; cell array
+%     of length rV, containing (uint32) arrays of indices
+% Graph - if requested, reduced graph structure; cell array of length 3
+%     representing the graph as forward-star (see input first_edge and
+%     adj_vertices) together with edge weights
 % Obj  - the values of the objective functional along iterations;
-%     array of length number of iterations performed + 1
+%     array of length number of cut-pursuit iterations performed + 1
 % Time - if requested, the elapsed time along iterations;
-%     array of length number of iterations performed + 1
+%     array of length number of cut-pursuit iterations performed + 1
 % Dif  - if requested, the iterate evolution along iterations;
-%     array of length number of iterations performed
+%     array of length number of cut-pursuit iterations performed
 % 
 % Parallel implementation with OpenMP API.
 %
@@ -128,4 +158,4 @@ function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_lsx_mex(loss, Y, ...
 % H. Raguet, A Note on the Forward-Douglas--Rachford Splitting for Monotone 
 % Inclusion and Convex Optimization Optimization Letters, 2018, 1-24
 %
-% Hugo Raguet 2017, 2018, 2019, 2020
+% Hugo Raguet 2017, 2018, 2019, 2020, 2023

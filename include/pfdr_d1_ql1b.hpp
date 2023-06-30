@@ -194,8 +194,6 @@ private:
 
     void main_iteration() override; // add application of matrix A
 
-    real_t compute_evolution() override; // weight l2 norm by Lipschitz metric
-
     /**  type resolution for base template class members  **/
     using Pfdr_d1<real_t, vertex_t>::V;
     using Pfdr_d1<real_t, vertex_t>::E;

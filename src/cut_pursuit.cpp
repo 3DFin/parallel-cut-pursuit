@@ -2,6 +2,7 @@
  * Hugo Raguet 2018
  *===========================================================================*/
 #include <algorithm>
+#include <random>
 #include "cut_pursuit.hpp"
 
 #define ZERO ((real_t) 0.0) // avoid conversions
@@ -10,9 +11,10 @@
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 
 /** specific flags **/
-#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max())
 /* use maximum number of components; no component can have this identifier */
-#define NOT_ASSIGNED MAX_NUM_COMP
+#define MAX_NUM_COMP (std::numeric_limits<comp_t>::max())
+#define NOT_ASSIGNED (std::numeric_limits<comp_t>::max())
+#define CHAIN_END (std::numeric_limits<comp_t>::max())
 #define ASSIGNED ((comp_t) 0)
 #define ASSIGNED_ROOT ((comp_t) 1) // must differ from ASSIGNED
 #define ASSIGNED_ROOT_SAT ((comp_t) 2) // must differ from ASSIGNED_ROOT
@@ -60,11 +62,16 @@ TPL CP::Cp(index_t V, index_t E, const index_t* first_edge,
     it_max = 10; verbose = 1000;
     dif_tol = ZERO;
     eps = numeric_limits<real_t>::epsilon();
-    monitor_evolution = false;
+    K = 2;
+    split_iter_num = 1;
+    split_damp_ratio = 1.0;
+    split_values_init_num = 1;
+    split_values_iter_num = 1;
 
     max_num_threads = omp_get_max_threads();
-    balance_par_split = max_num_threads > 1 &&
+    balance_parallel_split = max_num_threads > 1 &&
         compute_num_threads(maxflow_complexity()) > 1;
+    max_split_size = V;
 }
 
 TPL CP::~Cp()
@@ -95,7 +102,6 @@ TPL void CP::set_monitoring_arrays(real_t* objective_values,
     this->objective_values = objective_values;
     this->elapsed_time = elapsed_time;
     this->iterate_evolution = iterate_evolution;
-    if (iterate_evolution){ monitor_evolution = true; }
 }
 
 TPL void CP::set_components(comp_t rV, comp_t* comp_assign)
@@ -112,22 +118,61 @@ TPL void CP::set_components(comp_t rV, comp_t* comp_assign)
 TPL void CP::set_cp_param(real_t dif_tol, int it_max, int verbose, real_t eps)
 {
     this->dif_tol = dif_tol;
-    if (dif_tol > ZERO){ monitor_evolution = true; }
     this->it_max = it_max;
     this->verbose = verbose;
     this->eps = ZERO < dif_tol && dif_tol < eps ? dif_tol : eps;
 }
 
-TPL void CP::set_parallel_param(int max_num_threads, bool balance_par_split)
+TPL void CP::set_split_param(index_t max_split_size, comp_t K,
+    int split_iter_num, real_t split_damp_ratio, int split_values_init_num,
+    int split_values_iter_num)
+{
+    if (K < 2){
+        cerr << "Cut-pursuit: there must be at least two alternative values"
+            "in the split (" << K << " specified)." << endl;
+        exit(EXIT_FAILURE);
+    }
+    if (split_iter_num < 1){
+        cerr << "Cut-pursuit: there must be at least one iteration in the "
+            "split (" << split_iter_num << " specified)." << endl;
+        exit(EXIT_FAILURE);
+    }
+    if (split_damp_ratio <= 0 || split_damp_ratio > 1.0){
+        cerr << "Cut-pursuit: split damping ratio must be between zero "
+            "excluded and one included (" << split_damp_ratio << " specified)."
+            << endl;
+        exit(EXIT_FAILURE);
+    }
+    if (split_values_init_num < 1){
+        cerr << "Cut-pursuit: split values must be computed at least once per"
+            "split (" << split_values_init_num << " specified)." << endl;
+        exit(EXIT_FAILURE);
+    }
+    if (split_values_iter_num < 1){
+        cerr << "Cut-pursuit: split values must be updated at least once per"
+            "split (" << split_values_iter_num << " specified)." << endl;
+        exit(EXIT_FAILURE);
+    }
+    this->max_split_size = max_split_size;
+    this->K = K;
+    this->split_iter_num = split_iter_num;
+    this->split_damp_ratio = split_damp_ratio;
+    this->split_values_init_num = split_values_init_num;
+    this->split_values_iter_num = split_values_iter_num;
+}
+
+TPL void CP::set_parallel_param(int max_num_threads,
+    bool balance_parallel_split)
 {
     if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
     this->max_num_threads = max_num_threads;
-    this->balance_par_split = balance_par_split && max_num_threads > 1
+    this->balance_parallel_split = balance_parallel_split
+        && max_num_threads > 1
         && compute_num_threads(split_complexity()) > 1;
 }
 
 TPL comp_t CP::get_components(const comp_t** comp_assign,
-    const index_t** first_vertex, const index_t** comp_list)
+    const index_t** first_vertex, const index_t** comp_list) const
 {
     if (comp_assign){ *comp_assign = this->comp_assign; }
     if (first_vertex){ *first_vertex = this->first_vertex; }
@@ -149,7 +194,7 @@ TPL index_t CP::get_reduced_graph(const comp_t** reduced_edges,
     return this->rE;
 }
 
-TPL value_t* CP::get_reduced_values(){ return rX; }
+TPL const value_t* CP::get_reduced_values() const { return rX; } 
 
 TPL void CP::set_reduced_values(value_t* rX){ this->rX = rX; }
 
@@ -186,7 +231,8 @@ TPL int CP::cut_pursuit(bool init)
         if (!activation){ /* do not recompute reduced problem */
             saturated_comp = rV;
             saturated_vert = V;
-            if (dif_tol > ZERO || iterate_evolution){
+
+            if (monitor_evolution()){
                 dif = ZERO;
                 if (iterate_evolution){ iterate_evolution[it] = dif; }
             }
@@ -196,6 +242,7 @@ TPL int CP::cut_pursuit(bool init)
             if (objective_values){
                 objective_values[it] = objective_values[it - 1];
             }
+
             continue;
         }
 
@@ -205,7 +252,7 @@ TPL int CP::cut_pursuit(bool init)
             last_comp_assign[v] = comp_assign[v];
         }
         last_rV = rV;
-        if (monitor_evolution){ /* store also last iterate values */
+        if (monitor_evolution()){ /* store also last iterate values */
             last_rX = (value_t*) malloc_check(sizeof(value_t)*D*rV);
             for (size_t i = 0; i < D*rV; i++){ last_rX[i] = rX[i]; }
         }
@@ -227,18 +274,16 @@ TPL int CP::cut_pursuit(bool init)
         rX = (value_t*) malloc_check(sizeof(value_t)*D*rV);
         solve_reduced_problem();
 
-        /* compute evolution before the merge step because parallel balancing
-         * components will be merged, resulting in underestimated evolution */
-        if (monitor_evolution){
-            dif = compute_evolution(dif_tol > ZERO || iterate_evolution);
-            if (iterate_evolution){ iterate_evolution[it] = dif; }
-            free(last_rX); last_rX = nullptr;
-        }
-
         if (verbose){ cout << "\tMerge... " << flush; }
         index_t deactivation = merge();
         if (verbose){
             cout << deactivation << " deactivated edge(s)." << endl;
+        }
+
+        if (dif_tol > ZERO || iterate_evolution){
+            dif = compute_evolution();
+            if (iterate_evolution){ iterate_evolution[it] = dif; }
+            free(last_rX); last_rX = nullptr;
         }
 
         free(last_comp_assign); last_comp_assign = nullptr;
@@ -255,7 +300,7 @@ TPL int CP::cut_pursuit(bool init)
     return it;
 }
 
-TPL double CP::monitor_time(chrono::steady_clock::time_point start)
+TPL double CP::monitor_time(chrono::steady_clock::time_point start) const
 { 
     using namespace chrono;
     steady_clock::time_point current = steady_clock::now();
@@ -263,9 +308,9 @@ TPL double CP::monitor_time(chrono::steady_clock::time_point start)
                / static_cast<double>(steady_clock::period::den);
 }
 
-TPL void CP::print_progress(int it, real_t dif, double timer)
+TPL void CP::print_progress(int it, real_t dif, double timer) const
 {
-    if (it && (dif_tol > ZERO || iterate_evolution)){
+    if (it && monitor_evolution()){
         cout.precision(2);
         cout << scientific << "\trelative iterate evolution " << dif
             << " (tol. " << dif_tol << ")\n";
@@ -542,7 +587,7 @@ TPL void CP::compute_reduced_graph()
      * starting indices */
     comp_t* adj_components = (comp_t*)
         malloc_check(sizeof(comp_t)*first_active_edge[rV]);
-    real_t* active_edge_weights = edge_weights || balance_par_split ?
+    real_t* active_edge_weights = edge_weights ?
         (real_t*) malloc_check(sizeof(real_t)*first_active_edge[rV]) : nullptr;
     for (index_t v = 0; v < V; v++){
         comp_t ru = comp_assign[v];
@@ -558,9 +603,7 @@ TPL void CP::compute_reduced_graph()
                     adj_components[ae] = ru;
                 }
                 if (active_edge_weights && ae != NO_EDGE){
-                    /* infinite weights to parallel separation ensure merge */
-                    active_edge_weights[ae] = is_par_sep(e) ? real_inf() :
-                        EDGE_WEIGHTS_(e);
+                    active_edge_weights[ae] = EDGE_WEIGHTS_(e);
                 }
             }
         }
@@ -643,7 +686,7 @@ TPL void CP::compute_reduced_graph()
 
 TPL void CP::initialize()
 {
-    free(rX); 
+    free(rX);
     if (!comp_assign){
         comp_assign = (comp_t*) malloc_check(sizeof(comp_t)*V);
     }
@@ -669,14 +712,18 @@ TPL void CP::initialize()
     merge();
 }
 
-TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new, 
+TPL int CP::balance_split(comp_t& rV_big, comp_t& rV_new, 
         index_t*& first_vertex_big)
 /* rV_big will be the number of big components to be split
    rV_new will be the number of resulting new components
    first_vertex_big will store info on list of vertices of big components */
 {
-    /**  sort components by decreasing size  **/
-    if (max_num_threads > 1){ // sort even if no balancing is required
+    int num_thrds = compute_num_threads(split_complexity());
+
+    /**  sort components by decreasing size
+     * even if no balancing is required, sorting is useful for dynamic
+     * scheduling of parallel split */
+    if (num_thrds > 1 || max_split_size < V){
         /* get component sizes */
         index_t* comp_sizes = (index_t*) malloc_check(sizeof(index_t)*rV);
         for (comp_t rv = 0; rv < rV; rv++){
@@ -731,13 +778,15 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
         free(sort_comp);
     }
 
-    if (!balance_par_split){
+    if (!balance_parallel_split &&
+        max_split_size >= first_vertex[1] - first_vertex[0]){
         rV_new = 0; rV_big = 0;
-        return compute_num_threads(split_complexity(), rV);
+        return (comp_t) num_thrds < rV ? num_thrds : rV;
     }
 
-    int num_thrds = compute_num_threads(split_complexity());
+    /* maximum component size for parallelism or maxflow performance */
     index_t max_comp_size = (V - 1)/num_thrds + 1;
+    if (max_comp_size > max_split_size){ max_comp_size = max_split_size; }
 
     /**  get number of components to split  **/
     rV_big = 0; // the number of components to split
@@ -748,27 +797,23 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
 
     if (!rV_big){
         rV_new = 0;
-        return num_thrds;
+        return (comp_t) num_thrds < rV ? num_thrds : rV;
     }
 
     /**  split big components and create balanced component list  **/
     /* the number of resulting new components */
     comp_t rV_new_par = 0; // auxiliary variable for parallel region
 
-    /** there is need to scan all edges involving a given vertex without
+    /* there is need to scan all edges involving a given vertex without
      * running through all edges of the graph, so we create the list of
      * 'reverse edges' within each component; to facilitate this, we keep the
-     * index of each vertex within its component **/
+     * index of each vertex within its component */
     index_in_comp = (index_t*) malloc_check(sizeof(index_t)*V);
 
     #pragma omp parallel for schedule(dynamic) \
         NUM_THREADS(2*E*first_vertex[rV_big]/V, rV_big) reduction(+:rV_new_par)
     for (comp_t rv = 0; rv < rV_big; rv++){
         index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
-
-        /* adjust maximum component size */
-        index_t n = (comp_size - 1)/max_comp_size + 1;
-        index_t max_comp_size_rv = (comp_size - 1)/n + 1;
 
         /* cleanup assigned components */
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
@@ -784,12 +829,17 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
             malloc_check(sizeof(index_t)*comp_size);
 
         /**  compute the new components  **/
+        index_t residual_comp_size = comp_size;
         index_t i = 0, j = 0;
         for (index_t k = first_vertex[rv]; k < first_vertex[rv + 1]; k++){
             index_t u = comp_list[k];
             if (comp_assign[u] != NOT_ASSIGNED){ continue; }
-            comp_assign[u] = ASSIGNED_ROOT; // flag a component's root
-            /* put in connected components list */
+            /* start a new component with u as root */
+            comp_assign[u] = ASSIGNED_ROOT;
+            /* adjust maximum component size */
+            index_t n = (residual_comp_size - 1)/max_comp_size + 1;
+            index_t max_comp_size_u = (residual_comp_size - 1)/n + 1;
+            /* put u in the new component list */
             tmp_comp_list_rv[j++] = u;
             index_t size = 1;
             while (i < j){ /* breadth-first search up to max component size */
@@ -813,14 +863,15 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
                         comp_assign[w] = ASSIGNED;
                         tmp_comp_list_rv[j++] = w;
                         size++;
-                        if (size == max_comp_size_rv){
-                            i = j; // incorporate the whole queue
+                        if (size == max_comp_size_u){
+                            i = j; // swallow the queue
                             break;
                         }
                     }
                     e++;
                 }
             } /* the current new component is complete */
+            residual_comp_size -= size;
             rV_new_par++;
         }
 
@@ -866,7 +917,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
         first_vertex_bal[rv + rV_dif] = first_vertex[rv];
     }
 
-    /**  set parallel cut separation on edges between new components  **/
+    /**  set separation on edges between new components  **/
     #pragma omp parallel for schedule(static) \
         NUM_THREADS(E*first_vertex_bal[rV_new]/V, rV_new)
     for (comp_t rv_new = 0; rv_new < rV_new; rv_new++){
@@ -875,7 +926,7 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
             index_t v = comp_list[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_bind(e) && rv_new != comp_assign[adj_vertices[e]]){
-                    edge_status[e] = PAR_SEP;
+                    separate(e);
                 }
             }
         }
@@ -910,10 +961,10 @@ TPL int CP::balance_parallel_split(comp_t& rV_big, comp_t& rV_new,
     first_vertex = first_vertex_bal;
     rV = rV_bal;
 
-    return num_thrds;
+    return (comp_t) num_thrds < rV ? num_thrds : rV;
 }
 
-TPL index_t CP::remove_parallel_separations(comp_t rV_new)
+TPL index_t CP::remove_balance_separations(comp_t rV_new)
 {
     index_t activation = 0;
 
@@ -937,7 +988,7 @@ TPL index_t CP::remove_parallel_separations(comp_t rV_new)
             i++){
             index_t v = comp_list[i];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-                if (is_par_sep(e)){
+                if (is_separation(e)){
                     if (sat && is_saturated[comp_assign[adj_vertices[e]]]){
                         bind(e);
                     }else{
@@ -952,7 +1003,7 @@ TPL index_t CP::remove_parallel_separations(comp_t rV_new)
     return activation;
 }
 
-TPL void CP::revert_balance_parallel_split(comp_t rV_big, comp_t rV_new, 
+TPL void CP::revert_balance_split(comp_t rV_big, comp_t rV_new, 
     index_t* first_vertex_big)
 {
     index_t* first_vertex_bal = first_vertex; // make clear which one is which
@@ -1002,13 +1053,276 @@ TPL void CP::revert_balance_parallel_split(comp_t rV_big, comp_t rV_new,
     rV = rV_ini;
 }
 
+TPL uintmax_t CP::split_values_complexity() const
+{
+    uintmax_t complexity = 0;
+    /* initialization: k-means++ */
+    complexity += D*V*K*(K - 1)/2; // draw initialization
+    complexity += D*V*(K + 1)*split_values_iter_num; // k-means
+    complexity *= split_values_init_num; // repetition
+    /* updates */
+    complexity += D*(K + V)*(split_iter_num - 1);
+    return complexity;
+}
+
+TPL uintmax_t CP::split_complexity() const
+{
+    /* graph cut */
+    uintmax_t complexity = D*V; // account unary split cost and final labeling
+    complexity += E; // account for binary split cost capacities
+    complexity += maxflow_complexity(); // graph cut
+    if (K > 2){ complexity *= K; } // K alternative labels
+    complexity *= split_iter_num; // repeated
+    /* all split value computations (init and updates) */
+    complexity += split_values_complexity();
+    return complexity*(V - saturated_vert)/V; // account saturation linearly
+}
+
+TPL real_t CP::vert_split_cost(const Split_info& split_info, index_t v,
+    comp_t k, comp_t l) const
+{
+    if (k == l){ return ZERO; }
+    return vert_split_cost(split_info, v, k)
+         - vert_split_cost(split_info, v, l);
+}
+
+TPL CP::Split_info::Split_info(comp_t rv) : rv(rv), K(0), first_k(0),
+    sX(nullptr) {}
+
+TPL CP::Split_info::~Split_info() { free(sX); }
+
+TPL typename CP::Split_info CP::initialize_split_info(comp_t rv)
+{
+    Split_info split_info(rv);
+
+    split_info.sX = (value_t*) malloc_check(sizeof(value_t)*D*K);
+    value_t* sX = split_info.sX;
+
+    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+    const index_t* comp_list_rv = comp_list + first_vertex[rv];
+
+    /* split cost map and random device for k-means++ */
+    real_t* near_cost = (real_t*) malloc_check(sizeof(real_t)*comp_size);
+    default_random_engine rand_gen; // default seed also enough for our purpose
+
+    /* best centroids, assignment and corresponding sum of split costs */
+    real_t current_sum_cost = real_inf();
+    real_t best_sum_cost = real_inf();
+    comp_t best_K = K;
+    comp_t* best_assign = split_values_init_num == 1 ? nullptr :
+        (comp_t*) malloc_check(sizeof(comp_t)*comp_size);
+    value_t* best_centroids = split_values_init_num == 1 ? nullptr :
+        (value_t*) malloc_check(sizeof(value_t)*D*K);
+
+    /**  kmeans ++  **/
+    for (int init = 0; init < split_values_init_num; init++){
+        split_info.K = K;
+
+        /**  initialization  **/ 
+        for (comp_t k = 0; k < split_info.K; k++){
+            index_t rand_i;
+            if (k == 0){ /* draw a value uniformly */
+                uniform_int_distribution<index_t> unif_distr(0, comp_size - 1);
+                rand_i = unif_distr(rand_gen);
+            }else{ /* draw value with higher probability to vertices not
+                    * satisfied with centroids already computed, that is
+                    * with higher unary split costs of the centroids */
+                for (index_t i = 0; i < comp_size; i++){
+                    index_t v = comp_list_rv[i];
+                    near_cost[i] = real_inf();
+                    for (comp_t l = 0; l < k; l++){
+                        real_t c = vert_split_cost(split_info, v, l);
+                        if (c < near_cost[i]){ near_cost[i] = c; }
+                    }
+                }
+                /* ensure positivity and deal with infinite costs;
+                 * concerning positivity, absolute values of costs are not
+                 * meaningful here anyway, only their differences are, so one
+                 * can subtract the minimum;
+                 * concerning infinite costs, they might concern
+                 * non-informative centroids, so we do note encourage them;
+                 * nonzero values ensures weights are not all zero, and prevent
+                 * from drawing twice the same vertex */
+                real_t min = near_cost[0];
+                for (index_t i = 1; i < comp_size; i++){
+                    if (near_cost[i] < min){ min = near_cost[i]; }
+                }
+                for (index_t i = 0; i < comp_size; i++){
+                    if (near_cost[i] == real_inf()){ near_cost[i] = eps; }
+                    else{ (near_cost[i] -= min) += eps; }
+                }
+                discrete_distribution<index_t> split_cost_distr(near_cost,
+                    near_cost + comp_size);
+                rand_i = split_cost_distr(rand_gen);
+            }
+            index_t rand_v = comp_list_rv[rand_i];
+            set_split_value(split_info, k, rand_v);
+        } // end for k
+
+        /**  k-means  **/
+        for (int iter = 0; iter < split_values_iter_num; iter++){
+            /* assign clusters to centroids */
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                real_t min_cost = real_inf();
+                for (comp_t k = 0; k < split_info.K; k++){
+                    real_t c = vert_split_cost(split_info, v, k);
+                    if (c < min_cost){
+                        min_cost = c;
+                        label_assign[v] = k;
+                    }
+                }
+            }
+            /* update centroids of clusters */
+            update_split_info(split_info);
+        }
+
+        if (split_values_init_num > 1){ /* keep the best sum of costs */
+            real_t current_sum_cost = ZERO;
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                comp_t k = label_assign[v];
+                current_sum_cost += vert_split_cost(split_info, v, k);
+            }
+            if (current_sum_cost < best_sum_cost){
+                best_sum_cost = current_sum_cost;
+                best_K = split_info.K;
+                for (size_t dk = 0; dk < D*split_info.K; dk++){
+                    best_centroids[dk] = sX[dk];
+                }
+                for (index_t i = 0; i < comp_size; i++){
+                    index_t v = comp_list_rv[i];
+                    best_assign[i] = label_assign[v];
+                }
+            }
+        }
+
+    } // end for init
+
+    free(near_cost);
+
+    if (current_sum_cost != best_sum_cost){
+        /* copy best centroids and assignment */
+        split_info.K = best_K;
+        for (size_t dk = 0; dk < D*split_info.K; dk++){
+            sX[dk] = best_centroids[dk];
+        }
+        for (index_t i = 0; i < comp_size; i++){
+            index_t v = comp_list_rv[i];
+            label_assign[v] = best_assign[i];
+        }
+    }
+
+    free(best_centroids);
+    free(best_assign);
+
+    if (split_info.K == 2){ split_info.first_k = 1; }
+    
+    return split_info;
+}
+
+TPL void CP::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
+{
+    index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
+    const index_t* comp_list_rv = comp_list + first_vertex[rv];
+
+    const Split_info split_info = initialize_split_info(rv);
+
+    real_t damping = split_damp_ratio;
+    for (int split_it = 0; split_it < split_iter_num; split_it++){
+        damping += (1.0 - split_damp_ratio)/split_iter_num;
+
+        bool no_reassignment = true;
+
+        /**  assign split values with graph cuts;
+         **  for K = 2, one graph cut 0 vs 1 in enough; otherwise iterate
+         **  over K alternative values like alpha-expansion  **/
+        for (comp_t k = split_info.first_k; k < split_info.K; k++){
+
+            /* set the source/sink capacities */
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                comp_t l = split_info.K == 2 ? 0 : label_assign[v];
+                /* unary cost: choosing alternative k against alternative l */
+                maxflow->terminal_capacity(i) = vert_split_cost(split_info, v,
+                    k, l);
+            }
+
+            /* set edge capacities */
+            index_t e_in_comp = 0;
+            for (index_t i = 0; i < comp_size; i++){
+                index_t u = comp_list_rv[i];
+                comp_t lu = split_info.K == 2 ? 0 : label_assign[u];
+                for (index_t e = first_edge[u]; e < first_edge[u + 1]; e++){
+                    if (!is_bind(e)){ continue; }
+                    index_t v = adj_vertices[e];
+                    comp_t lv = split_info.K == 2 ? 0 : label_assign[v];
+                    if (lu == lv){
+                        /* special case useful for avoiding additional flow,
+                         * and getting meaningful residual flows (e.g. for
+                         * directionnaly differentiable problems, where they
+                         * might represent subgradients) */
+                        real_t cap = damping*edge_split_cost(split_info, e,
+                            lu, k);
+                        maxflow->set_edge_capacities(e_in_comp++, cap, cap);
+                    }else{
+                        /* horizontal and source/sink capacities are modified 
+                         * according to Kolmogorov & Zabih (2004); in their
+                         * notations, functional E(u,v) is decomposed as
+                         *
+                         * E(0,0) | E(0,1)    A | B
+                         * --------------- = -------
+                         * E(1,0) | E(1,1)    C | D
+                         *
+                         *               0 | 0        0 | D-C      0 |B+C-A-D
+                         *  =   A   +  ---------  +  --------  +  -----------
+                         *             C-A | C-A      0 | D-C      0 |   0
+                         *
+                         * constant +      unary terms         +  binary term
+                         */
+                        /* A = E(0,0) binary cost of the current assignment */
+                        real_t A = damping*edge_split_cost(split_info, e,
+                            lu, lv);
+                        /* B = E(0,1) binary cost of changing lv to k */
+                        real_t B = damping*edge_split_cost(split_info, e,
+                            lu, k);
+                        /* C = E(1,0) binary cost of changing lu to k */
+                        real_t C = damping*edge_split_cost(split_info, e,
+                            k, lv);
+                        /* D = E(1,1) = 0 binary cost for changing both to k */
+                        /* set capacities with horizontal orientation u -> v */
+                        maxflow->terminal_capacity(i) += C - A;
+                        maxflow->terminal_capacity(index_in_comp[v]) -= C;
+                        maxflow->set_edge_capacities(e_in_comp++, B + C - A,
+                            ZERO);
+                    }
+                }  // end for all edges of vertex
+            } // end for all vertices
+
+            /* find min cut and set assignment accordingly */
+            maxflow->maxflow();
+
+            for (index_t i = 0; i < comp_size; i++){
+                index_t v = comp_list_rv[i];
+                if (maxflow->is_sink(i) && label_assign[v] != k){
+                    label_assign[v] = k;
+                    no_reassignment = false;
+                }
+            }
+        } // end for k
+
+        if (no_reassignment){ break; }
+
+    } // end for split_it
+
+}
+
 TPL index_t CP::split()
 {
     index_t activation = 0;
-
     comp_t rV_new, rV_big;
     index_t* first_vertex_big;
-    int num_thrds = balance_parallel_split(rV_big, rV_new, first_vertex_big);
+    int num_thrds = balance_split(rV_big, rV_new, first_vertex_big);
 
     /* components are processed in parallel but graph structure specifies edges
      * ends with global indexing; the following table enables constant time
@@ -1019,7 +1333,6 @@ TPL index_t CP::split()
         reduction(+:activation)
     for (comp_t rv = 0; rv < rV; rv++){
         if (is_saturated[rv]){ continue; }
-
         /**  build flow graph structure  **/
         /* set indexing within component and get number of binding edge */
         index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
@@ -1068,8 +1381,8 @@ TPL index_t CP::split()
     free(index_in_comp); index_in_comp = nullptr;
 
     if (rV_new != rV_big){
-        activation += remove_parallel_separations(rV_new);
-        revert_balance_parallel_split(rV_big, rV_new, first_vertex_big);
+        activation += remove_balance_separations(rV_new);
+        revert_balance_split(rV_big, rV_new, first_vertex_big);
     }
 
     /* reconstruct components assignment */
@@ -1087,7 +1400,7 @@ TPL comp_t CP::get_merge_chain_root(comp_t rv)
 {
     /* find the root */
     comp_t ru = rv;
-    while (merge_chains_root[ru] != chain_end()){ ru = merge_chains_root[ru]; }
+    while (merge_chains_root[ru] != CHAIN_END){ ru = merge_chains_root[ru]; }
     /* update intermediary steps */
     if (ru != rv){
         comp_t rw = merge_chains_root[rv];
@@ -1120,8 +1433,8 @@ TPL index_t CP::merge()
     merge_chains_next = (comp_t*) malloc_check(sizeof(comp_t)*rV);
     merge_chains_leaf = (comp_t*) malloc_check(sizeof(comp_t)*rV);
     for (comp_t rv = 0; rv < rV; rv++){
-        merge_chains_root[rv] = chain_end();
-        merge_chains_next[rv] = chain_end();
+        merge_chains_root[rv] = CHAIN_END;
+        merge_chains_next[rv] = CHAIN_END;
         merge_chains_leaf[rv] = rv;
     }
     comp_t merge_count = compute_merge_chains();
@@ -1145,7 +1458,7 @@ TPL index_t CP::merge()
         }
         /* run along each final component, from their root */
         for (comp_t ru = 0; ru < rV; ru++){
-            if (merge_chains_root[ru] != chain_end()){ continue; }
+            if (merge_chains_root[ru] != CHAIN_END){ continue; }
             comp_t last_ru = last_comp_assign[comp_list[first_vertex[ru]]];
             if (saturation_flag[last_ru] == NOT_ASSIGNED){
                 saturation_flag[last_ru] = ASSIGNED;
@@ -1154,7 +1467,7 @@ TPL index_t CP::merge()
             }
             /* run along the merge chain */
             comp_t rv = ru; 
-            while (rv != chain_end()){
+            while (rv != CHAIN_END){
                 comp_t last_rv = last_comp_assign[comp_list[first_vertex[rv]]];
                 if (last_ru != last_rv){ /* previous components do not agree */
                     saturation_flag[last_ru] = saturation_flag[last_rv] =
@@ -1165,7 +1478,7 @@ TPL index_t CP::merge()
         }
         /* resulting saturation for each final component */
         for (comp_t rv = 0; rv < rV; rv++){
-            if (merge_chains_root[rv] != chain_end()){ continue; }
+            if (merge_chains_root[rv] != CHAIN_END){ continue; }
             comp_t last_rv = last_comp_assign[comp_list[first_vertex[rv]]];
             is_saturated[rv] = saturation_flag[last_rv] != NOT_SATURATED;
         }
@@ -1195,7 +1508,7 @@ TPL index_t CP::merge()
      * and roots are processed before getting assigned a final component */
     comp_t* final_comp = merge_chains_root;
     for (comp_t ru = 0; ru < rV; ru++){
-        if (merge_chains_root[ru] != chain_end()){ continue; }
+        if (merge_chains_root[ru] != CHAIN_END){ continue; }
         /**  ru is a root, create the corresponding final component  **/
         /* copy component value and saturation;
          * can be done in-place because rn <= ru guaranteed */
@@ -1206,7 +1519,7 @@ TPL index_t CP::merge()
         /* run along the merge chain */
         index_t first = i; // holds index of first vertex of the component
         comp_t rv = ru;
-        while (rv != chain_end()){
+        while (rv != CHAIN_END){
             final_comp[rv] = rn;
             /* assign all vertices to final component */ 
             for (index_t j = first_vertex[rv]; j < first_vertex[rv + 1]; j++){
@@ -1246,7 +1559,7 @@ TPL index_t CP::merge()
     /* deactivate edges between merged components */
     index_t deactivation = 0;
     index_t desaturated_vert = 0;
-    index_t desaturated_comp = 0;
+    comp_t desaturated_comp = 0;
     #pragma omp parallel for schedule(static) NUM_THREADS(E, rV) \
         reduction(+:deactivation, desaturated_vert, desaturated_comp)
     for (comp_t rv = 0; rv < rV; rv++){
@@ -1256,12 +1569,12 @@ TPL index_t CP::merge()
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_bind(e)){ continue; }
                 if (rv != comp_assign[adj_vertices[e]]){ continue; }
-                if (balance_par_split){
+                if (balance_parallel_split){
                 /* if a large component has been artificially split for
-                 * parallel balancing, parallel separation edges must be set
-                 * inactive, but edges which have been cut in parallel
-                 * might not properly form new components yet and must be
-                 * kept for later; the component must also be desaturated */
+                 * parallel balancing, separation edges must be set inactive,
+                 * but edges which have been cut in parallel might not properly
+                 * form new components yet and must be kept for later;
+                 * the component must also be desaturated */
                     if (last_rv == last_comp_assign[adj_vertices[e]]){ 
                         // if (is_cut(e)){ continue; } // do not bind
                         // TODO: find a way to keep them

@@ -1,7 +1,6 @@
-function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
-    first_edge, adj_vertices, options)
+function varargout = cp_d1_ql1b_mex(Y, A, first_edge, adj_vertices, options)
 %
-%       [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y | AtY,
+%       [Comp, rX, [List, Graph, Obj, Time, Dif]] = cp_d1_ql1b_mex(Y | AtY,
 %    A | AtA, first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d1 (total variation) penalization, with a 
@@ -63,9 +62,12 @@ function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 % options - structure with any of the following fields [with default values]:
 %     edge_weights [1.0], Yl1 [none], l1_weights [0.0], low_bnd [-Inf],
 %     upp_bnd [Inf], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
-%     pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-2*cp_dif_tol],
-%     pfdr_it_max [1e4], verbose [1e3], max_num_threads [none],
-%     balance_parallel_split [true], Gram_if_square [true]
+%     pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
+%     pfdr_dif_tol [1e-2*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
+%     Gram_if_square [true], max_num_threads [none],
+%     max_split_size [none], balance_parallel_split [true],
+%     compute_List [false], compute_Graph [false], compute_Obj [false],
+%     compute_Time [false], compute_Dif [false]
 % edge_weights - (real) array of length E, or scalar for homogeneous weights
 % Yl1 - offset for l1 penalty, (real) array of length V
 % l1_weights - (real) array of length V, or scalar for homogeneous weights
@@ -95,25 +97,40 @@ function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 %     1e4 iterations provides enough precision for most subproblems
 % verbose - if nonzero, display information on the progress, every 'verbose'
 %     PFDR iterations
+% Gram_if_square - if A is square, set this to false for direct matricial case
 % max_num_threads - if greater than zero, set the maximum number of threads
 %     used for parallelization with OpenMP
+% max_split_size - maximum number of vertices allowed in connected component
+%     passed to a split problem; make split of very large components faster,
+%     but might induced suboptimal artificial cuts
 % balance_parallel_split - if true, the parallel workload of the split step 
 %     is balanced; WARNING: this might trade off speed against optimality
-% Gram_if_square - if A is square, set this to false for direct matricial case
+% compute_List  - report the list of vertices constituting each component
+% compute_Graph - get the reduced graph on the components
+% compute_Obj   - compute the objective functional along iterations 
+% compute_Time  - monitor elapsing time along iterations
+% compute_Dif   - compute relative evolution along iterations 
 %
-% OUTPUTS: indices start at 0
+% OUTPUTS: List, Graph, Obj, Time and Dif are optional, set parameters
+%   compute_List, compute_Graph, compute_Obj, compute_Time, or
+%   compute_Dif to True to request them and capture them in output
+%   variables in that order;
+%   NOTA: indices start at 0
 %
 % Comp - assignement of each vertex to a component, (uint16) array of length V
 % rX - values of eachcomponents of the minimizer, (real) array of length rV;
 %     the actual minimizer can be reconstructed with X = rX(Comp + 1);
-% Obj - the values of the objective functional along iterations;
-%     array of length number of iterations performed + 1;
-%     WARNING: in the precomputed A^t A version (including diagonal or identity
-%     case), a constant 1/2||Y||^2 in the quadratic part is omited
+% List - if requested, list of vertices constituting each component; cell array
+%     of length rV, containing (uint32) arrays of indices
+% Graph - if requested, reduced graph structure; cell array of length 3
+%     representing the graph as forward-star (see input first_edge and
+%     adj_vertices) together with edge weights
+% Obj  - the values of the objective functional along iterations;
+%     array of length number of cut-pursuit iterations performed + 1
 % Time - if requested, the elapsed time along iterations;
-%     array of length number of iterations performed + 1
+%     array of length number of cut-pursuit iterations performed + 1
 % Dif  - if requested, the iterate evolution along iterations;
-%     array of length number of iterations performed
+%     array of length number of cut-pursuit iterations performed
 % 
 % Parallel implementation with OpenMP API.
 %
@@ -124,4 +141,4 @@ function [Comp, rX, Obj, Time, Dif] = cp_pfdr_d1_ql1b_mex(Y, A, ...
 % H. Raguet, A Note on the Forward-Douglas--Rachford Splitting for Monotone 
 % Inclusion and Convex Optimization Optimization Letters, 2018, 1-24
 %
-% Hugo Raguet 2017, 2018, 2019, 2020
+% Hugo Raguet 2017, 2018, 2019, 2020, 2023

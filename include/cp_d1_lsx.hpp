@@ -25,7 +25,7 @@
  * H. Raguet, A Note on the Forward-Douglas-Rachford Splitting for Monotone 
  * Inclusion and Convex Optimization, Optimization Letters, 2018, 1-24
  *
- * Hugo Raguet 2018, 2020
+ * Hugo Raguet 2018, 2021, 2022, 2023
  *=========================================================================*/
 #pragma once
 #include "cut_pursuit_d1.hpp"
@@ -122,39 +122,54 @@ private:
     /* compute reduced values */
     void solve_reduced_problem() override;
 
-    /* split */
-    /* rough estimate of the number of operations for split step;
-     * useful for estimating the number of parallel threads */
-    uintmax_t split_complexity() override;
-    real_t* grad; // store gradient of smooth part
-    /* type resolution for base template class members */
-    void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
+    /**  split  **/
+
+    void compute_grad() override;
+
+    using typename Cp<real_t, index_t, comp_t>::Split_info;
+
+    /* override for taking into account nondifferentiable contributions */
+    real_t vert_split_cost(const Split_info& split_info, index_t v, comp_t k)
+        const override;
+    real_t vert_split_cost(const Split_info& split_info, index_t v, comp_t k,
+        comp_t l) const override;
+
+    /* override for direction within the simplex */
+    void project_descent_direction(Split_info& split_info, comp_t k) const
         override;
-    index_t split() override; // overload for computing gradient
 
-    /* relative iterate evolution in l1 norm and components saturation */
-    real_t compute_evolution(bool compute_dif) override;
+    /**  merge and updage  **/
 
-    real_t compute_objective() override;
+    /* override for checking evolution of saturated components in l1 norm;
+     * precision can be increased by decreasing dif_tol if necessary */
+    index_t merge() override;
+
+    /* override for relative iterate evolution in l1 norm */
+    real_t compute_evolution() const override;
+
+    real_t compute_objective() const override;
 
     /**  type resolution for base template class members  **/
+    using Cp_d1<real_t, index_t, comp_t>::G;
     using Cp_d1<real_t, index_t, comp_t>::D11;
     using Cp_d1<real_t, index_t, comp_t>::coor_weights;
     using Cp_d1<real_t, index_t, comp_t>::compute_graph_d1;
-    using Cp<real_t, index_t, comp_t>::D;
+    using Cp<real_t, index_t, comp_t>::split_iter_num;
+    using Cp<real_t, index_t, comp_t>::split_damp_ratio;
+    using Cp<real_t, index_t, comp_t>::split_values_init_num;
+    using Cp<real_t, index_t, comp_t>::split_values_iter_num;
+    using Cp<real_t, index_t, comp_t>::K;
     using Cp<real_t, index_t, comp_t>::rX;
     using Cp<real_t, index_t, comp_t>::last_rX;
     using Cp<real_t, index_t, comp_t>::saturated_comp;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
-    using Cp<real_t, index_t, comp_t>::monitor_evolution;
     using Cp<real_t, index_t, comp_t>::is_cut;
-    using Cp<real_t, index_t, comp_t>::is_bind;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;
-    using Cp<real_t, index_t, comp_t>::maxflow_complexity;
     using Cp<real_t, index_t, comp_t>::eps;
     using Cp<real_t, index_t, comp_t>::V;
     using Cp<real_t, index_t, comp_t>::E;
+    using Cp<real_t, index_t, comp_t>::D;
     using Cp<real_t, index_t, comp_t>::first_edge;
     using Cp<real_t, index_t, comp_t>::adj_vertices; 
     using Cp<real_t, index_t, comp_t>::edge_weights;
@@ -162,10 +177,8 @@ private:
     using Cp<real_t, index_t, comp_t>::rV;
     using Cp<real_t, index_t, comp_t>::rE;
     using Cp<real_t, index_t, comp_t>::comp_assign;
-    using Cp<real_t, index_t, comp_t>::label_assign;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
-    using Cp<real_t, index_t, comp_t>::index_in_comp;
     using Cp<real_t, index_t, comp_t>::reduced_edges;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::verbose;

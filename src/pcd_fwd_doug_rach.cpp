@@ -34,7 +34,7 @@ TPL PFDR::Pfdr(var_index_t size, index_t aux_size, const var_index_t* aux_idx,
     rho = 1.5;
     L = Lmut = nullptr;
     l = ZERO; lshape = SCALAR;
-    lipschcomput = EACH;
+    lipschcomput = ONCE;
     Ga = Ga_grad_f = Z = W = Z_Id = Id_W = nullptr;
 }
 
@@ -63,9 +63,12 @@ TPL void PFDR::compute_lipschitz_metric(){ l = ZERO; lshape = SCALAR; }
 TPL void PFDR::compute_hess_f()
 /* default to zero f, can be overriden */
 {
-    for (var_index_t i = 0; i < size; i++){
-        index_t id = i*D;
-        for (index_t d = 0; d < D; d++){ Ga_(i, id++) = ZERO; }
+    if (gashape == SCALAR){
+        ga = ZERO;
+    }else if (gashape == MONODIM){
+        for (var_index_t i = 0; i < size; i++){ Ga[i] = ZERO; }
+    }else{
+        for (index_t i = 0; i < size*D; i++){ Ga[i] = ZERO; }
     }
 }
 
@@ -294,6 +297,28 @@ TPL void PFDR::main_iteration()
 
 TPL real_t PFDR::compute_objective()
 { return compute_f() + compute_g() + compute_h(); }
+
+/* weight l2 norm by Lipschitz metric if available */
+TPL real_t PFDR::compute_evolution()
+{
+    if (Lipschcomput == EACH){ Pcd_prox<real_t>::compute_evolution(); }
+
+    real_t dif = ZERO;
+    real_t amp = ZERO;
+    #pragma omp parallel for schedule(static) NUM_THREADS(D*size, size) \
+        reduction(+:dif, amp)
+    for (var_index_t i = 0; i < size; i++){
+        index_t id = i*D;
+        for (index_t d = 0; d < D; d++){
+            real_t dx = last_X[id] - X[id];
+            dif += L_(i, id)*dx*dx;
+            amp += L_(i, id)*X[id]*X[id];
+            last_X[id] = X[id];
+            id++;
+        }
+    }
+    return sqrt(amp) > eps ? sqrt(dif/amp) : sqrt(dif)/eps;
+}
 
 /**  instantiate for compilation  **/
 #if defined _OPENMP && _OPENMP < 200805

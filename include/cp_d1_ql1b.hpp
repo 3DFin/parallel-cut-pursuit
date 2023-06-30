@@ -34,7 +34,7 @@
  * H. Raguet, A Note on the Forward-Douglas--Rachford Splitting for Monotone 
  * Inclusion and Convex Optimization Optimization Letters, 2018, 1-24
  *
- * Hugo Raguet 2018, 2020
+ * Hugo Raguet 2018, 2020, 2023
  *===========================================================================*/
 #pragma once
 #include "cut_pursuit_d1.hpp"
@@ -140,7 +140,7 @@ private:
      * otherwise, correlation of A with the observations (A^t Y), array of
      * length V; set to null for all zero */
 
-    real_t *R; // residual, array of length N, used only if N is positive
+    real_t* R; // residual, array of length N, used only if N is positive
 
     /* regularizations */
 
@@ -167,16 +167,23 @@ private:
     real_t pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol;
     int pfdr_it, pfdr_it_max;
 
-    /**  cut-pursuit steps  **/
+    /**  split  **/
 
-    /* split */
-    /* rough estimate of the number of operations for split step;
-     * useful for estimating the number of parallel threads */
-    uintmax_t split_complexity() override;
-    real_t* grad; // store gradient of smooth part
-    void split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
-        override;
-    index_t split() override; // overload for computing gradient
+    void compute_grad() override;
+
+    using typename Cp<real_t, index_t, comp_t>::Split_info;
+
+    /* override for setting directly {-1,+1} or {-1,0,+1}, and omitting
+     * competing value k = 0, when D = 1 */
+    Split_info initialize_split_info(comp_t rv) override;
+
+    /* override for taking into account nondifferentiable contributions */
+    real_t vert_split_cost(const Split_info& split_info, index_t v, comp_t k)
+        const override;
+    real_t vert_split_cost(const Split_info& split_info, index_t v, comp_t k,
+        comp_t l) const override;
+
+    /**  reduced problem and update  **/
 
     /* compute reduced values;
      * NOTA: if Yl1 is not constant, this actually solves only an approximation
@@ -184,26 +191,23 @@ private:
      * by the distance to the weighted median of Yl1 */
     void solve_reduced_problem() override;
 
-    /* relative iterate evolution in l2 norm and components saturation */
-    real_t compute_evolution(bool compute_dif) override;
-
     /* in the precomputed A^t A version, a constant 1/2||Y||^2 in the quadratic
      * part is omited */
-    real_t compute_objective() override;
+    real_t compute_objective() const override;
 
     /**  type resolution for base template class members  **/
+    using Cp_d1<real_t, index_t, comp_t>::G;
     using Cp_d1<real_t, index_t, comp_t>::compute_graph_d1;
+    using Cp<real_t, index_t, comp_t>::split_iter_num;
+    using Cp<real_t, index_t, comp_t>::split_damp_ratio;
+    using Cp<real_t, index_t, comp_t>::split_values_init_num;
+    using Cp<real_t, index_t, comp_t>::split_values_iter_num;
+    using Cp<real_t, index_t, comp_t>::K;
     using Cp<real_t, index_t, comp_t>::rX;
-    using Cp<real_t, index_t, comp_t>::last_rX;
-    using Cp<real_t, index_t, comp_t>::monitor_evolution;
     using Cp<real_t, index_t, comp_t>::is_cut;
     using Cp<real_t, index_t, comp_t>::is_bind;
-    using Cp<real_t, index_t, comp_t>::is_par_sep;
     using Cp<real_t, index_t, comp_t>::is_saturated;
-    using Cp<real_t, index_t, comp_t>::saturated_comp;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
-    using Cp<real_t, index_t, comp_t>::last_comp_assign;
-    using Cp<real_t, index_t, comp_t>::maxflow_complexity;
     using Cp<real_t, index_t, comp_t>::V;
     using Cp<real_t, index_t, comp_t>::E;
     using Cp<real_t, index_t, comp_t>::first_edge;

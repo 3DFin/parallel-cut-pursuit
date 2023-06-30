@@ -1,6 +1,6 @@
-         #----------------------------------------------------------#
-         #  script for illustrating cp_pfdr_d1_ql1b on EEG problem  #
-         #----------------------------------------------------------#
+            #-----------------------------------------------------#
+            #  script for illustrating cp_d1_ql1b on EEG problem  #
+            #-----------------------------------------------------#
 # Reference: H. Raguet and L. Landrieu, Cut-Pursuit Algorithm for Regularizing
 # Nonsmooth Functionals with Graph Total Variation, International Conference on
 # Machine Learning, PMLR, 2018, 80, 4244-4253
@@ -18,13 +18,13 @@ os.chdir(os.path.realpath(os.path.dirname(__file__)))
 sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
                                               "wrappers"))
 
-from cp_pfdr_d1_ql1b import cp_pfdr_d1_ql1b 
+from cp_d1_ql1b import cp_d1_ql1b 
 
 ###  general parameters  ###
-plot_results = True
+plot_results = False
 print_results = False
 
-###  parameters; see documentation of cp_pfdr_d1_ql1b  ###
+###  parameters; see documentation of cp_d1_ql1b  ###
 cp_dif_tol = 1e-4
 # cp_it_max = 15
 pfdr_rho = 1.5
@@ -55,11 +55,12 @@ supp0 = np.array(x0 != 0, dtype="int")
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX = cp_pfdr_d1_ql1b(y, Phi, first_edge, adj_vertices,
-                           edge_weights=d1_weights, l1_weights=l1_weights,
-                           low_bnd=low_bnd, pfdr_rho=pfdr_rho,
-                           pfdr_dif_tol=pfdr_dif_tol,
-                           balance_parallel_split=balance_parallel_split)
+Comp, rX = cp_d1_ql1b(y, Phi, first_edge, adj_vertices,
+                      edge_weights=d1_weights, l1_weights=l1_weights,
+                      low_bnd=low_bnd, pfdr_rho=pfdr_rho,
+                      pfdr_dif_tol=pfdr_dif_tol,
+                      max_num_threads=1,
+                      balance_parallel_split=balance_parallel_split)
 it2 = time.time()
 x = rX[Comp] # rX is components values, Comp is components assignment
 del rX, Comp

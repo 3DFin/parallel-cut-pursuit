@@ -28,6 +28,9 @@ TPL PFDR_D1_LSX::Pfdr_d1_lsx(vertex_t V, index_t E, const vertex_t* edges,
 {
     W_Ga_Y = nullptr;
     loss_weights = nullptr;
+    /* Lipschitz metric useful only during preconditioning, no point in wasting
+     * memory for saving so few computations */
+    lipshcompute = EACH; 
 }
 
 TPL PFDR_D1_LSX::~Pfdr_d1_lsx(){ if (W_Ga_Y != Ga){ free(W_Ga_Y); } }
@@ -259,6 +262,7 @@ TPL void PFDR_D1_LSX::initialize_iterate()
     /* } */
 }
 
+/* relative iterate evolution in l1 norm */
 TPL real_t PFDR_D1_LSX::compute_evolution()
 {
     real_t dif = ZERO;
