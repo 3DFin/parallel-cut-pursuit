@@ -7,7 +7,7 @@
  *        F(x) = sum_v loss(y_v, x_v) + ||x||_d0
  *
  * where for each vertex, y_v and x_v are D-dimensional vectors, the loss is
- * either the sum of square differences or smoothed Kullback-Leibler divergence
+ * a mix of the sum of square differences and a Kullback-Leibler divergence
  * (equivalent to cross-entropy in this formulation); see the 'loss' attribute,
  *   and ||x||_d0 = sum_{uv in E : xu != xv} w_d0_uv ,
  *
@@ -56,7 +56,7 @@ public:
     /**  methods for manipulating parameters  **/
 
     /* specific loss */
-    static real_t quadratic_loss() { return 1.0; }
+    real_t quadratic_loss() const { return D; }
 
     /* Y is changed only if the corresponding argument is not null */
     void set_loss(real_t loss, const real_t* Y = nullptr,
@@ -79,31 +79,36 @@ private:
     /**  separable loss term: weighted square l2 or smoothed KL **/
     const real_t* Y; // observations, D-by-V array, column major format
 
-    /* 1 for quadratic (function quadratic_loss())
+    /* D (or public function quadratic_loss()) for quadratic 
      *      f(x) = 1/2 ||y - x||_{l2,W}^2 ,
      * where W is a diagonal metric (separable product along ℝ^V and ℝ^D),
      * that is ||y - x||_{l2,W}^2 = sum_{v in V} w_v ||x_v - y_v||_{l2,M}^2
      *                            = sum_{v in V} w_v sum_d m_d (x_vd - y_vd)^2.
      *
-     * 0 < loss < 1 for (smoothed, weighted) Kullback-Leibler divergence
-     * (cross-entropy) on the probability simplex
+     * 0 < loss < 1 for smoothed Kullback-Leibler divergence (equivalent to
+     * cross-entropy) on the probability simplex
      *     f(x) = sum_v w_v KLs_m(x_v, y_v),
-     * with KLs(y_v, x_v) = KL_m(s u + (1 - s) y_v ,  s u + (1 - s) x_v), where
+     * with KLs(y_v, x_v) = KL(s u + (1 - s) y_v ,  s u + (1 - s) x_v), where
      *     KL is the regular Kullback-Leibler divergence,
      *     u is the uniform discrete distribution over {1,...,D}, and
      *     s = loss is the smoothing parameter
-     *     m is a diagonal metric weighting the coordinates;
      * it yields
-     *     KLs_m(y_v, x_v) = - H_m(s u + (1 - s) y_v)
-     *         - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) x_{v,d}) ,
-     * where H_m is the (weighted) entropy, that is H_m(s u + (1 - s) y_v)
-     *       = - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) y_{v,d}) ;
-     * note that the choosen order of the arguments in the Kullback--Leibler
-     * does not favor the entropy of x (H_m(s u + (1 - s) y_v) is a constant),
+     *     KLs(y_v, x_v) = - H(s u + (1 - s) y_v)
+     *         - sum_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) x_{v,d}) ,
+     * where H_m is the entropy, that is H(s u + (1 - s) y_v)
+     *       = - sum_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) y_{v,d}) ;
+     * note that the choosen order of the arguments in the Kullback-Leibler
+     * does not favor the entropy of x (H(s u + (1 - s) y_v) is a constant),
      * hence this loss is actually equivalent to cross-entropy;
      *
+     * 1 <= loss < D for both: quadratic on coordinates from 1 to loss, and
+     * Kullback-Leibler divergence on coordinates from loss + 1 to D;
+     *
      * the weights w_v are set in vert_weights and m_d are set in coor_weights;
-     * set corresponding pointer to null for no weight */
+     * set corresponding pointer to null for no weight; note that coordinate
+     * weights makes no sense for Kullback-Leibler divergence alone, but should
+     * be used for weighting quadratic and KL when mixing both, in which case
+     * coor_weights should be of length loss + 1 */
     real_t loss;
     const real_t *vert_weights, *coor_weights;
 

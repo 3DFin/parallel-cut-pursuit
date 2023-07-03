@@ -32,8 +32,8 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         F(x) = sum_v loss(y_v, x_v) + ||x||_d0
 
     where for each vertex, y_v and x_v are D-dimensional vectors, the loss is
-    either the sum of square differences or smoothed Kullback-Leibler 
-    divergence (equivalent to cross-entropy in this formulation); see the 
+    a mix of the sum of square differences and a Kullback-Leibler divergence
+    (equivalent to cross-entropy in this formulation); see the 
     'loss' attribute, and ||x||_d0 = sum_{uv in E : xu != xv} w_d0_uv ,
 
     using greedy cut-pursuit approach with splitting initialized with 
@@ -41,28 +41,35 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     Available data-fidelity loss include:
 
-    quadratic:
+    quadratic (loss = D):
         f(x) = ||y - x||_{l2,W}^2 ,
     where W is a diagonal metric (separable product along ℝ^V and ℝ^D),
     that is ||y - x||_{l2,W}^2 = sum_{v in V} w_v ||x_v - y_v||_{l2,M}^2
                                = sum_{v in V} w_v sum_d m_d (x_vd - y_vd)^2;
 
-    (smoothed, weighted) Kullback-Leibler divergence (equivalent to
-    cross-entropy) on the probability simplex:
-        f(x) = sum_v w_v KLs_m(x_v, y_v),
-    with KLs(y_v, x_v) = KL_m(s u + (1 - s) y_v ,  s u + (1 - s) x_v), where
+    Kullback-Leibler divergence (equivalent to cross-entropy) on the
+    probability simplex (0 < loss < 1):
+        f(x) = sum_v w_v KLs(x_v, y_v),
+    with KLs(y_v, x_v) = KL(s u + (1 - s) y_v ,  s u + (1 - s) x_v), where
         KL is the regular Kullback-Leibler divergence,
         u is the uniform discrete distribution over {1,...,D}, and
         s = loss is the smoothing parameter
         m is a diagonal metric weighting the coordinates;
     it yields
-        KLs_m(y_v, x_v) = - H_m(s u + (1 - s) y_v)
-            - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) x_{v,d}) ,
-    where H_m is the (weighted) entropy, that is H_m(s u + (1 - s) y_v)
+        KLs(y_v, x_v) = - H(s u + (1 - s) y_v)
+            - sum_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) x_{v,d}) ,
+    where H is the (weighted) entropy, that is H(s u + (1 - s) y_v)
         = - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) y_{v,d}) ;
     note that the choosen order of the arguments in the Kullback--Leibler
-    does not favor the entropy of x (H_m(s u + (1 - s) y_v) is a constant),
+    does not favor the entropy of x (H(s u + (1 - s) y_v) is a constant),
     hence this loss is actually equivalent to cross-entropy.
+
+    Both (1 <= loss < D): quadratic on coordinates from 1 to loss, and
+    Kullback-Leibler divergence on coordinates from loss + 1 to D;
+    
+    note that coordinate weights makes no sense for Kullback-Leibler divergence
+    alone, but should be used for weighting quadratic and KL when mixing both,
+    in which case coor_weights should be of length loss + 1;
  
     INPUTS: real numeric type is either float32 or float64, not both;
             indices numeric type can be int32 or uint32.
@@ -71,7 +78,9 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     this can be easily changed in the module source if more than 65535 
     components are expected (recompilation is necessary)
 
-    loss - 1 for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler
+    loss - D for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler, D for
+           quadratic, 1 <= loss < D for both (quadratic on the first 'loss'
+           values and Kullback-Leibler on the 'D - loss' remaining)
     Y - observations, (real) D-by-V array;
         careful to the internal memory representation of multidimensional
         arrays; the C++ implementation uses column-major order (F-contiguous);
@@ -94,8 +103,10 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     edge_weights - (real) array of length E or scalar for homogeneous weights
     vert_weights - weights on vertices (w_v in above notations)
         (real) array of length V or empty for no weights
-    coor_weights - weights on coordinates (m_d above notations)
-        (real) array of length D or empty for no weights
+    coor_weights - weights on coordinates (m_d in above notations)
+        (real) array of length D (quadratic case) or of length loss + 1
+        (quadratic + Kullback-Leibler case, the last coordinate weights the all
+        Kullback-Leibler part), or empty for no weights
     cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (that is, relative dissimilarity measures defined by 
         the choosen loss between succesive iterates and between current iterate
@@ -201,26 +212,24 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     if type(vert_weights) != np.ndarray:
         if type(vert_weights) == list:
             raise TypeError("Cut-pursuit d0 distance: argument 'vert_weights' "
-                            "must be a scalar or a numpy array.")
-        elif vert_weights != None:
-            vert_weights = np.array([vert_weights], dtype=real_t)
+                            "must be a numpy array.")
         else:
             vert_weights = np.array([], dtype=real_t)
 
     if type(coor_weights) != np.ndarray:
         if type(coor_weights) == list:
             raise TypeError("Cut-pursuit d0 distance: argument 'coor_weights' "
-                            "must be a scalar or a numpy array.")
-        elif coor_weights != None:
-            coor_weights = np.array([coor_weights], dtype=real_t)
+                            "must be a numpy array.")
         else:
             coor_weights = np.array([], dtype=real_t)
 
     # Determine V and check graph structure 
     if Y.ndim > 1:
         V = Y.shape[1]
+        D = Y.shape[0]
     else:
         V = Y.shape[0]
+        D = 1
         
     if first_edge.size != V + 1 :
         raise ValueError("Cut-pursuit d0 distance: argument 'first_edge'"
@@ -242,6 +251,19 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     # Convert in float64 all float arguments
     loss = float(loss)
+    if 0.0 < loss and loss < 1.0 and coor_weights.size > 0:
+        raise ValueError("Cut-pursuit d0 distance: with Kullback-Leibler loss,"
+                     " 'coor_weights' should be empty; weighting coordinates "
+                     "of the probability space makes no sense.")
+    elif (1 <= loss and loss < D and coor_weights.size > 0 and
+        coor_weights.size != loss + 1):
+        raise ValueError("Cut-pursuit d0 distance: for weighting quadratic and"
+            " Kullback-Leibler parts, 'coor_weights' should be of size loss + "
+            "1, where loss indicates the number of coordinates involved in the"
+            " quadratic part and the last weights is for KL")
+    elif loss == D and coor_weights.size > 0 and coor_weights.size != D:
+        raise ValueError("Cut-pursuit d0 distance: with quadratic loss,"
+            " argument 'coor_weights' should be empty or of size D")
     cp_dif_tol = float(cp_dif_tol)
     split_damp_ratio = float(split_damp_ratio)
      

@@ -60,21 +60,23 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 from cp_d0_dist import cp_d0_dist
 
 ##  problem parameters
-Df = 1 # dimension of points features; unity eases graphical representation
 Ds = 2 # dimension of points positions; 2D eases graphical representation
+Df = 3 # dimension of points features; unity eases graphical representation
 V = 1000 # number of points, V_0
 knn = 5 # number of nearest neighbors for main graph connectivity
 regularizations = [.005, .05]; # regularization parameter
+# spatial_weight = .2; # importance of space vs. features similarity
 spatial_weight = .2; # importance of space vs. features similarity
 min_comp_weights = [5.0, 50.0]; # force minimum components sizes
 
 ##  draw observations
-features = np.random.rand(Df, V)
 positions = np.random.rand(Ds, V)
+features = np.random.rand(Df, V)
+features = features/features.sum(axis=0)
 # to introduce some meaningful structure, sort the data so that the (first
 # coordinates of) values correlates with the (first coordinates of) positions
-features = features[:, np.argsort(features[0, :])]
 positions = positions[:, np.argsort(positions[0, :])]
+features = features[:, np.argsort(features[0, :])]
 
 ##  draw (spatial) nearest neighbors graph
 adj_mat = NearestNeighbors(n_neighbors=knn).fit(positions.T).kneighbors_graph()
@@ -82,7 +84,7 @@ first_edge = adj_mat.indptr
 adj_vertices = adj_mat.indices
 
 ##  initialize hierarchical partition
-values = [np.asfortranarray(np.concatenate((features, positions)))]
+values = [np.asfortranarray(np.concatenate((positions, features)))]
 graph = [(first_edge, adj_vertices)]
 comp_weights = [None] # could be changed to nonhomogeneous weights
 edge_weights = [1]    # could be changed to nonhomogeneous weights
@@ -90,8 +92,10 @@ coarse_to_fine = [None] # no finer level than the first
 fine_to_coarse = []
 
 ##  successive minimal partition problems
-loss = 1 # quadratic fidelity term
-coor_weights = np.concatenate((np.ones(Df), spatial_weight*np.ones(Ds)))
+# loss = Df + Ds # quadratic fidelity term
+# coor_weights = np.concatenate((spatial_weight*np.ones(Ds), np.ones(Df)))
+loss = Ds # quadratic on space KL on features
+coor_weights = np.concatenate((spatial_weight*np.ones(Ds), [1.0]))
 for l in range(len(regularizations)):
     Comp, rX, List, Graph = cp_d0_dist(loss, values[l],
         graph[l][0], graph[l][1],
@@ -139,7 +143,7 @@ plt.plot(np.vstack((positions[0, start_vertex], positions[0, adj_vertices])),
 # level 0 are raw observations, with white contours
 # levels 1 and 2 centroids gets gray and black contours
 for l in range(3):
-    plt.scatter(values[l][Df, :], values[l][Df+1, :], s=100*values[l][0, :],
+    plt.scatter(values[l][0, :], values[l][1, :], s=100*values[l][Ds, :],
                 c=hsv_to_rgb(colors[l]), zorder=2+l,
                 edgecolors=[1-l/2, 1-l/2, 1-l/2])
 plt.axis("off")

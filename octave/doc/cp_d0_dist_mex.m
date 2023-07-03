@@ -19,28 +19,35 @@ function varargout = cp_d0_dist_mex(loss, Y, first_edge, adj_vertices, options)
 %
 % Available data-fidelity loss include:
 %
-% quadratic:
+% quadratic (loss = D):
 %      f(x) = ||y - x||_{l2,W}^2 ,
 % where W is a diagonal metric (separable product along ℝ^V and ℝ^D),
 % that is ||y - x||_{l2,W}^2 = sum_{v in V} w_v ||x_v - y_v||_{l2,M}^2
 %                            = sum_{v in V} w_v sum_d m_d (x_vd - y_vd)^2;
 %
-% (smoothed, weighted) Kullback-Leibler divergence (equivalent to
-% cross-entropy) on the probability simplex:
-%     f(x) = sum_v w_v KLs_m(x_v, y_v),
-% with KLs(y_v, x_v) = KL_m(s u + (1 - s) y_v ,  s u + (1 - s) x_v), where
+% Kullback-Leibler divergence (equivalent to cross-entropy) on the probability
+% simplex (0 < loss < 1):
+%     f(x) = sum_v w_v KLs(x_v, y_v),
+% with KLs(y_v, x_v) = KL(s u + (1 - s) y_v ,  s u + (1 - s) x_v), where
 %     KL is the regular Kullback-Leibler divergence,
 %     u is the uniform discrete distribution over {1,...,D}, and
 %     s = loss is the smoothing parameter
 %     m is a diagonal metric weighting the coordinates;
 % it yields
-%     KLs_m(y_v, x_v) = - H_m(s u + (1 - s) y_v)
-%         - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) x_{v,d}) ,
-% where H_m is the (weighted) entropy, that is H_m(s u + (1 - s) y_v)
-%       = - sum_d m_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) y_{v,d}) ;
+%     KLs(y_v, x_v) = - H(s u + (1 - s) y_v)
+%         - sum_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) x_{v,d}) ,
+% where H is the entropy, that is H(s u + (1 - s) y_v)
+%       = - sum_d (s/D + (1 - s) y_{v,d}) log(s/D + (1 - s) y_{v,d}) ;
 % note that the choosen order of the arguments in the Kullback-Leibler
-% does not favor the entropy of x (H_m(s u + (1 - s) y_v) is a constant),
+% does not favor the entropy of x (H(s u + (1 - s) y_v) is a constant),
 % hence this loss is actually equivalent to cross-entropy.
+% 
+% Both (1 <= loss < D): quadratic on coordinates from 1 to loss, and
+% Kullback-Leibler divergence on coordinates from loss + 1 to D;
+% 
+% note that coordinate weights makes no sense for Kullback-Leibler divergence
+% alone, but should be used for weighting quadratic and KL when mixing both,
+% in which case coor_weights should be of length loss + 1;
 %
 % NOTA: by default, components are identified using uint16 identifiers; this
 % can be easily changed in the mex source if more than 65535 components are
@@ -49,7 +56,9 @@ function varargout = cp_d0_dist_mex(loss, Y, first_edge, adj_vertices, options)
 % INPUTS: real numeric type is either single or double, not both;
 %         indices start at 0, type uint32
 %
-% loss - 1 for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler
+% loss - D for quadratic, 0 < loss < 1 for smoothed Kullback-Leibler, D for
+%        quadratic, 1 <= loss < D for both (quadratic on the first 'loss'
+%        values and Kullback-Leibler on the 'D - loss' remaining)
 % Y - observations, (real) D-by-V array, column-major format;
 %     for Kullback-Leibler loss, the value at each vertex must lie on the
 %     probability simplex 
@@ -76,6 +85,9 @@ function varargout = cp_d0_dist_mex(loss, Y, first_edge, adj_vertices, options)
 % edge_weights - (real) array of length E or scalar for homogeneous weights
 % vert_weights - weights on vertices (w_v above); (real) array of length V
 % coor_weights - weights on coordinates (m_d above); (real) array of length D
+%     (quadratic case) or of length loss + 1 (quadratic + Kullback-Leibler
+%     case, the last coordinate weights the all Kullback-Leibler part), or
+%     empty for no weights
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (that is, relative dissimilarity measures defined by the
 %     choosen loss between successive iterates and between current iterate and

@@ -5,7 +5,9 @@
 #include "cp_d0_dist.hpp"
 
 #define ZERO ((real_t) 0.0)
-#define VERT_WEIGHTS_(v) (vert_weights ? vert_weights[(v)] : (real_t) 1.0)
+#define ONE ((real_t) 1.0)
+#define VERT_WEIGHTS_(v) (vert_weights ? vert_weights[(v)] : ONE)
+#define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : ONE)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
 #define CP_D0_DIST Cp_d0_dist<real_t, index_t, comp_t>
@@ -30,29 +32,23 @@ TPL CP_D0_DIST::~Cp_d0_dist(){ free(comp_weights); }
 
 TPL real_t CP_D0_DIST::distance(const real_t* Yv, const real_t* Xv) const
 {
-    real_t dist = 0.0;
-    if (loss == quadratic_loss()){
-        if (coor_weights){
-            for (size_t d = 0; d < D; d++){
-                dist += coor_weights[d]*(Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
-            }
-        }else{
-            for (size_t d = 0; d < D; d++){
-                dist += (Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
-            }
+    real_t dist = ZERO;
+    size_t Q = loss; // number of coordinates for quadratic part
+    if (Q != 0){ /* quadratic part */
+        for (size_t d = 0; d < Q; d++){
+            dist += COOR_WEIGHTS_(d)*(Yv[d] - Xv[d])*(Yv[d] - Xv[d]);
         }
-    }else{ // smoothed Kullback-Leibler; just compute cross-entropy here
-        const real_t c = ((real_t) 1.0 - loss);
-        const real_t q = loss/D;
-        if (coor_weights){
-            for (size_t d = 0; d < D; d++){
-                dist -= coor_weights[d]*(q + c*Yv[d])*log(q + c*Xv[d]);
-            }
-        }else{
-            for (size_t d = 0; d < D; d++){
-                dist -= (q + c*Yv[d])*log(q + c*Xv[d]);
-            }
+    }
+    if (Q != D){ /* smoothed Kullback-Leibler;
+                    just compute cross-entropy here */
+        real_t distKL = ZERO;
+        const real_t s = loss < ONE ? loss : eps;
+        const real_t c = ONE - s;  
+        const real_t u = s/(D - Q);
+        for (size_t d = Q; d < D; d++){
+            distKL -= (u + c*Yv[d])*log(u + c*Xv[d]);
         }
+        dist += COOR_WEIGHTS_(Q)*distKL;
     }
     return dist;
 }
@@ -60,25 +56,38 @@ TPL real_t CP_D0_DIST::distance(const real_t* Yv, const real_t* Xv) const
 TPL void CP_D0_DIST::set_loss(real_t loss, const real_t* Y,
     const real_t* vert_weights, const real_t* coor_weights)
 {
-    if (loss < ZERO || loss > 1.0){
-        cerr << "Cut-pursuit d0 distance: loss parameter should be between"
-            " 0 and 1 (" << loss << " given)." << endl;
+    if (loss < ZERO || (loss > ONE && ((size_t) loss) != loss) || loss > D){
+        cerr << "Cut-pursuit d0 distance: loss parameter should be positive,"
+            "either in (0,1) or an integer that do not exceed the dimension "
+            "(" << loss << " given)." << endl;
         exit(EXIT_FAILURE);
     }
     if (loss == ZERO){ loss = eps; } // avoid singularities
     this->loss = loss;
     if (Y){ this->Y = Y; }
     this->vert_weights = vert_weights;
+    if (ZERO < loss && loss < ONE && coor_weights){
+        cerr << "Cut-pursuit d0 distance: no sense in weighting coordinates of"
+            " the probability space in Kullback-Leibler divergence." << endl;
+        exit(EXIT_FAILURE);
+    }
     this->coor_weights = coor_weights; 
-    /* recompute the constant dist(Y, Y) if necessary */
+    if (loss == quadratic_loss()){ fYY = ZERO; return; }
+    /* recompute the constant dist(Y, Y) for Kullback-Leibler */
+    const size_t Q = loss; // number of coordinates for quadratic part
+    const real_t s = loss < ONE ? loss : eps;
+    const real_t c = ONE - s;  
+    const real_t u = s/(D - Q);
     real_t fYY_par = ZERO; // auxiliary variable for parallel region
-    if (loss != quadratic_loss()){
-        #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
-            reduction(+:fYY_par)
-        for (index_t v = 0; v < V; v++){
-            const real_t* Yv = Y + D*v;
-            fYY_par += VERT_WEIGHTS_(v)*distance(Yv, Yv);
+    #pragma omp parallel for schedule(static) NUM_THREADS(V*(D - loss), V) \
+        reduction(+:fYY_par)
+    for (index_t v = 0; v < V; v++){
+        const real_t* Yv = Y + D*v;
+        real_t H_Yv = ZERO;
+        for (size_t d = Q; d < D; d++){
+            H_Yv -= (u + c*Yv[d])*log(u + c*Yv[d]);
         }
+        fYY_par += VERT_WEIGHTS_(v)*H_Yv;
     }
     fYY = fYY_par;
 }
@@ -127,9 +136,12 @@ TPL void CP_D0_DIST::solve_reduced_problem()
             const real_t* Yv = Y + D*v;
             for (size_t d = 0; d < D; d++){ rXv[d] += VERT_WEIGHTS_(v)*Yv[d]; }
         }
-        if (comp_weights[rv]){
-            for (size_t d = 0; d < D; d++){ rXv[d] /= comp_weights[rv]; }
-        } /* maybe one should raise an exception for zero weight component */
+        if (comp_weights[rv] <= ZERO){
+            cerr << "Cut-pursuit d0 distance: nonpositive total component "
+                "weight; something went wrong." << endl;
+            exit(EXIT_FAILURE);
+        }
+        for (size_t d = 0; d < D; d++){ rXv[d] /= comp_weights[rv]; }
     }
 
     /* fXY can be updated now to avoid computing it twice later */
@@ -187,19 +199,39 @@ TPL void CP_D0_DIST::update_merge_info(Merge_info& merge_info)
     real_t wru = comp_weights[ru]/(comp_weights[ru] + comp_weights[rv]);
     real_t wrv = comp_weights[rv]/(comp_weights[ru] + comp_weights[rv]);
 
-    real_t* value = merge_info.value;
-    for (size_t d = 0; d < D; d++){ value[d] = wru*rXu[d] + wrv*rXv[d]; }
+    real_t gain = edge_weight;
+    size_t Q = loss; // number of coordinates for quadratic part
 
-    real_t gain;
+    if (Q != 0){
+        /* quadratic gain */
+        real_t gainQ = ZERO;
+        for (size_t d = 0; d < Q; d++){
+            gainQ -= COOR_WEIGHTS_(d)*(rXu[d] - rXv[d])*(rXu[d] - rXv[d]);
+        }
+        gain += comp_weights[ru]*wrv*gainQ;
+    }
 
-    if (loss == quadratic_loss()){
-        gain = edge_weight - comp_weights[ru]*wrv*distance(rXu, rXv);
-    }else{
-        /* in the following some computations might be saved by factoring
-         * multiplications and logarithms, at the cost of readability */
-        gain = edge_weight
-            + comp_weights[ru]*(distance(rXu, rXu) - distance(rXu, value))
-            + comp_weights[rv]*(distance(rXv, rXv) - distance(rXv, value));
+    if (gain > ZERO || comp_weights[ru] < min_comp_weight
+                    || comp_weights[rv] < min_comp_weight){
+        real_t* value = merge_info.value;
+        for (size_t d = 0; d < D; d++){ value[d] = wru*rXu[d] + wrv*rXv[d]; }
+
+        if (Q != D){
+            /* smoothed Kullback-Leibler gain */
+            real_t gainKLu = ZERO, gainKLv = ZERO;
+            const real_t s = loss < ONE ? loss : eps;
+            const real_t c = ONE - s;  
+            const real_t u = s/(D - Q);
+            for (size_t d = Q; d < D; d++){
+                real_t u_value_d = u + c*value[d];
+                real_t u_rXu_d = u + c*rXu[d];
+                real_t u_rXv_d = u + c*rXv[d];
+                gainKLu -= (u_rXu_d)*log(u_rXu_d/u_value_d);
+                gainKLv -= (u_rXv_d)*log(u_rXv_d/u_value_d);
+            }
+            gain += COOR_WEIGHTS_(Q)*
+                (comp_weights[ru]*gainKLu + comp_weights[rv]*gainKLv);
+        }
     }
 
     if (gain > ZERO || comp_weights[ru] < min_comp_weight
@@ -236,7 +268,17 @@ TPL real_t CP_D0_DIST::compute_evolution() const
     for (comp_t rv = 0; rv < rV; rv++){
         if (is_saturated[rv]){ continue; }
         const real_t* rXv = rX + D*rv;
-        real_t distXX = loss == quadratic_loss() ? ZERO : distance(rXv, rXv);
+        real_t distXX = ZERO;
+        if (loss != quadratic_loss()){
+            const size_t Q = loss; // number of coordinates for quadratic part
+            const real_t s = loss < ONE ? loss : eps;
+            const real_t c = ONE - s;  
+            const real_t u = s/(D - Q);
+            for (size_t d = Q; d < D; d++){
+                distXX -= (u + c*rXv[d])*log(u + c*rXv[d]);
+            }
+            distXX *= COOR_WEIGHTS_(Q);
+        }
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
             const real_t* lrXv = last_rX + D*last_comp_assign[v];
