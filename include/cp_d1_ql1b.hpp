@@ -49,7 +49,9 @@ template <typename real_t, typename index_t, typename comp_t>
 class Cp_d1_ql1b : public Cp_d1<real_t, index_t, comp_t>
 {
 private:
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Cp<real_t, index_t, comp_t>::dif_tol;
 
 public:
@@ -195,7 +197,9 @@ private:
      * part is omited */
     real_t compute_objective() const override;
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Cp_d1<real_t, index_t, comp_t>::G;
     using Cp_d1<real_t, index_t, comp_t>::compute_graph_d1;
     using Cp<real_t, index_t, comp_t>::split_iter_num;

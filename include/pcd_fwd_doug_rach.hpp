@@ -184,9 +184,13 @@ protected:
     real_t compute_objective() override;
 
     /* weight l2 norm by Lipschitz metric if available */
-    real_t compute_evolution() override;
+    real_t compute_evolution() const override;
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
+    using Pcd_prox<real_t>::eps;
+    using Pcd_prox<real_t>::last_X;
     using Pcd_prox<real_t>::X;
     using Pcd_prox<real_t>::cond_min;
     using Pcd_prox<real_t>::malloc_check;

@@ -6,7 +6,7 @@
 % Machine Learning, PMLR, 2018, 80, 4244-4253
 %
 % Hugo Raguet 2022
-%% needs grid_to_graph_mex and cp_pfdr_d1_ql1b_mex
+%% needs grid_to_graph and cp_d1_ql1b
 cd(fileparts(which('example_prox_tv.m')));
 addpath('bin/');
 
@@ -28,8 +28,7 @@ y = x0 + noise_level*randn(size(x0));
 fprintf('done.\n');
 
 fprintf('generate adjacency graph... ');
-[first_edge, adj_vertices, edge_weights] = ...
-    grid_to_graph_mex(uint32(size(x0)), 2);
+[first_edge, adj_vertices, edge_weights] = grid_to_graph(uint32(size(x0)), 2);
 edge_weights = la_tv./sqrt(edge_weights)/4;
 fprintf('done.\n');
 
@@ -50,7 +49,7 @@ end
 tic;
 options.edge_weights = edge_weights;
 options.max_num_threads = 0;
-[Comp, rX] = cp_prox_tv_mex(y, first_edge, adj_vertices, options);
+[Comp, rX] = cp_prox_tv(y, first_edge, adj_vertices, options);
 time = toc;
 x = reshape(rX(Comp + 1), size(x0)); % rX is components values, Comp is components assignment
 clear Comp rX;

@@ -1,6 +1,6 @@
-  %------------------------------------------------------------------------%
-  %  script for illustrating cp_pfdr_d1_lsx on labeling of 3D point cloud  %
-  %------------------------------------------------------------------------%
+     %-------------------------------------------------------------------%
+     %  script for illustrating cp_d1_lsx on labeling of 3D point cloud  %
+     %-------------------------------------------------------------------%
 % Reference: H. Raguet and L. Landrieu, Cut-Pursuit Algorithm for Regularizing
 % Nonsmooth Functionals with Graph Total Variation, International Conference on
 % Machine Learning, PMLR, 2018, 80, 4244-4253
@@ -14,7 +14,7 @@ classNames = {'road', 'vegetation', 'facade', 'hardscape', ...
     'scanning artifacts', 'cars'};
 classId = uint8(1:6)';
 
-%%%  parameters; see octave/doc/cp_pfdr_d1_lsx_mex.m  %%%
+%%%  parameters; see octave/doc/cp_d1_lsx.m  %%%
 options = struct; % reinitialize
 % options.cp_dif_tol = 1e-3;
 % options.cp_it_max = 10;
@@ -47,8 +47,8 @@ clear predk truek
 
 %%%  solve the optimization problem  %%%
 tic;
-[Comp, rX] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, adj_vertices, options);
-% [Comp, rX, Obj, Tim] = cp_pfdr_d1_lsx_mex(loss, y, first_edge, adj_vertices, options);
+[Comp, rX] = cp_d1_lsx(loss, y, first_edge, adj_vertices, options);
+% [Comp, rX, Obj, Tim] = cp_d1_lsx(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;

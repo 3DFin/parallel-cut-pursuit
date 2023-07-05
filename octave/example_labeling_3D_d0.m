@@ -1,6 +1,6 @@
-  %-------------------------------------------------------------------------%
-  %  script for illustrating cp_kmpp_d0_dist on labeling of 3D point cloud  %
-  %-------------------------------------------------------------------------%
+    %--------------------------------------------------------------------%
+    %  script for illustrating cp_d0_dist on labeling of 3D point cloud  %
+    %--------------------------------------------------------------------%
 % References:
 % L. Landrieu and G. Obozinski, Cut Pursuit: fast algorithms to learn
 % piecewise constant functions on general weighted graphs, SIAM Journal on
@@ -19,7 +19,7 @@ classNames = {'road', 'vegetation', 'facade', 'hardscape', ...
     'scanning artifacts', 'cars'};
 classId = uint8(1:6)';
 
-%%%  parameters; see octave/doc/cp_pfdr_d1_lsx_mex.m  %%%
+%%%  parameters; see octave/doc/cp_d0_dist.m  %%%
 options = struct; % reinitialize
 % options.cp_dif_tol = 1e-3;
 options.cp_it_max = 10;
@@ -53,7 +53,7 @@ clear predk truek
 
 %%%  solve the optimization problem  %%%
 tic;
-[Comp, rX, Obj] = cp_kmpp_d0_dist_mex(loss, y, first_edge, adj_vertices, options);
+[Comp, rX, Obj] = cp_d0_dist(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;

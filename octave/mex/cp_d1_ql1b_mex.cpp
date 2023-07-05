@@ -1,5 +1,5 @@
 /*=============================================================================
- * [Comp, rX, Obj, Time, Dif] = cp_d1_ql1b_mex(Y | AtY, A | AtA,
+ * [Comp, rX, [List, Graph, Obj, Time, Dif]] = cp_d1_ql1b(Y | AtY, A | AtA,
  *      first_edge, adj_vertices, [options])
  *
  * options is a struct with any of the following fields [with default values]:

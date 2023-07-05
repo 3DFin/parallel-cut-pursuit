@@ -1,5 +1,5 @@
 /*=============================================================================
- * [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv_mex(Y, first_edge,
+ * [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
  *      adj_vertices, [options])
  *
  * options is a struct with any of the following fields [with default values]:

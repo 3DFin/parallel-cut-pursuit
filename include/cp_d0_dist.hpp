@@ -168,7 +168,9 @@ private:
     /* iterate evolution in terms of distance relative to distance to Y */
     real_t compute_evolution() const override;
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Cp<real_t, index_t, comp_t>::set_split_param;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;

@@ -194,7 +194,9 @@ private:
 
     void main_iteration() override; // add application of matrix A
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Pfdr_d1<real_t, vertex_t>::V;
     using Pfdr_d1<real_t, vertex_t>::E;
     using Pfdr<real_t, vertex_t>::Ga_grad_f;

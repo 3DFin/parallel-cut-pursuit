@@ -30,7 +30,7 @@ TPL PFDR_D1_LSX::Pfdr_d1_lsx(vertex_t V, index_t E, const vertex_t* edges,
     loss_weights = nullptr;
     /* Lipschitz metric useful only during preconditioning, no point in wasting
      * memory for saving so few computations */
-    lipshcompute = EACH; 
+    lipschcomput = EACH; 
 }
 
 TPL PFDR_D1_LSX::~Pfdr_d1_lsx(){ if (W_Ga_Y != Ga){ free(W_Ga_Y); } }
@@ -263,20 +263,17 @@ TPL void PFDR_D1_LSX::initialize_iterate()
 }
 
 /* relative iterate evolution in l1 norm */
-TPL real_t PFDR_D1_LSX::compute_evolution()
+TPL real_t PFDR_D1_LSX::compute_evolution() const
 {
     real_t dif = ZERO;
     real_t amp = ZERO;
     #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
         reduction(+:dif, amp)
     for (vertex_t v = 0; v < V; v++){
-        real_t* Xv = X + D*v;
-        real_t* last_Xv = last_X + D*v;
+        const real_t* Xv = X + D*v;
+        const real_t* last_Xv = last_X + D*v;
         real_t dif_v = ZERO; 
-        for (index_t d = 0; d < D; d++){
-            dif_v += abs(last_Xv[d] - Xv[d]);
-            last_Xv[d] = Xv[d];
-        }
+        for (index_t d = 0; d < D; d++){ dif_v += abs(last_Xv[d] - Xv[d]); }
         dif += LOSS_WEIGHTS_(v)*dif_v;
         amp += LOSS_WEIGHTS_(v);
     }

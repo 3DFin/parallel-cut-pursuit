@@ -1,6 +1,6 @@
 origDir = pwd; % remember working directory
 cd(fileparts(which('compile_mex.m'))); 
-mkdir('bin/');
+if ~exist('bin/'), mkdir('bin/'); end
 try
     % compilation flags 
     [~, CXXFLAGS] = system('mkoctfile -p CXXFLAGS');
@@ -25,8 +25,8 @@ try
         ../src/maxflow.cpp ../src/matrix_tools.cpp ...
         ../src/pfdr_d1_ql1b.cpp ../src/pfdr_graph_d1.cpp ...
         ../src/pcd_fwd_doug_rach.cpp ../src/pcd_prox_split.cpp ...
-        -output bin/cp_d1_ql1b_mex
-    clear cp_d1_ql1b_mex
+        -output bin/cp_d1_ql1b
+    clear cp_d1_ql1b
     %}
 
     % %{
@@ -35,16 +35,16 @@ try
         ../src/maxflow.cpp ../src/proj_simplex.cpp ...
         ../src/pfdr_d1_lsx.cpp ../src/pfdr_graph_d1.cpp ...
         ../src/pcd_fwd_doug_rach.cpp ../src/pcd_prox_split.cpp ...
-        -output bin/cp_d1_lsx_mex
-    clear cp_d1_lsx_mex
+        -output bin/cp_d1_lsx
+    clear cp_d1_lsx
     %}
 
     % %{
-    mex -I../include mex/cp_kmpp_d0_dist_mex.cpp ../src/cp_kmpp_d0_dist.cpp ...
+    mex -I../include mex/cp_d0_dist_mex.cpp ../src/cp_d0_dist.cpp ...
         ../src/cut_pursuit_d0.cpp ../src/cut_pursuit.cpp ...
         ../src/maxflow.cpp ...
-        -output bin/cp_kmpp_d0_dist_mex
-    clear cp_kmpp_d0_dist_mex
+        -output bin/cp_d0_dist
+    clear cp_kmpp_d0_dist
     %}
 
     % %{
@@ -53,8 +53,8 @@ try
         ../src/maxflow.cpp ../src/pfdr_d1_ql1b.cpp ../src/pfdr_graph_d1.cpp ...
         ../src/pcd_fwd_doug_rach.cpp ../src/pcd_prox_split.cpp ...
         ../src/matrix_tools.cpp ...
-        -output bin/cp_prox_tv_mex
-    clear cp_prox_tv_mex
+        -output bin/cp_prox_tv
+    clear cp_prox_tv
     %}
 
     if exist('cut_pursuit.o'), system('rm *.o'); end

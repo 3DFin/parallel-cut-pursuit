@@ -1,6 +1,6 @@
 /*=============================================================================
- * [Comp, rX, [List, Graph, Obj, Time, Dif]] = cp_d1_lsx_mex(loss, Y,
- *      first_edge, adj_vertices, [options])
+ * [Comp, rX, [List, Graph, Obj, Time, Dif]] = cp_d1_lsx(loss, Y, first_edge,
+ *      adj_vertices, [options])
  *
  * options is a struct with any of the following fields [with default values]:
  *

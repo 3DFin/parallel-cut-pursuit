@@ -3,13 +3,13 @@
  *
  * The 'weighted rank interval' of an element e can be defined as the interval
  *
- *      [wsum(e), wsum(e) + weight(e)[
+ *      ]wsum(e), wsum(e) + weight(e)]
  *
  * where wsum(e) is the cumulative sum of the weights of all elements comparing
  * lower to e, and weight(e) is the weight associated to e.
  * The w-th element is the element whose weighted rank interval contains w;
- * note that if all weights are equal, the w-th element with w = n reduces
- * to the n-th element.
+ * note that if all weights are equal to unity, the w-th element with w = n
+ * reduces to the n-th element (starting count at 0).
  *
  * Based on quickselect algorithm
  *

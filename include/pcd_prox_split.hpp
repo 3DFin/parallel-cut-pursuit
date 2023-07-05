@@ -125,7 +125,7 @@ protected:
 
     /* compute relative iterate evolution and store current iterate in last_X;
      * by default, relative evolution in Euclidean norm */
-    virtual real_t compute_evolution();
+    virtual real_t compute_evolution() const;
 
     /* compute objective functional */
     virtual real_t compute_objective() = 0;

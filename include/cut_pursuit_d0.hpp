@@ -126,7 +126,9 @@ protected:
      TODO: rewrite */
     virtual comp_t accept_merge(const Merge_info&);
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Cp<real_t, index_t, comp_t>::K;
     using Cp<real_t, index_t, comp_t>::split_iter_num;
     using Cp<real_t, index_t, comp_t>::split_damp_ratio;

@@ -1,5 +1,5 @@
 /*=============================================================================
- * Hugo Raguet 2018
+ * Hugo Raguet 2016, 2018
  *===========================================================================*/
 #include <cmath>
 #include "omp_num_threads.hpp"
@@ -122,6 +122,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
         if (iterate_evolution ||
             ((dif_tol > ZERO || dif_rcd > ZERO) && it_dif == dif_it)){
             dif = compute_evolution();
+            for (index_t i = 0; i < size; i++){ last_X[i] = X[i]; }
             if (iterate_evolution){ iterate_evolution[it] = dif; }
             it_dif = 0;
         }
@@ -148,20 +149,20 @@ TPL void PCD_PROX::print_progress(int it, real_t dif)
     cout << flush;
 }
 
-TPL real_t PCD_PROX::compute_evolution()
+TPL real_t PCD_PROX::compute_evolution() const
 /* by default, relative evolution in Euclidean norm */
 {
     real_t dif = ZERO;
-    real_t norm = ZERO;
+    real_t amp = ZERO;
     #pragma omp parallel for schedule(static) NUM_THREADS(size) \
-        reduction(+:dif, norm)
+        reduction(+:dif, amp)
     for (index_t i = 0; i < size; i++){
         real_t d = last_X[i] - X[i];
         dif += d*d;
-        norm += X[i]*X[i];
+        amp += X[i]*X[i];
         last_X[i] = X[i];
     }
-    return sqrt(norm) > eps ? sqrt(dif/norm) : sqrt(dif)/eps;
+    return sqrt(amp) > eps ? sqrt(dif/amp) : sqrt(dif)/eps;
 }
 
 /**  instantiate for compilation  **/

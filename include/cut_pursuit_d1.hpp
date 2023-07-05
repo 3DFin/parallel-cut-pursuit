@@ -75,7 +75,9 @@ protected:
     /* compute graph total variation; use reduced edges and reduced weights */
     real_t compute_graph_d1() const;
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Cp<real_t, index_t, comp_t>::last_rX;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;
     using Cp<real_t, index_t, comp_t>::rX;

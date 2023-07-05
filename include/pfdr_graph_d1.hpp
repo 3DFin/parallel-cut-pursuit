@@ -118,7 +118,9 @@ protected:
 
     real_t compute_g(); // sum_i g_i
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Pfdr<real_t, vertex_t>::gashape;
     using Pfdr<real_t, vertex_t>::wshape;
     using Pfdr<real_t, vertex_t>::rho;

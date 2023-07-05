@@ -125,9 +125,11 @@ private:
     void preconditioning(bool init) override; // add some precomputations
 
     /* relative iterate evolution in l1 norm */
-    real_t compute_evolution() override;
+    real_t compute_evolution() const override;
 
-    /**  type resolution for base template class members  **/
+    /**  type resolution for base template class members
+     * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
+     **/
     using Pfdr_d1<real_t, vertex_t>::V;
     using Pfdr_d1<real_t, vertex_t>::E;
     using Pfdr_d1<real_t, vertex_t>::D11;

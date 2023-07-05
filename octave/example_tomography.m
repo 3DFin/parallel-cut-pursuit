@@ -1,6 +1,6 @@
-       %------------------------------------------------------------%
-       %  script for testing cp_pfdr_d1_ql1b on tomography problem  %
-       %------------------------------------------------------------%
+           %-------------------------------------------------------%
+           %  script for testing cp_d1_ql1b on tomography problem  %
+           %-------------------------------------------------------%
 % Reference: H. Raguet and L. Landrieu, Cut-Pursuit Algorithm for Regularizing
 % Nonsmooth Functionals with Graph Total Variation, International Conference on
 % Machine Learning, PMLR, 2018, 80, 4244-4253
@@ -14,7 +14,7 @@ plot_results = true;
 print_results = false; % requires color encapsulated postscript driver on your
                        % system
 
-%%%  parameters; see octave/doc/cp_pfdr_d1_ql1b_mex.m %%%
+%%%  parameters; see octave/doc/cp_d1_ql1b.m %%%
 options = struct; % reinitialize
 options.cp_dif_tol = 1e-3;
 % options.cp_it_max = 10;
@@ -39,7 +39,7 @@ options.low_bnd = 0.0;
 options.upp_bnd = 1.0;
 
 tic;
-[Comp, rX] = cp_pfdr_d1_ql1b_mex(y, A, first_edge, adj_vertices, options);
+[Comp, rX] = cp_d1_ql1b(y, A, first_edge, adj_vertices, options);
 time = toc;
 x = rX(Comp + 1); % rX is components values, Comp is components assignment
 clear Comp rX;
