@@ -1,7 +1,6 @@
 /*=============================================================================
  * Hugo Raguet 2018, 2022, 2023
  *===========================================================================*/
-#include <random>
 #include "cp_d0_dist.hpp"
 
 #define ZERO ((real_t) 0.0)
@@ -161,10 +160,10 @@ TPL void CP_D0_DIST::set_split_value(Split_info& split_info, comp_t k,
 TPL void CP_D0_DIST::update_split_info(Split_info& split_info) const
 {
     comp_t rv = split_info.rv;
-    comp_t& K = split_info.K; // shadow member K
     real_t* sX = split_info.sX;
-    real_t* total_weights = (real_t*) malloc_check(sizeof(real_t)*K);
-    for (comp_t k = 0; k < K; k++){
+    real_t* total_weights = (real_t*)
+        malloc_check(sizeof(real_t)*split_info.K);
+    for (comp_t k = 0; k < split_info.K; k++){
         total_weights[k] = ZERO;
         real_t* sXk = sX + D*k;
         for (size_t d = 0; d < D; d++){ sXk[d] = ZERO; }
@@ -177,14 +176,18 @@ TPL void CP_D0_DIST::update_split_info(Split_info& split_info) const
         real_t* sXk = sX + D*k;
         for (size_t d = 0; d < D; d++){ sXk[d] += VERT_WEIGHTS_(v)*Yv[d]; }
     }
-    for (comp_t k = 0; k < K; k++){
-        real_t* sXk = sX + D*k;
+    comp_t kk = 0; // actual number of alternatives kept
+    for (comp_t k = 0; k < split_info.K; k++){
+        const real_t* sXk = sX + D*k;
+        real_t* sXkk = sX + D*kk;
         if (total_weights[k]){
-            for (size_t d = 0; d < D; d++){ sXk[d] /= total_weights[k]; }
-        }else{ // no vertex assigned to k, discard this alternative
-            k--; K--;
-        }
+            for (size_t d = 0; d < D; d++){
+                sXkk[d] = sXk[d]/total_weights[k];
+            }
+            kk++;
+        } // else no vertex assigned to k, discard this alternative
     }
+    split_info.K = kk;
     free(total_weights);
 }
 

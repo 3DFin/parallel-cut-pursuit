@@ -166,15 +166,19 @@ TPL void CP_D1::update_split_info(Split_info& split_info) const
         real_t* sXk = sX + D*k;
         for (size_t d = 0; d < D; d++){ sXk[d] -= Gv[d]; }
     }
+    comp_t kk = 0; // actual number of alternatives kept
     for (comp_t k = 0; k < split_info.K; k++){
-        real_t* sXk = sX + D*k;
+        const real_t* sXk = sX + D*k;
+        real_t* sXkk = sX + D*kk;
         if (total_weights[k]){
-            for (size_t d = 0; d < D; d++){ sXk[d] /= total_weights[k]; }
-            project_descent_direction(split_info, k);
-        }else{ // no vertex assigned to k, discard this alternative
-            k--; split_info.K--;
-        }
+            for (size_t d = 0; d < D; d++){
+                sXkk[d] = sXk[d]/total_weights[k];
+            }
+            project_descent_direction(split_info, kk);
+            kk++;
+        } // else no vertex assigned to k, discard this alternative
     }
+    split_info.K = kk;
     free(total_weights);
 }
 
