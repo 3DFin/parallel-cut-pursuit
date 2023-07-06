@@ -60,7 +60,7 @@ static void check_opts(const mxArray* options)
             mxGetClassName(options));
     }
 
-    const int num_allow_opts = 14;
+    const int num_allow_opts = 20;
     const char* opts_names[] = {"edge_weights", "vert_weights", "coor_weights",
         "cp_dif_tol", "cp_it_max", "K", "split_iter_num", "split_damp_ratio",
         "kmpp_init_num", "kmpp_iter_num", "min_comp_weight", "verbose",
@@ -160,7 +160,9 @@ static void cp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
         const real_t* NAME = nullptr; \
         if (opt = mxGetField(options, 0, #NAME)){ \
             check_arg_class(opt, #NAME, mxREAL_CLASS, real_class_name); \
-            NAME = (real_t*) mxGetData(opt); \
+            if (mxGetNumberOfElements(opt) > 0){ \
+                NAME = (real_t*) mxGetData(opt); \
+            } \
         }
 
     GET_REAL_OPT(vert_weights)
@@ -247,13 +249,12 @@ static void cp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
             for (index_t i = 0; i < comp_size; i++){
                 List_rv[i] = comp_list[first_vertex[rv] + i];
             }
-            void mxSetCell(mx_List, rv, mx_List_rv);
+            mxSetCell(mx_List, rv, mx_List_rv);
         }
     }
 
     /* copy reduced values */
-    comp_t rV = cp->get_components();
-    real_t* cp_rX = cp->get_reduced_values();
+    const real_t* cp_rX = cp->get_reduced_values();
     plhs[1] = mxCreateNumericMatrix(D, rV, mxREAL_CLASS, mxREAL);
     real_t* rX = (real_t*) mxGetData(plhs[1]);
     for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
@@ -318,7 +319,7 @@ static void cp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
     }
     nout = 2;
     if (compute_List){ plhs[nout++] = mx_List; }
-    if (compute_Graph){ plhs[nout++] = mx_Graph); }
+    if (compute_Graph){ plhs[nout++] = mx_Graph; }
     if (compute_Obj){
         plhs[nout++] = resize_and_create_mxRow(Obj, cp_it + 1, mxREAL_CLASS);
     }
