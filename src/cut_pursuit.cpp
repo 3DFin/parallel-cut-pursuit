@@ -1155,6 +1155,10 @@ TPL typename CP::Split_info CP::initialize_split_info(comp_t rv)
                     near_cost + comp_size);
                 rand_i = split_cost_distr(rand_gen);
             }
+
+rand_i = k < comp_size ? k : comp_size;
+
+
             index_t rand_v = comp_list_rv[rand_i];
             set_split_value(split_info, k, rand_v);
         } // end for k
