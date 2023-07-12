@@ -1155,10 +1155,6 @@ TPL typename CP::Split_info CP::initialize_split_info(comp_t rv)
                     near_cost + comp_size);
                 rand_i = split_cost_distr(rand_gen);
             }
-
-rand_i = k < comp_size ? k : comp_size;
-
-
             index_t rand_v = comp_list_rv[rand_i];
             set_split_value(split_info, k, rand_v);
         } // end for k
@@ -1230,11 +1226,13 @@ TPL void CP::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
     index_t comp_size = first_vertex[rv + 1] - first_vertex[rv];
     const index_t* comp_list_rv = comp_list + first_vertex[rv];
 
-    const Split_info split_info = initialize_split_info(rv);
+    Split_info split_info = initialize_split_info(rv);
 
     real_t damping = split_damp_ratio;
     for (int split_it = 0; split_it < split_iter_num; split_it++){
         damping += (1.0 - split_damp_ratio)/split_iter_num;
+
+        if (split_it > 0){ update_split_info(split_info); }
 
         bool no_reassignment = true;
 
@@ -1308,8 +1306,10 @@ TPL void CP::split_component(comp_t rv, Maxflow<index_t, real_t>* maxflow)
 
             for (index_t i = 0; i < comp_size; i++){
                 index_t v = comp_list_rv[i];
-                if (maxflow->is_sink(i) && label_assign[v] != k){
-                    label_assign[v] = k;
+                comp_t l = maxflow->is_sink(i) ? k :
+                    split_info.K == 2 ? 0 : label_assign[v];
+                if (label_assign[v] != l){
+                    label_assign[v] = l;
                     no_reassignment = false;
                 }
             }
