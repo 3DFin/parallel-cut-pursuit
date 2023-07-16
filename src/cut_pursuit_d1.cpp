@@ -5,7 +5,6 @@
 #include "cut_pursuit_d1.hpp"
 
 #define ZERO ((real_t) 0.0) // avoid conversions
-#define TWO ((size_t) 2) // avoid overflows
 #define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : (real_t) 1.0)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
@@ -269,8 +268,8 @@ TPL comp_t CP_D1::compute_merge_chains()
 {
     comp_t merge_count = 0;
     for (index_t re = 0; re < rE; re++){
-        comp_t ru = reduced_edges[TWO*re];
-        comp_t rv = reduced_edges[TWO*re + 1];
+        comp_t ru = reduced_edges_u(re);
+        comp_t rv = reduced_edges_v(re);
         /* get the root of each component's chain */
         ru = get_merge_chain_root(ru);
         rv = get_merge_chain_root(rv);
@@ -353,8 +352,8 @@ TPL real_t CP_D1::compute_graph_d1() const
     #pragma omp parallel for schedule(static) NUM_THREADS(2*rE*D, rE) \
         reduction(+:tv)
     for (index_t re = 0; re < rE; re++){
-        real_t *rXu = rX + reduced_edges[TWO*re]*D;
-        real_t *rXv = rX + reduced_edges[TWO*re + 1]*D;
+        real_t *rXu = rX + reduced_edges_u(re)*D;
+        real_t *rXv = rX + reduced_edges_v(re)*D;
         real_t dif = 0.0;
         for (size_t d = 0; d < D; d++){
             if (d1p == D11){

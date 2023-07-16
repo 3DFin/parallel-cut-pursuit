@@ -5,6 +5,7 @@
 
 #define ZERO ((real_t) 0.0)
 #define ONE ((real_t) 1.0)
+#define TWO ((size_t) 2) // avoid overflows
 #define VERT_WEIGHTS_(v) (vert_weights ? vert_weights[(v)] : ONE)
 #define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : ONE)
 
@@ -191,11 +192,11 @@ TPL void CP_D0_DIST::update_split_info(Split_info& split_info) const
     free(total_weights);
 }
 
-TPL void CP_D0_DIST::update_merge_info(Merge_info& merge_info)
+TPL void CP_D0_DIST::update_merge_info(*Merge_info& merge_info) const
 {
-    comp_t ru = merge_info.ru;
-    comp_t rv = merge_info.rv;
-    real_t edge_weight = reduced_edge_weights[merge_info.re];
+    comp_t ru = reduced_edges_u(merge_info->re);
+    comp_t rv = reduced_edges_v(merge_info->re);
+    real_t edge_weight = reduced_edge_weights[merge_info->re];
 
     real_t* rXu = rX + D*ru;
     real_t* rXv = rX + D*rv;
@@ -214,9 +215,11 @@ TPL void CP_D0_DIST::update_merge_info(Merge_info& merge_info)
         gain += comp_weights[ru]*wrv*gainQ;
     }
 
+    real_t* value;
     if (gain > ZERO || comp_weights[ru] < min_comp_weight
                     || comp_weights[rv] < min_comp_weight){
-        real_t* value = merge_info.value;
+        value = merge_info->value ? merge_info->value :
+            (real_t*) malloc_check(sizeof(real_t)*D);
         for (size_t d = 0; d < D; d++){ value[d] = wru*rXu[d] + wrv*rXv[d]; }
 
         if (Q != D){
@@ -237,21 +240,25 @@ TPL void CP_D0_DIST::update_merge_info(Merge_info& merge_info)
         }
     }
 
+    /* too small components will be merged even with negative gain */
     if (gain > ZERO || comp_weights[ru] < min_comp_weight
                     || comp_weights[rv] < min_comp_weight){
-        merge_info.gain = gain;
-    }else{
-        merge_info.gain = -real_inf();
+        merge_info->value = value;
+        merge_info->gain = gain;
+    }else{ /* negative gain and big enough component */
+        merge_info->gain = -real_inf();
     }
 }
 
 TPL size_t CP_D0_DIST::update_merge_complexity()
 { return rE*2*D; /* each update is only linear in D */ }
 
-TPL comp_t CP_D0_DIST::accept_merge(const Merge_info& candidate)
+TPL comp_t CP_D0_DIST::accept_merge(Merge_info*& candidate)
 {
-    comp_t ru = Cp_d0<real_t, index_t, comp_t>::accept_merge(candidate);
-    comp_t rv = ru == candidate.ru ? candidate.rv : candidate.ru;
+    comp_t ru = reduced_edges_u(candidate->re);
+    comp_t rv = reduced_edges_v(candidate->re);
+    comp_t ro = Cp_d0<real_t, index_t, comp_t>::accept_merge(candidate);
+    if (ro != ru){ rv = ru; ru = ro; }
     comp_weights[ru] += comp_weights[rv];
     return ru;
 }

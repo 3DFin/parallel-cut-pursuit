@@ -7,7 +7,6 @@
 
 #define ZERO ((real_t) 0.0) // avoid conversions
 #define ONE ((size_t) 1) // avoid overflows
-#define TWO ((size_t) 2) // avoid overflows
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 
 /** specific flags **/
@@ -504,7 +503,7 @@ TPL void CP::compute_connected_components()
 
     if (tmp_rV > MAX_NUM_COMP){
         cerr << "Cut-pursuit: number of components (" << tmp_rV << ") greater "
-            << "than can be represented by comp_t (" << MAX_NUM_COMP << ")"
+            "than can be represented by comp_t (" << MAX_NUM_COMP << ")"
             << endl;
         exit(EXIT_FAILURE);
     }
@@ -541,7 +540,7 @@ TPL void CP::compute_reduced_graph()
                    * linked to themselves */
         rE = 1;
         reduced_edges = (comp_t*) malloc_check(sizeof(comp_t)*2);
-        reduced_edges[0] = reduced_edges[1] = 0;
+        reduced_edges_u(0) = reduced_edges_v(0) = 0;
         reduced_edge_weights = (real_t*) malloc_check(sizeof(real_t)*1);
         reduced_edge_weights[0] = eps;
         return; 
@@ -551,7 +550,7 @@ TPL void CP::compute_reduced_graph()
      * when dealing with component ru, reduced_edge_to[rv] is the identifier of
      * the reduced edge ru -> rv, or NO_EDGE if the edge is not created yet */
     index_t* reduced_edge_to = (index_t*) malloc_check(sizeof(index_t)*rV);
-    /* this will also be used to indicate isolated vertices */
+    /* same storage can also be used to indicate isolated vertices */
     index_t* is_isolated = reduced_edge_to;
     for (comp_t rv = 0; rv < rV; rv++){ is_isolated[rv] = ISOLATED; }
 
@@ -602,8 +601,8 @@ TPL void CP::compute_reduced_graph()
                     ae = first_active_edge[rv]++;
                     adj_components[ae] = ru;
                 }
-                if (active_edge_weights && ae != NO_EDGE){
-                    active_edge_weights[ae] = EDGE_WEIGHTS_(e);
+                if (edge_weights && ae != NO_EDGE){
+                    active_edge_weights[ae] = edge_weights[e];
                 }
             }
         }
@@ -636,15 +635,15 @@ TPL void CP::compute_reduced_graph()
                 reduced_edge_weights = (real_t*) realloc_check(
                     reduced_edge_weights, sizeof(real_t)*bufsize);
             }
-            reduced_edges[TWO*rE] = reduced_edges[TWO*rE + 1] = ru;
+            reduced_edges_u(rE) = reduced_edges_v(rE) = ru;
             reduced_edge_weights[rE++] = eps;
             continue;
         }
 
         for (index_t ae = first_active_edge[ru];
              ae < first_active_edge[ru + 1]; ae++){
-            real_t edge_weight = active_edge_weights ? active_edge_weights[ae]
-                                                     : homo_edge_weight;
+            real_t edge_weight = edge_weights ? active_edge_weights[ae]
+                                              : homo_edge_weight;
             comp_t rv = adj_components[ae];
             index_t re = reduced_edge_to[rv];
             if (re == NO_EDGE){ // a new edge must be created
@@ -655,8 +654,8 @@ TPL void CP::compute_reduced_graph()
                     reduced_edge_weights = (real_t*) realloc_check(
                         reduced_edge_weights, sizeof(real_t)*bufsize);
                 }
-                reduced_edges[TWO*rE] = ru;
-                reduced_edges[TWO*rE + 1] = rv;
+                reduced_edges_u(rE) = ru;
+                reduced_edges_v(rE) = rv;
                 reduced_edge_weights[rE] = edge_weight;
                 reduced_edge_to[rv] = rE++;
             }else{ /* edge already exists */
@@ -666,7 +665,7 @@ TPL void CP::compute_reduced_graph()
 
         /* reset reduced_edge_to */
         for (; last_rE < rE; last_rE++){
-            reduced_edge_to[reduced_edges[TWO*last_rE + 1]] = NO_EDGE;
+            reduced_edge_to[reduced_edges_v(last_rE)] = NO_EDGE;
         }
 
     }
@@ -1400,21 +1399,10 @@ TPL index_t CP::split()
     return activation;
 }
 
-TPL comp_t CP::get_merge_chain_root(comp_t rv)
+TPL comp_t CP::get_merge_chain_root(comp_t rv) const
 {
-    /* find the root */
-    comp_t ru = rv;
-    while (merge_chains_root[ru] != CHAIN_END){ ru = merge_chains_root[ru]; }
-    /* update intermediary steps */
-    if (ru != rv){
-        comp_t rw = merge_chains_root[rv];
-        while (rw != ru){
-            merge_chains_root[rv] = ru;
-            rv = rw;
-            rw = merge_chains_root[rv];
-        }
-    }
-    return ru;
+    while (merge_chains_root[rv] != CHAIN_END){ rv = merge_chains_root[rv]; }
+    return rv;
 }
 
 TPL comp_t CP::merge_components(comp_t ru, comp_t rv)
@@ -1600,16 +1588,16 @@ TPL index_t CP::merge()
     saturated_vert -= desaturated_vert;
 
     /* update corresponding reduced edges and weights in-place;
-     * some edges will appear several times in the list, important thing is
+     * some edges might appear several times in the list, important thing is
      * that the corresponding weights sum up to the right quantity;
      * note that rE is thus an upper bound of the actual number of edges */
     index_t final_re = 0;
     for (index_t re = 0; re < rE; re++){
-        comp_t ru = final_comp[reduced_edges[TWO*re]];
-        comp_t rv = final_comp[reduced_edges[TWO*re + 1]];
-        if (ru != rv){
-            reduced_edges[TWO*final_re] = ru;
-            reduced_edges[TWO*final_re + 1] = rv;
+        comp_t ru = final_comp[reduced_edges_u(re)];
+        comp_t rv = final_comp[reduced_edges_v(re)];
+        if (ru != rv && reduced_edge_weights[re] > ZERO){
+            reduced_edges_u(final_re) = ru;
+            reduced_edges_v(final_re) = rv;
             reduced_edge_weights[final_re] = reduced_edge_weights[re];
             final_re++;
         }

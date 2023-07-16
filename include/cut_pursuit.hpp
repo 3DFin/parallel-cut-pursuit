@@ -171,7 +171,19 @@ protected:
      * number of reduced edges, consecutive indices are linked components)
      * guaranteed to be in increasing order of starting components (eases
      * conversion to forward-star representation) */
+private:
     comp_t* reduced_edges;
+protected:
+    /* accessors for reduced_edges */
+    const comp_t& reduced_edges_u(re) const {
+        return reduced_edges[((size_t) 2)*re];
+    }
+    const comp_t& reduced_edges_v(re) const {
+        return reduced_edges[((size_t) 2)*re + 1];
+    }
+    comp_t& reduced_edges_u(re) { return reduced_edges[((size_t) 2)*re]; }
+    comp_t& reduced_edges_v(re) { return reduced_edges[((size_t) 2)*re + 1]; }
+
     real_t* reduced_edge_weights;
 
     /**  parameters  **/
@@ -299,7 +311,7 @@ protected:
      * - rv is the leaf of its chain if, and only if next[rv] == CHAIN_END;
      * an additional requirement is that the root of each chain should be the
      * component in the chain with lowest index */
-    comp_t get_merge_chain_root(comp_t rv);
+    comp_t get_merge_chain_root(comp_t rv) const;
 
     /* merge the merge chains of the two given roots;
      * the root of the resulting chain will be the component in the chains
@@ -409,9 +421,11 @@ private:
     void compute_connected_components();
 
     /* allocate and compute reduced graph structure; 
-     * NOTA: guarantees that the reduced edges are listed in increasing order
-     * of starting components (eases conversion to forward-star representation)
-     * NOTA: parallel separation edges contribute to infinite reduced edge
-     * weights, so that they will be removed during merge step */
+     * NOTA: this must guarantee that
+     * 1) starting component identifiers are smaller than ending components
+     * 2) the reduced edges are listed in increasing order of starting
+     *    components identifiers;
+     * these properties are used in various routines, like conversion to
+     * forward-star representation */
     void compute_reduced_graph();
 };

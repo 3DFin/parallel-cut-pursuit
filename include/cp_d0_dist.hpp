@@ -143,23 +143,19 @@ private:
     /**  merging components **/
     using typename Cp_d0<real_t, index_t, comp_t>::Merge_info;
 
-    /* update information of the given merge candidate in the list;
-     * merge information must be created with new and destroyed with delete;
-     * negative gain values might still get accepted; for inacceptable gain,
-     * do not create (or destroy if it exists) the merge information and flag
-     * it with a null pointer
-     TODO: rewrite */
-    void update_merge_info(Merge_info&) override;
+    /* update information of the given merge candidate;
+     * allocate value array with malloc;
+     * negative gain values might still get accepted: for inacceptable merges,
+     * flag with negative infinity */
+    void update_merge_info(Merge_info*&) const override;
 
     /* rough estimate of the number of operations for updating all candidates;
-     * useful for estimating the number of parallel threads
-     TODO: change name */
-    size_t update_merge_complexity() override;
+     * useful for estimating the number of parallel threads */
+    size_t update_merge_complexity() const override;
 
-    /* accept the merge candidate and return the component root of the
-     * resulting merge chain
-     TODO: rewrite */
-    comp_t accept_merge(const Merge_info&) override;
+    /* accept the merge candidate, delete it, and return the component root of
+     * the resulting merge chain */
+    comp_t accept_merge(Merge_info*&) override;
 
     index_t merge() override; // override for freeing comp_weights
 
