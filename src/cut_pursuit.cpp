@@ -10,17 +10,19 @@
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 
 /** specific flags **/
-/* use maximum number of components; no component can have this identifier */
+/* enusre number of components do not exceed integer representation */
 #define MAX_NUM_COMP (std::numeric_limits<comp_t>::max())
+/* use maximum number of components; no component can have this identifier */
 #define NOT_ASSIGNED (std::numeric_limits<comp_t>::max())
 #define CHAIN_END (std::numeric_limits<comp_t>::max())
+#define NO_COMP (std::numeric_limits<comp_t>::max())
 #define ASSIGNED ((comp_t) 0)
 #define ASSIGNED_ROOT ((comp_t) 1) // must differ from ASSIGNED
 #define ASSIGNED_ROOT_SAT ((comp_t) 2) // must differ from ASSIGNED_ROOT
 #define NOT_SATURATED ((comp_t) 1) // must differ from ASSIGNED
 /* use maximum number of edges; no edge can have this identifier */
 #define NO_EDGE (std::numeric_limits<index_t>::max())
-#define NOT_ISOLATED NO_EDGE
+#define NOT_ISOLATED (std::numeric_limits<index_t>::max())
 #define ISOLATED ((index_t) 0)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
@@ -315,7 +317,7 @@ TPL void CP::print_progress(int it, real_t dif, double timer) const
             << " (tol. " << dif_tol << ")\n";
     }
     cout << "\t" << rV << " connected component(s), " << saturated_comp <<
-        " saturated, and at most " << rE << " reduced edge(s).\n";
+        " saturated, and " << rE << " reduced edge(s).\n";
     if (timer > 0.0){
         cout.precision(1);
         cout << fixed << "\telapsed time " << timer << " s.\n";
@@ -555,8 +557,7 @@ TPL void CP::compute_reduced_graph()
     for (comp_t rv = 0; rv < rV; rv++){ is_isolated[rv] = ISOLATED; }
 
     /**  get all active (cut) edges linking a component to another
-     **  store in (redundant) forward-star representation
-     **  (first_active_edge, adj_components)                        **/
+     **  forward-star representation (first_active_edge, adj_components)  **/
     index_t* first_active_edge = (index_t*)
         malloc_check(sizeof(index_t)*(rV + ONE));
     /* count the number of such edges for each component (ind shift by one) */
@@ -619,7 +620,7 @@ TPL void CP::compute_reduced_graph()
     reduced_edges = (comp_t*) malloc_check(sizeof(comp_t)*2*bufsize);
     reduced_edge_weights = (real_t*) malloc_check(sizeof(real_t)*bufsize);
 
-    /**  convert to (nonredundant) edge list representation with weights  **/
+    /**  convert to edge list representation with weights  **/
 
     rE = 0; // current number of reduced edges
     index_t last_rE = 0; // keep track of number of processed edges
@@ -1017,9 +1018,9 @@ TPL void CP::revert_balance_split(comp_t rV_big, comp_t rV_new,
         value_t* rXv_bal = rX + D*rv_new;
         for (size_t d = 0; d < D; d++){ rXv[d] = rXv_bal[d]; }
 
-        /* each new component which has not been cut is declared saturated;
-         * however, if any new component from the same original large component
-         * has been cut, the original large component is not saturated */
+        /* each new component which has not been cut has been declared
+         * saturated; an original large component is declared saturated if all
+         * new components within are saturated */
         bool saturation = true;
         while (first_vertex_bal[rv_new] < first_vertex_big[rv + 1]){
             saturation = saturation && is_saturated[rv_new];
@@ -1531,8 +1532,6 @@ TPL index_t CP::merge()
         first_vertex[rn++] = first;
     }
 
-    free(merge_chains_next);
-
     /* finalize and shrink arrays to fit the reduced number of components */
     first_vertex[rV = rn] = V;
     first_vertex = (index_t*) realloc_check(first_vertex,
@@ -1545,48 +1544,120 @@ TPL index_t CP::merge()
         comp_list[v] = tmp_comp_list[v];
         comp_assign[v] = final_comp[comp_assign[v]];
     }
-
     free(tmp_comp_list);
 
     /* deactivate edges between merged components */
     index_t deactivation = 0;
-    index_t desaturated_vert = 0;
-    comp_t desaturated_comp = 0;
     #pragma omp parallel for schedule(static) NUM_THREADS(E, rV) \
-        reduction(+:deactivation, desaturated_vert, desaturated_comp)
+        reduction(+:deactivation)
     for (comp_t rv = 0; rv < rV; rv++){
         for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
             index_t v = comp_list[i];
-            comp_t last_rv = last_comp_assign[v];
             for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
                 if (is_bind(e)){ continue; }
-                if (rv != comp_assign[adj_vertices[e]]){ continue; }
-                if (balance_parallel_split){
-                /* if a large component has been artificially split for
-                 * parallel balancing, separation edges must be set inactive,
-                 * but edges which have been cut in parallel might not properly
-                 * form new components yet and must be kept for later;
-                 * the component must also be desaturated */
-                    if (last_rv == last_comp_assign[adj_vertices[e]]){ 
-                        // if (is_cut(e)){ continue; } // do not bind
-                        // TODO: find a way to keep them
-                        // answer: update before, in order to compare roots
-                        if (is_saturated[rv]){
-                            is_saturated[rv] = false;
-                            desaturated_comp++;
-                            desaturated_vert += first_vertex[rv + 1]
-                                - first_vertex[rv];
-                        }
-                    }
+                if (!is_bind(e) && rv == comp_assign[adj_vertices[e]]){
+                    bind(e);
+                    deactivation++;
                 }
-                bind(e);
-                deactivation++;
             }
         }
     }
-    saturated_comp -= desaturated_comp;
-    saturated_vert -= desaturated_vert;
 
+    /**  update reduced edges  **/
+
+    /* update current reduced edges ends with final components */
+    comp_t* is_isolated = merge_chains_next; // reuse storage
+    for (comp_t rv = 0; rv < rV; rv++){ is_isolated[rv] = ((comp_t) true); }
+    
+    for (index_t re = 0; re < rE; re++){
+        comp_t ru = final_comp[reduced_edges_u(re)];
+        comp_t rv = final_comp[reduced_edges_v(re)];
+        if (ru > rv){ comp_t tmp = ru; ru = rv; rv = tmp; }
+        reduced_edges_u(re) = ru; 
+        reduced_edges_v(re) = rv; 
+        if (ru != rv && reduced_edge_weights[ru] > ZERO){
+            is_isolated[ru] = is_isolated[rv] = ((comp_t) false);
+        }
+    }
+
+    free(merge_chains_root); // also storage of final_comp
+
+    /* reorder by increasing lexicographic order on the components */
+    index_t* permutation = (index_t*) malloc_check(sizeof(index_t)*rE);
+    for (index_t re = 0; re < rE; re++){ permutation[re] = re; }
+    sort(permutation, permutation + rE,
+        [this] (index_t re1, index_t re2) -> bool
+        { return reduced_edges_u(re1) < reduced_edges_u(re2) ||
+            (reduced_edges_u(re1) == reduced_edges_u(re2) &&
+                reduced_edges_v(re1) < reduced_edges_v(re2)); });
+
+    /* create permutation array from sorting array in-place; O(rE) */
+    for (index_t start_rank = 0; start_rank < rE; start_rank++){
+        index_t rnk = start_rank;
+        index_t ind = permutation[start_rank];
+        while (permutation[ind] != rnk){
+            index_t nxt_ind = permutation[ind];
+            permutation[ind] = rnk;
+            rnk = ind;
+            ind = nxt_ind;
+        }
+    }
+
+    /* permute in-place; same principle, this is an involution! */
+    for (index_t start_rank = 0; start_rank < rE; start_rank++){
+        index_t rnk = start_rank;
+        index_t ind = permutation[start_rank];
+        comp_t ru = reduced_edges_u(start_rank);
+        comp_t rv = reduced_edges_v(start_rank);
+        real_t rweight = reduced_edge_weights[start_rank];
+        while (permutation[ind] != rnk){
+            index_t nxt_ind = permutation[ind];
+            comp_t nxt_ru = reduced_edges_u(ind);
+            comp_t nxt_rv = reduced_edges_v(ind);
+            real_t nxt_rweight = reduced_edge_weights[ind];
+            permutation[ind] = rnk;
+            reduced_edges_u(ind) = ru;
+            reduced_edges_v(ind) = rv;
+            reduced_edge_weights[ind] = rweight;
+            rnk = ind;
+            ind = nxt_ind, ru = nxt_ru, rv = nxt_rv, rweight = nxt_rweight;
+        }
+    }
+
+    free(permutation);
+
+    /* remove duplicates, accumulate weights, flag isolated components;
+     * in-place, by shifting left when deleting an edge */
+    comp_t current_ru = NO_COMP;
+    index_t final_re = 0;
+    for (index_t re = 0; re < rE; re++){
+        bool accept = false;
+        comp_t ru = reduced_edges_u(re);
+        comp_t rv = reduced_edges_v(re);
+        if (ru != current_ru){ /* first from ru */
+            if (is_isolated[ru] || ru != rv){
+                current_ru = ru;
+                accept = true;
+            }
+        }else if (ru != rv){ /* check if last accepted was the same */
+            if (rv == reduced_edges_v(final_re - 1)){
+                reduced_edge_weights[final_re - 1] += reduced_edge_weights[re];
+            }else{
+                accept = true;
+            }
+        }
+        if (accept){
+            reduced_edges_u(final_re) = ru;
+            reduced_edges_v(final_re) = rv;
+            reduced_edge_weights[final_re] = !is_isolated[ru] ?
+                reduced_edge_weights[re] : eps;
+            final_re++;
+        }
+    }
+
+    free(merge_chains_next); // also storage of is_isolated
+    
+#if 0
     /* update corresponding reduced edges and weights in-place;
      * some edges might appear several times in the list, important thing is
      * that the corresponding weights sum up to the right quantity;
@@ -1602,8 +1673,7 @@ TPL index_t CP::merge()
             final_re++;
         }
     }
-
-    free(merge_chains_root); // also storage of final_comp
+#endif
 
     rE = final_re;
     reduced_edges = (comp_t*) realloc_check(reduced_edges,

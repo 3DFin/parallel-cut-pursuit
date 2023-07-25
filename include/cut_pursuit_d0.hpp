@@ -45,13 +45,6 @@ public:
     Cp_d0(index_t V, index_t E, const index_t* first_edge, 
         const index_t* adj_vertices, size_t D = 1);
 
-    /* the destructor does not free pointers which are supposed to be provided 
-     * by the user (forward-star graph structure given at construction, 
-     * edge weights, etc.); IT DOES FREE THE REST (components assignment 
-     * and reduced problem elements, etc.), but this can be prevented by
-     * getting the corresponding pointer member and setting it to null
-     * beforehand */
-
 protected:
     /* compute the functional f at a single vertex */
     virtual real_t fv(index_t v, const value_t* Xv) const = 0; 
@@ -75,45 +68,43 @@ protected:
 
     /**  merging components  **/
 
-    /* during the merging step, merged components are stored as chains, see
-     * header `cut_pursuit.hpp` for details */
-
     /* the strategy is to compute the gain on the functional for the merge of
      * each reduced edge, and accept greedily the candidates with greatest
-     * positive gain;
-     * one could store the candidates in a priority queue, but the benefit is
-     * not substantial since each merge might affect the others, hence a pass
-     * on all remaining edges is necessary after each merge anyway;
-     * to avoid unnecessary recomputation, positive merge gains and
-     * corresponding values are stored;
-     * to take additional information into account, override the virtual merge
-     * update methods */
-    struct Merge_info
-    {
-        comp_t re; // the edge to be removed if merge 
-        real_t gain; // the gain on the functional if the components are merged
-        value_t* value; // the value taken by the components if they are merged
-        Merge_info(index_t re);
-        ~Merge_info(); // destroy value with free
-    };
+     * gain; merge gains and values of neighboring components might be impacted
+     * by the merge of two components, see implementation for details; override
+     * the following virtual merge methods for taking additional information
+     * into account
+     * NOTA: during the merging step, merged components are stored as chains,
+     * see header `cut_pursuit.hpp` for details */
 
-    /* update information of the given merge candidate;
-     * allocate value array with malloc;
-     * negative gain values might still get accepted: for inacceptable merges,
-     * flag with negative infinity */
-    virtual void update_merge_info(Merge_info&) const = 0;
+    /* arrays are indexed by reduced edges */
+    real_t* merge_gains; // gain on the objective if components are merged
+    value_t** merge_values; // the value of the components if they are merged
 
-    /* rough estimate of the number of operations for updating all candidates;
-     * useful for estimating the number of parallel threads */
-    virtual uintmax_t update_merge_complexity() const = 0;
+    /* compute merge information of the given reduced edge;
+     * populate member arrays merge_gains and merge_values; allocate value with
+     * malloc; negative gain values might still get accepted, inacceptable
+     * merge candidate must be deleted */
+    virtual void compute_merge_candidate(index_t re) = 0;
 
-    /* accept the merge candidate, delete it, and return the component root of
-     * the resulting merge chain */
-    virtual comp_t accept_merge(const Merge_info&);
+    /* accept and delete the merge candidate, and return the component root of
+     * the resulting merge chain; can be overriden to take into account other
+     * merge effects */
+    virtual comp_t accept_merge_candidate(index_t re);
+
+    /* frees the merge value and flag it to null pointer */
+    void delete_merge_candidate(index_t re);
+
+    /* rough estimate of the number of operations for computing merge info of a
+     * reduced edge; useful for estimating the number of parallel threads */
+    virtual size_t merge_info_complexity() const = 0;
+
+
 
     /**  type resolution for base template class members
      * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
      **/
+    using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
     using Cp<real_t, index_t, comp_t>::K;
     using Cp<real_t, index_t, comp_t>::split_iter_num;
     using Cp<real_t, index_t, comp_t>::split_damp_ratio;
@@ -129,20 +120,14 @@ protected:
     using Cp<real_t, index_t, comp_t>::homo_edge_weight;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
+    using Cp<real_t, index_t, comp_t>::reduced_edges_u;
+    using Cp<real_t, index_t, comp_t>::reduced_edges_v;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
-    using Cp<real_t, index_t, comp_t>::reduced_edges;
-    using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
     using Cp<real_t, index_t, comp_t>::merge_components;
+    using Cp<real_t, index_t, comp_t>::realloc_check;
     using Cp<real_t, index_t, comp_t>::malloc_check;
-    using Cp<real_t, index_t, comp_t>::real_inf;
 
 private:
-
     /* compute the merge chains and return the number of effective merges */
     comp_t compute_merge_chains() override;
-    /* auxiliary functions for merge */
-    void delete_merge_candidate(index_t re);
-    void select_best_merge_candidate(index_t re, real_t* best_gain,
-        index_t* best_edge);
-    Merge_info reserved_merge_info;
 };

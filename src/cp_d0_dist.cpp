@@ -143,11 +143,6 @@ TPL void CP_D0_DIST::solve_reduced_problem()
         }
         for (size_t d = 0; d < D; d++){ rXv[d] /= comp_weights[rv]; }
     }
-
-    /* fXY can be updated now to avoid computing it twice later */
-    if (monitor_evolution()){
-        fXY = Cp_d0<real_t, index_t, comp_t>::compute_f();
-    }
 }
 
 TPL void CP_D0_DIST::set_split_value(Split_info& split_info, comp_t k,
@@ -192,11 +187,11 @@ TPL void CP_D0_DIST::update_split_info(Split_info& split_info) const
     free(total_weights);
 }
 
-TPL void CP_D0_DIST::update_merge_info(*Merge_info& merge_info) const
+TPL void CP_D0_DIST::compute_merge_candidate(index_t re)
 {
-    comp_t ru = reduced_edges_u(merge_info->re);
-    comp_t rv = reduced_edges_v(merge_info->re);
-    real_t edge_weight = reduced_edge_weights[merge_info->re];
+    comp_t ru = reduced_edges_u(re);
+    comp_t rv = reduced_edges_v(re);
+    real_t edge_weight = reduced_edge_weights[re];
 
     real_t* rXu = rX + D*ru;
     real_t* rXv = rX + D*rv;
@@ -215,11 +210,12 @@ TPL void CP_D0_DIST::update_merge_info(*Merge_info& merge_info) const
         gain += comp_weights[ru]*wrv*gainQ;
     }
 
-    real_t* value;
     if (gain > ZERO || comp_weights[ru] < min_comp_weight
                     || comp_weights[rv] < min_comp_weight){
-        value = merge_info->value ? merge_info->value :
-            (real_t*) malloc_check(sizeof(real_t)*D);
+        if (!merge_values[re]){
+            merge_values[re] = (real_t*) malloc_check(sizeof(real_t)*D);
+        }
+        real_t* value = merge_values[re]; 
         for (size_t d = 0; d < D; d++){ value[d] = wru*rXu[d] + wrv*rXv[d]; }
 
         if (Q != D){
@@ -240,24 +236,21 @@ TPL void CP_D0_DIST::update_merge_info(*Merge_info& merge_info) const
         }
     }
 
-    /* too small components will be merged even with negative gain */
-    if (gain > ZERO || comp_weights[ru] < min_comp_weight
-                    || comp_weights[rv] < min_comp_weight){
-        merge_info->value = value;
-        merge_info->gain = gain;
-    }else{ /* negative gain and big enough component */
-        merge_info->gain = -real_inf();
+    merge_gains[re] = gain;
+    if (gain <= ZERO && comp_weights[ru] >= min_comp_weight
+                     && comp_weights[rv] >= min_comp_weight){
+        delete_merge_candidate(re);
     }
 }
 
-TPL size_t CP_D0_DIST::update_merge_complexity()
-{ return rE*2*D; /* each update is only linear in D */ }
+TPL size_t CP_D0_DIST::merge_info_complexity() const
+{ return 2*D; }
 
-TPL comp_t CP_D0_DIST::accept_merge(Merge_info*& candidate)
+TPL comp_t CP_D0_DIST::accept_merge_candidate(index_t re)
 {
-    comp_t ru = reduced_edges_u(candidate->re);
-    comp_t rv = reduced_edges_v(candidate->re);
-    comp_t ro = Cp_d0<real_t, index_t, comp_t>::accept_merge(candidate);
+    comp_t ro = Cp_d0<real_t, index_t, comp_t>::accept_merge_candidate(re);
+    comp_t ru = reduced_edges_u(re);
+    comp_t rv = reduced_edges_v(re);
     if (ro != ru){ rv = ru; ru = ro; }
     comp_weights[ru] += comp_weights[rv];
     return ru;
@@ -267,6 +260,10 @@ TPL index_t CP_D0_DIST::merge()
 {
     index_t deactivation = Cp_d0<real_t, index_t, comp_t>::merge();
     free(comp_weights); comp_weights = nullptr;
+    /* fXY can be updated now to avoid computing it twice later */
+    if (monitor_evolution()){
+        fXY = Cp_d0<real_t, index_t, comp_t>::compute_f();
+    }
     return deactivation;
 }
 

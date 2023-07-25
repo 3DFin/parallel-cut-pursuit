@@ -141,21 +141,19 @@ private:
     void update_split_info(Split_info& split_info) const override;
 
     /**  merging components **/
-    using typename Cp_d0<real_t, index_t, comp_t>::Merge_info;
 
-    /* update information of the given merge candidate;
-     * allocate value array with malloc;
-     * negative gain values might still get accepted: for inacceptable merges,
-     * flag with negative infinity */
-    void update_merge_info(Merge_info*&) const override;
+    /* compute merge information of the given reduced edge;
+     * populate member arrays merge_gains and merge_values; allocate value with
+     * malloc; negative gain values might still get accepted, inacceptable
+     * merge candidate must be deleted */
+    void compute_merge_candidate(index_t re) override;
 
-    /* rough estimate of the number of operations for updating all candidates;
-     * useful for estimating the number of parallel threads */
-    size_t update_merge_complexity() const override;
+    /* override for transfering component weights to root component */
+    comp_t accept_merge_candidate(index_t re) override;
 
-    /* accept the merge candidate, delete it, and return the component root of
-     * the resulting merge chain */
-    comp_t accept_merge(Merge_info*&) override;
+    /* rough estimate of the number of operations for computing merge info of a
+     * reduced edge; useful for estimating the number of parallel threads */
+    size_t merge_info_complexity() const override;
 
     index_t merge() override; // override for freeing comp_weights
 
@@ -167,6 +165,9 @@ private:
     /**  type resolution for base template class members
      * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
      **/
+    using Cp_d0<real_t, index_t, comp_t>::delete_merge_candidate;
+    using Cp_d0<real_t, index_t, comp_t>::merge_gains;
+    using Cp_d0<real_t, index_t, comp_t>::merge_values;
     using Cp<real_t, index_t, comp_t>::set_split_param;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;
@@ -182,6 +183,8 @@ private:
     using Cp<real_t, index_t, comp_t>::label_assign;
     using Cp<real_t, index_t, comp_t>::comp_list;
     using Cp<real_t, index_t, comp_t>::first_vertex;
+    using Cp<real_t, index_t, comp_t>::reduced_edges_u;
+    using Cp<real_t, index_t, comp_t>::reduced_edges_v;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::malloc_check;

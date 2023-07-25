@@ -166,23 +166,28 @@ protected:
     bool* is_saturated;
     comp_t saturated_comp; // number of saturated components
     index_t saturated_vert; // number of vertices within saturated components
+private:
     /* reduced connectivity
      * reduced edges represented with edges list (array of size twice the 
      * number of reduced edges, consecutive indices are linked components)
-     * guaranteed to be in increasing order of starting components (eases
-     * conversion to forward-star representation) */
-private:
+     * guarantees:
+     * 1) starting component identifiers are smaller than ending components
+     * 2) increasing order of starting and ending components identifiers
+     *  (this eases some routines, like conversion to forward-star)
+     * 3) each edge appears only once
+     * 4) isolated components (not linked to any other component) are linked
+     *  to themselves with epsilon reduced weight */
     comp_t* reduced_edges;
 protected:
     /* accessors for reduced_edges */
-    const comp_t& reduced_edges_u(re) const {
-        return reduced_edges[((size_t) 2)*re];
-    }
-    const comp_t& reduced_edges_v(re) const {
-        return reduced_edges[((size_t) 2)*re + 1];
-    }
-    comp_t& reduced_edges_u(re) { return reduced_edges[((size_t) 2)*re]; }
-    comp_t& reduced_edges_v(re) { return reduced_edges[((size_t) 2)*re + 1]; }
+    const comp_t& reduced_edges_u(index_t re) const
+        { return reduced_edges[((size_t) 2)*re]; }
+    const comp_t& reduced_edges_v(index_t re) const
+        { return reduced_edges[((size_t) 2)*re + 1]; }
+    comp_t& reduced_edges_u(index_t re)
+        { return reduced_edges[((size_t) 2)*re]; }
+    comp_t& reduced_edges_v(index_t re)
+        { return reduced_edges[((size_t) 2)*re + 1]; }
 
     real_t* reduced_edge_weights;
 
@@ -318,14 +323,11 @@ protected:
      * with lowest index, which is returned by the function */ 
     comp_t merge_components(comp_t ru, comp_t rv);
 
-    /* compute the merge chains and return the number of effective merges;
-     * NOTA: the chosen reduced graph structure is just a list of edges,
-     * and does not provide the complete list of edges linking to a given
-     * vertex, thus getting back to the root of the chains for each edge is
-     * O(rE^2), but is expected to be much less in practice */
+    /* compute the merge chains and return the number of effective merges */
     virtual comp_t compute_merge_chains() = 0;
 
-    /* main routine using the above to perform the merge step */
+    /* main routine using the above to perform the merge step;
+     * NOTA: reduced edges must guarantee 1-4), see member declaration */
     virtual index_t merge();
 
     /**  monitoring evolution  **/
@@ -420,12 +422,7 @@ private:
     /* update connected components and count saturated ones */
     void compute_connected_components();
 
-    /* allocate and compute reduced graph structure; 
-     * NOTA: this must guarantee that
-     * 1) starting component identifiers are smaller than ending components
-     * 2) the reduced edges are listed in increasing order of starting
-     *    components identifiers;
-     * these properties are used in various routines, like conversion to
-     * forward-star representation */
+    /* allocate and compute reduced graph structure;
+     * NOTA: reduced edges must guarantee 1-4), see member declaration */
     void compute_reduced_graph();
 };

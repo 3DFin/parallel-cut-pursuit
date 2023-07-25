@@ -39,6 +39,7 @@ options.balance_parallel_split = true;
 load('../data/labeling_3D.mat')
 % penalization for d0 norm was adjusted by trial-and-error
 options.edge_weights = 3*homo_d1_weight; 
+loss = .1; % smoothed Kullback-Leibler
 
 % compute prediction performance of random forest
 [~, ML] = max(y, [], 1);
@@ -53,7 +54,7 @@ clear predk truek
 
 %%%  solve the optimization problem  %%%
 tic;
-[Comp, rX, Obj] = cp_d0_dist(loss, y, first_edge, adj_vertices, options);
+[Comp, rX] = cp_d0_dist_(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;
