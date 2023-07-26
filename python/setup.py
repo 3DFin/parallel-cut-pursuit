@@ -18,7 +18,7 @@ import re
 to_compile = [ # comment undesired extension modules
     # "cp_d1_ql1b_cpy",
     # "cp_d1_lsx_cpy",
-    "cp_d0_dist_cpy_",
+    "cp_d0_dist_cpy",
     # "cp_prox_tv_cpy"
 ]
 include_dirs = [numpy.get_include(), # find the Numpy headers
@@ -96,7 +96,7 @@ if name in to_compile:
     setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
 
 
-name = "cp_d0_dist_cpy_"
+name = "cp_d0_dist_cpy"
 if name in to_compile:
     mod = Extension(
             name,

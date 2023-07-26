@@ -43,8 +43,8 @@ try
     mex -I../include mex/cp_d0_dist_mex.cpp ../src/cp_d0_dist.cpp ...
         ../src/cut_pursuit_d0.cpp ../src/cut_pursuit.cpp ...
         ../src/maxflow.cpp ...
-        -output bin/cp_d0_dist_
-    clear cp_d0_dist_
+        -output bin/cp_d0_dist
+    clear cp_d0_dist
     %}
 
     %{

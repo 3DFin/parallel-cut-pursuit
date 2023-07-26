@@ -323,7 +323,7 @@ static struct PyModuleDef cp_d0_dist_module = {
 };
 
 PyMODINIT_FUNC
-PyInit_cp_d0_dist_cpy_(void)
+PyInit_cp_d0_dist_cpy(void)
 {
     import_array() /* IMPORTANT: this must be called to use numpy array */
     return PyModule_Create(&cp_d0_dist_module);
