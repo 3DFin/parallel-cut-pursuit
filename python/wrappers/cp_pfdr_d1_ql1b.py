@@ -1,11 +1,7 @@
 import numpy as np
-import os 
-import sys
 
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "../bin"))
+from pycut_pursuit.cp_pfdr_d1_ql1b_cpy import cp_pfdr_d1_ql1b_cpy
 
-from cp_pfdr_d1_ql1b_cpy import cp_pfdr_d1_ql1b_cpy
 
 def cp_pfdr_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None, 
                     Yl1=None, l1_weights=None, low_bnd=None, upp_bnd=None, 

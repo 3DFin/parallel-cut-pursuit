@@ -46,18 +46,12 @@ and edge_weights[l+1] are in `Graph`, and comp_weights[l+1] must be recomputed
 from comp_weights[l] and coarse_to_fine.
 """
 
-import os
-import sys
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
 from matplotlib.colors import hsv_to_rgb
 
-os.chdir(os.path.realpath(os.path.dirname(__file__)))
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "wrappers"))
-
-from cp_kmpp_d0_dist import cp_kmpp_d0_dist
+from pycut_pursuit.cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 ##  problem parameters
 Df = 1 # dimension of points features; unity eases graphical representation

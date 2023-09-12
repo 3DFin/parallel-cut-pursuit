@@ -11,17 +11,11 @@
 # Photogrammetry and Remote Sensing, 132:102-118, 2017
 #
 # Camille Baudoin 2019
-import sys
-import os 
 import numpy as np
 import scipy.io
 import time
 
-os.chdir(os.path.realpath(os.path.dirname(__file__)))
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "wrappers"))
-
-from cp_kmpp_d0_dist import cp_kmpp_d0_dist 
+from pycut_pursuit.cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 ###  classes involved in the task  ###
 classNames = ["road", "vegetation", "facade", "hardscape",
