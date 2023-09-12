@@ -28,7 +28,7 @@
             num_threads = omp_get_num_procs();
         }
         if (num_threads > max_threads){ num_threads = max_threads; }
-        return num_threads > 1 ? num_threads : 1;
+        return num_threads > 1 ? (int)num_threads : 1;
     }
 
     /* overload for max_threads defaulting to num_ops */

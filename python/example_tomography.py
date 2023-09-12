@@ -6,18 +6,12 @@
 # Machine Learning, PMLR, 2018, 80, 4244-4253
 #
 # Camille Baudoin 2019  
-import sys
-import os 
 import numpy as np
 import scipy.io
 import time
 import matplotlib.pyplot as plt
 
-os.chdir(os.path.realpath(os.path.dirname(__file__)))
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "wrappers"))
-
-from cp_pfdr_d1_ql1b import cp_pfdr_d1_ql1b 
+from pycut_pursuit.cp_d1_ql1b import cp_d1_ql1b 
 
 ###  general parameters  ###
 plot_results = True
@@ -53,7 +47,7 @@ upp_bnd = 1.0
 
 ###  solve the optimization problem  ###
 it1 = time.time()
-Comp, rX = cp_pfdr_d1_ql1b(y, A, first_edge, adj_vertices,
+Comp, rX = cp_d1_ql1b(y, A, first_edge, adj_vertices,
                            edge_weights=d1_weights, low_bnd=low_bnd,
                            upp_bnd=upp_bnd, pfdr_rho=pfdr_rho,
                            pfdr_dif_tol=pfdr_dif_tol)

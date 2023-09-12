@@ -6,17 +6,12 @@
 # Machine Learning, PMLR, 2018, 80, 4244-4253
 #
 # Camille Baudoin 2019
-import sys
-import os 
 import numpy as np
 import scipy.io
 import time
 
-os.chdir(os.path.realpath(os.path.dirname(__file__)))
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "wrappers"))
 
-from cp_d1_lsx import cp_d1_lsx 
+from pycut_pursuit.cp_d1_lsx import cp_d1_lsx 
 
 ###  classes involved in the task  ###
 classNames = ["road", "vegetation", "facade", "hardscape",

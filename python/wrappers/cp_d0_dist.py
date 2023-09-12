@@ -1,11 +1,6 @@
 import numpy as np
-import os 
-import sys
 
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "../bin"))
-
-from cp_d0_dist_cpy import cp_d0_dist_cpy
+from pycut_pursuit.cp_d0_dist_cpy import cp_d0_dist_cpy
 
 def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None, 
                vert_weights=None, coor_weights=None, cp_dif_tol=1e-3,
