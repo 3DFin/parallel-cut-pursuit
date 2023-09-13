@@ -222,8 +222,8 @@ The scripts `example_labeling_3D.m` and `example_labeling_3D_d0.m` exemplify the
 
 ### Python
 Requires `numpy` package.  
-See the script `setup.py` for compiling modules with `distutils`; on UNIX systems, it can be directly interpreted as `python setup.py build_ext`.  
-Compatible with Python 2 and Python 3.  
+See the script `setup.py` for compiling modules with `setuptools`; it can be run simply by using `pip`
+e.g. `python -m pip install .`. pre compiled binaries for Windows and Linux will soon be available on `PyPI`  
 
 Extensive documentation of the Python wrappers can be found in the corresponding `.py` files.  
 The scripts are mostly written for Python 3, and should work with Python 2 with minor tweaking.
