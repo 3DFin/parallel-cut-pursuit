@@ -13,7 +13,7 @@ authors = [
   {name = "Loic Landrieu", email = "loic.landrieu@enpc.fr"},
   {name = "Hugo Raget", email = "hugo.raguet@insa-cvl.fr"}
 ]
-keywords = ["point clouds", "features", "3D", "LiDAR"]
+keywords = ["cut pursuit", "graph signal processing", "graphs", "optimization"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python",
