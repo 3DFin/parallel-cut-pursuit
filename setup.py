@@ -9,11 +9,12 @@ Camille Baudoin 2019
 
 from setuptools import setup, Extension
 import numpy
-import os 
+import os
 
 # Include directories
 include_dirs = [numpy.get_include(), # find the Numpy headers
                 "include"]
+
 # Compilation and linkage options
 # _GLIBCXX_PARALLEL is only useful for libstdc++ users
 # MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
@@ -27,6 +28,11 @@ elif os.name == 'posix': # linux
     extra_link_args = ["-lgomp"]
 else:
     raise NotImplementedError('OS not yet supported.')
+
+CP_NPY_COMP_32 = os.environ.get("CP_NPY_COMP_32", None)
+
+if CP_NPY_COMP_32 is not None and CP_NPY_COMP_32 == "1":
+    extra_compile_args.append("-DCP_NPY_COMP_32")
 
 # Compilation
 mod_cp_d1_ql1b = Extension(

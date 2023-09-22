@@ -26,21 +26,29 @@ using namespace std;
  * although published in 2008, MSVC still does not support it as of 2020 */
     typedef int32_t index_t;
     #define NPY_IND NPY_INT32
-    /* comment the following if more than 32767 components are expected */
-    typedef int16_t comp_t;
-    #define NPY_COMP NPY_INT16
-    /* uncomment the following if more than 32767 components are expected */
-    // typedef int32_t comp_t;
-    // #define NPY_COMP NPY_INT32
+    /* use 32 bit int if more than 65535 components are expected */
+    #ifdef CP_NPY_COMP_32
+        #pragma message("compile python extension CP_NPY_COMP_32")
+        typedef int32_t comp_t;
+        #define NPY_COMP NPY_INT32
+    #else
+        #pragma message("compile python extension without CP_NPY_COMP_32")
+        typedef int16_t comp_t;
+        #define NPY_COMP NPY_INT16
+    #endif
 #else
     typedef uint32_t index_t;
     #define NPY_IND NPY_UINT32
-    /* comment the following if more than 65535 components are expected */
-    typedef uint16_t comp_t;
-    #define NPY_COMP NPY_UINT16
-    /* uncomment the following if more than 65535 components are expected */
-    // typedef uint32_t comp_t;
-    // #define NPY_COMP NPY_UINT32
+    /* use 32 bit unsigned int if more than 65535 components are expected */
+    #ifdef CP_NPY_COMP_32
+        #pragma message("compile python extension CP_NPY_COMP_32")
+        typedef uint32_t comp_t;
+        #define NPY_COMP NPY_UINT32
+    #else
+        #pragma message("compile python extension without CP_NPY_COMP_32")
+        typedef uint16_t comp_t;
+        #define NPY_COMP NPY_UINT16
+    #endif
 #endif
 
 /* template for handling both single and double precisions */
