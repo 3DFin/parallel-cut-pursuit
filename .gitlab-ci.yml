@@ -1,3 +1,7 @@
+#set global variables  
+variables:
+  CIBW_ENVIRONMENT: CP_NPY_COMP_32=1 
+
 linux:
   image: python:3.8
   # make a docker daemon available for cibuildwheel to use
@@ -31,3 +35,4 @@ windows:
       - wheelhouse/
   tags:
     - windows
+
