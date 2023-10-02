@@ -309,7 +309,7 @@ TPL void CP_D0_DIST::update_merge_info(Merge_info& merge_info)
     }
 }
 
-TPL size_t CP_D0_DIST::update_merge_complexity()
+TPL uintmax_t CP_D0_DIST::update_merge_complexity()
 { return rE*2*D; /* each update is only linear in D */ }
 
 TPL comp_t CP_D0_DIST::accept_merge(const Merge_info& candidate)

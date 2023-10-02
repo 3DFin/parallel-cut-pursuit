@@ -151,7 +151,7 @@ private:
     /* rough estimate of the number of operations for updating all candidates;
      * useful for estimating the number of parallel threads
      TODO: change name */
-    size_t update_merge_complexity() override;
+    uintmax_t update_merge_complexity() override;
 
     /* accept the merge candidate and return the component root of the
      * resulting merge chain
