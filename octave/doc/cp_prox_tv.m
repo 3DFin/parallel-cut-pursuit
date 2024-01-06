@@ -1,17 +1,20 @@
-function [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv_mex(Y, ...
-    first_edge, adj_vertices, options)
+function [Comp, rX, List, Obj, Time, Dif] = cp_prox_tv_mex(Y, first_edge, ...
+    adj_vertices, options)
 %
-%       [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv_mex(Y, first_edge,
-%   adj_vertices, options)
+%       [Comp, rX, List, Obj, Time, Dif] = cp_prox_tv_mex(Y, first_edge,
+%   adj_vertices, [options])
 %
 % Compute the proximity operator of the d1 (total variation) penalization:
 %
-% minimize functional over a graph G = (V, E)
+% Minimize functional over a graph G = (V, E)
 %
-%        F(x) = 1/2 ||y - x||^2 + ||x||_d1
+%        F(x) = 1/2 ||y - x||_M^2 + ||x||_d1p
 %
-% where y in R^V is given, and for x in R^V,
-%      ||x||_d1 = sum_{uv in E} w_d1_uv |x_u - x_v|,
+% where y,x in R^{D-by-V}, M in R^{V-by-V}, and 
+%      ||x||_M^2 = sum_{v in V} ||y_v - x_v||_{m_v}^2.
+%  (the norm is a diagonaly weighted squared l2-norm),
+% and  ||x||_d1p = sum_{uv in E} w_uv ||x_u - x_v||_p.
+%  (the norm can be a l1 or a l2-norm)
 %
 % using cut-pursuit approach with preconditioned forward-Douglas-Rachford 
 % splitting algorithm.
@@ -23,9 +26,7 @@ function [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv_mex(Y, ...
 % INPUTS: real numeric type is either single or double, not both;
 %         indices start at 0, type uint32
 %
-% Y - observations, (real) array of length N (direct matricial case), or
-%                          array of length V (left-premult. by A^t), or
-%                          empty matrix (for all zeros)
+% Y - observations, (real) D-by-V array
 % first_edge, adj_vertices - forward-star graph representation:
 %     vertices are numeroted (start at 0) in the order they are given in Y or A
 %         (careful to the internal memory representation of multidimensional
@@ -39,11 +40,19 @@ function [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv_mex(Y, ...
 %     for each edge, adj_vertices indicates its ending vertex, (uint32) array
 %         of length E
 % options - structure with any of the following fields [with default values]:
-%     edge_weights [1.0], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
-%     pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-2*cp_dif_tol],
-%     pfdr_it_max [1e4], verbose [1e3], max_num_threads [none],
-%     balance_parallel_split [true]
+%     l2_metric [none], edge_weights [1.0], d1p [2], d1p_coor_weights [none],
+%     cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0], pfdr_cond_min [1e-2],
+%     pfdr_dif_rcd [0.0], pfdr_dif_tol [1e-2*cp_dif_tol], pfdr_it_max [1e4],
+%     verbose [1e3], max_num_threads [none], balance_parallel_split [true]
+% l2_metric - diagonal metric (positive weights) on squared l2-norm;
+%     array or length V for weights depending only on vertices
+%     D-by-V array otherwise
 % edge_weights - (real) array of length E, or scalar for homogeneous weights
+% d1p - define the total variation as the l11- (d1p = 1) or l12- (d1p = 2) norm
+%     of the finite differences
+% d1p_coor_weights - for multidimensional data, weights the coordinates in the
+%     lp norms; all weights must be strictly positive, and it is advised to
+%     normalize the weights so that the first value is unity
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (in Euclidean norm) is less than dif_tol;
 %     1e-4 is a typical value; a lower one can give better precision but with
@@ -78,15 +87,17 @@ function [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv_mex(Y, ...
 %     the actual minimizer can be reconstructed with X = rX(Comp + 1);
 % List - if requested, list of vertices constituting each component; cell array
 %     of length rV, containing (uint32) arrays of indices
-% Gtv - subgradients of the total variation penalization at solution; (real)
-%     array of length E; if e is the edge (u, v), the subgradient of the
-%     total variation penalization at vertices (u, v) is (-Gd1(e), Gd1(e))
-% Obj - the values of the objective functional along iterations, up to the
-%     constant 1/2||Y||^2; array of length number of iterations performed + 1;
+% Obj - the values of the objective functional along iterations; array of
+%     length number of iterations performed + 1;
 % Time - if requested, the elapsed time along iterations;
 %     array of length number of iterations performed + 1
 % Dif  - if requested, the iterate evolution along iterations;
 %     array of length number of iterations performed
+%
+% TODO: implement subgradients retrieval
+% Gtv - subgradients of the total variation penalization at solution; (real)
+%     array of length E; if e is the edge (u, v), the subgradient of the
+%     total variation penalization at vertices (u, v) is (-Gd1(e), Gd1(e))
 % 
 % Parallel implementation with OpenMP API.
 %
@@ -94,4 +105,4 @@ function [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv_mex(Y, ...
 % Piecewise Constant Functions on General Weighted Graphs, SIIMS, 10, 4,
 % 1724–1766, 2017.
 %
-% Hugo Raguet 2022
+% Hugo Raguet 2023

@@ -8,7 +8,6 @@
 
 #define ZERO ((real_t) 0.0) // avoid conversions
 #define HALF ((real_t) 0.5) // avoid conversions
-#define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 #define L1_WEIGHTS_(v) (l1_weights ? l1_weights[(v)] : homo_l1_weight)
 #define Y_(n) (Y ? Y[(n)] : (real_t) 0.0)
 #define Yl1_(v) (Yl1 ? Yl1[(v)] : (real_t) 0.0)
@@ -98,11 +97,12 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
     real_t *rY, *rA, *rAA; // reduced observations, matrix, etc.
     rY = rA = rAA = nullptr;
     /* rN conveys information on the matricial shape; even if the main problem
-     * uses a direct matricial form (indicated by positive N), one might still
-     * uses premultiplication for the reduced problem; rule of thumb to decide:
-     * without premultiplication: 2 N rV i operations
+     * uses a direct matricial form (N is actually the number of observations),
+     * one might still use premultiplication for the reduced problem;
+     * rule of thumb to decide:
+     * without premultiplication: 2 N rV i operations, decomposed as
      *     + two matrix-vector mult. per PFDR iter. : 2 N rV i
-     * with premultiplication: N rV^2 + rV^2 i operations
+     * with premultiplication: N rV^2 + rV^2 i operations, decomposed as
      *     + compute Gram reduced matrix: N rV^2
      *     + one matrix-vector mult. per pfdr iter. : rV^2 i
      * conclusion: premultiplication if rV < (2 N i)/(N + i) */
@@ -119,7 +119,8 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 rAA = (real_t*) malloc_check(sizeof(real_t)*rV*rV);
             }
         }
-    }
+    } /* else reduced problem is direct matricial case, observation Y */
+
     if (!is_Gram(N)){ /* main problem is direct matricial case */
         rA = (real_t*) malloc_check(sizeof(real_t)*N*rV);
         for (matrix_index_t i = 0; i < N*rV; i++){ rA[i] = ZERO; }
@@ -158,7 +159,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 }
             }
             /* keep also rA for later update of the residual */
-        }
+        } /* else no reason to get a diagonal reduced problem */
     }else{ /* main problem is already premultiplied by A^t */
         if (Y){ /* recall that observation Y is actually A^t Y */
             #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV)
@@ -344,8 +345,10 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
 
 TPL void CP_D1_QL1B::compute_grad()
 {
-    for (index_t v = 0; v < V; v++){ G[v] = ZERO; }
+    /**  gradient of smooth part of d1 penalization  **/
+    Cp_d1<real_t, index_t, comp_t>::compute_grad();
 
+    /**  add remaining smooth terms  **/
     uintmax_t Vns = V - saturated_vert;
     uintmax_t num_ops = Vns*(N == Gram_full() ? V : N == Gram_diag() ? 1 : N);
     if (l1_weights || homo_l1_weight){ num_ops += Vns; }
@@ -355,7 +358,7 @@ TPL void CP_D1_QL1B::compute_grad()
         comp_t rv = comp_assign[v];
         if (is_saturated[rv]){ continue; }
 
-        /**  gradient of quadratic term  **/ 
+        /**  quadratic term  **/ 
         if (!is_Gram(N)){ /* direct matricial case, grad = -(A^t) R */
             const real_t* Av = A + N*v;
             for (matrix_index_t n = 0; n < N; n++){ G[v] -= Av[n]*R[n]; }
@@ -381,21 +384,6 @@ TPL void CP_D1_QL1B::compute_grad()
         if (l1_weights || homo_l1_weight){
             if (rX[rv] >= Yl1_(v) + eps){ G[v] += L1_WEIGHTS_(v); }
             else if (rX[rv] <= Yl1_(v) - eps){ G[v] -= L1_WEIGHTS_(v); }
-        }
-    }
-
-    /**  differentiable d1 contribution  **/ 
-    /* cannot parallelize with graph structure available here */
-    for (index_t v = 0; v < V; v++){
-        real_t rXv = rX[comp_assign[v]];
-        for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_cut(e)){
-                index_t u = adj_vertices[e];
-                real_t grad_d1 = rXv > rX[comp_assign[u]] ?
-                    EDGE_WEIGHTS_(e) : -EDGE_WEIGHTS_(e);
-                G[v] += grad_d1;
-                G[u] -= grad_d1;
-            }
         }
     }
 }

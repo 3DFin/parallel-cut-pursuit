@@ -57,7 +57,7 @@ private:
 public:
     /**  constructor, destructor  **/
 
-    /* only creates BK graph structure and assign Y */
+    /* only store graph structure */
     Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
         const index_t* adj_vertices);
 
@@ -123,24 +123,27 @@ private:
     /* quadratic problem */
 
     matrix_index_t N; /* number of observations;
-     * if zero (function Gram_full()), matricial information is precomputed, 
-     * that is, argument A is actually (A^t A), and argument Y is (A^t Y);
-     * if negative one (or maximum value representable by matrix_index_t if
-     * unsigned type, macro Gram_diag()), A is a diagonal matrix and only the
-     * diagonal of (A^t A) = A^2 is given */
+     * set N to Gram_full() (static member function), enables precomputation of
+     * matricial information: argument Y is actually(A^t Y) and argument A
+     * actually (A^t A);
+     * if in addition A is a diagonal matrix, set N to Gram_diag(), so that
+     * only the diagonal of (A^t A) = A^2 must be given */
     
     const real_t* A; /* linear operator;
-     * if N is positive, N-by-V array, column major format;
-     * if N is zero (function Gram_full()), matrix (A^t A), V-by-V array,
-     * column major format;
-     * if N is negative one (function Gram_diag()), diagonal of (A^t A) = A^2,
+     * if N is the number of observations, N-by-V array, column major format;
+     * if N equal to Gram_full() (static member function), matrix (A^t A),
+     * V-by-V array, column major format;
+     * if N is negative one (static member function Gram_diag()), diagonal of
+     * (A^t A) = A^2,
      * array of length V, or null pointer for identity matrix (a = 1) or no
      * quadratic part (a = 0) */
     real_t a; 
 
-    const real_t* Y; /* if N is positive, observations, array of length N;
-     * otherwise, correlation of A with the observations (A^t Y), array of
-     * length V; set to null for all zero */
+    const real_t* Y; /* observations, array of length N if the latter is the
+     * number of observations; otherwise, if N is either Gram_full() or
+     * Gram_diag(), correlation of A with the observations (A^t Y), array of
+     * length V;
+     * set to null for all zero */
 
     real_t* R; // residual, array of length N, used only if N is positive
 
@@ -208,16 +211,12 @@ private:
     using Cp<real_t, index_t, comp_t>::split_values_iter_num;
     using Cp<real_t, index_t, comp_t>::K;
     using Cp<real_t, index_t, comp_t>::rX;
-    using Cp<real_t, index_t, comp_t>::is_cut;
-    using Cp<real_t, index_t, comp_t>::is_bind;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
     using Cp<real_t, index_t, comp_t>::V;
     using Cp<real_t, index_t, comp_t>::E;
     using Cp<real_t, index_t, comp_t>::first_edge;
     using Cp<real_t, index_t, comp_t>::adj_vertices; 
-    using Cp<real_t, index_t, comp_t>::edge_weights;
-    using Cp<real_t, index_t, comp_t>::homo_edge_weight;
     using Cp<real_t, index_t, comp_t>::rV;
     using Cp<real_t, index_t, comp_t>::rE;
     using Cp<real_t, index_t, comp_t>::comp_assign;

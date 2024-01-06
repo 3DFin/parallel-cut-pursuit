@@ -1,15 +1,17 @@
 /*=============================================================================
- * [Comp, rX, List, Gtv, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
- *      adj_vertices, [options])
+ * [Comp, rX, List, Gtv, ...] TODO: implement subgradient retrieval
+ * [Comp, rX, List, Obj, Time, Dif] = cp_prox_tv(Y, first_edge, adj_vertices,
+ *      [options])
  *
  * options is a struct with any of the following fields [with default values]:
  *
- *      edge_weights [1.0], cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
+ *      l2_metric [none], edge_weights [1.0], d1p [2], d1p_coor_weights [none],
+ *      cp_dif_tol [1e-4], cp_it_max [10], pfdr_rho [1.0],
  *      pfdr_cond_min [1e-2], pfdr_dif_rcd [0.0],
  *      pfdr_dif_tol [1e-2*cp_dif_tol], pfdr_it_max [1e4], verbose [1e3],
  *      max_num_threads [none], balance_parallel_split [true]
  * 
- *  Hugo Raguet 2022
+ *  Hugo Raguet 2023
  *===========================================================================*/
 #include <cstdint>
 #include <cstring>
@@ -57,10 +59,11 @@ static void check_opts(const mxArray* options)
             mxGetClassName(options));
     }
 
-    const int num_allow_opts = 11;
-    const char* opts_names[] = {"edge_weights", "cp_dif_tol", "cp_it_max",
-        "pfdr_rho", "pfdr_cond_min", "pfdr_dif_rcd", "pfdr_dif_tol",
-        "pfdr_it_max", "verbose", "max_num_threads", "balance_parallel_split"};
+    const int num_allow_opts = 14;
+    const char* opts_names[] = {"l2_metric", "edge_weights", "d1p", 
+        "d1p_coor_weights", "cp_dif_tol", "cp_it_max", "pfdr_rho",
+        "pfdr_cond_min", "pfdr_dif_rcd", "pfdr_dif_tol", "pfdr_it_max",
+        "verbose", "max_num_threads", "balance_parallel_split"};
 
     const int num_given_opts = mxGetNumberOfFields(options);
 
@@ -71,7 +74,7 @@ static void check_opts(const mxArray* options)
             if (strcmp(opt_name, opts_names[allow_opt]) == 0){ break; }
         }
         if (allow_opt == num_allow_opts){
-            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 quadratic l1 bounds: "
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit prox TV: "
                 "option '%s' unknown.", opt_name);
         }
     }
@@ -82,7 +85,7 @@ static void check_arg_class(const mxArray* arg, const char* arg_name,
     mxClassID class_id, const char* class_name)
 {
     if (mxGetNumberOfElements(arg) > 1 && mxGetClassID(arg) != class_id){
-        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 quadratic l1 bounds: "
+        mexErrMsgIdAndTxt("MEX", "Cut-pursuit prox TV: "
             "parameter '%s' should be of class %s (%s given).",
             arg_name, class_name, mxGetClassName(arg), class_name);
     }
@@ -117,7 +120,9 @@ static void cp_prox_tv_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     /** quadratic functional **/
 
-    index_t V = mxGetNumberOfElements(prhs[0]);
+    size_t D = mxGetM(prhs[0]);
+    vertex_t V = mxGetN(prhs[0]);
+    if (V == 1){ /* accept a column vector */ V = D; D = 1; }
     const real_t* Y = (real_t*) mxGetData(prhs[0]);
 
     /**  graph structure  **/
@@ -143,22 +148,33 @@ static void cp_prox_tv_mex(int nlhs, mxArray *plhs[], int nrhs,
     check_opts(options);
     const mxArray* opt;
 
-    /* penalizations */
-    const real_t* edge_weights = nullptr;
-    real_t homo_edge_weights = 1.0;
-    if (options && (opt = mxGetField(options, 0, "edge_weights"))){
-        check_arg_class(opt, "edge_weights", mxREAL_CLASS, real_class_name);
-        if (mxGetNumberOfElements(opt) > 1){
-            edge_weights = (real_t*) mxGetData(opt);
-        }else{
-            homo_edge_weights = mxGetScalar(opt);
+    #define GET_REAL_OPT(NAME) \
+        const real_t* NAME = nullptr; \
+        if (opt = mxGetField(options, 0, #NAME)){ \
+            check_arg_class(opt, #NAME, mxREAL_CLASS, real_class_name); \
+            NAME = (real_t*) mxGetData(opt); \
         }
+
+    GET_REAL_OPT(l2_metric)
+    typename Cp_prox_tv<real_t, index_t, comp_t>::Condshape metric_shape =
+        Cp_prox_tv<real_t, index_t, comp_t>::SCALAR;
+    if (opt){
+        metric_shape = mxGetNumberOfElements(opt) == V ?
+            Cp_prox_tv<real_t, index_t, comp_t>::MONODIM :
+            Cp_prox_tv<real_t, index_t, comp_t>::MULTIDIM;
+    }
+    GET_REAL_OPT(d1p_coor_weights);
+    GET_REAL_OPT(edge_weights);
+    real_t homo_edge_weight = 1.0;
+    if (opt && mxGetNumberOfElements(opt) == 1){
+        edge_weights = nullptr;
+        homo_edge_weight = mxGetScalar(opt);
     }
 
-    /* algorithmic parameters */
     #define GET_SCAL_OPT(NAME, DFLT) \
         NAME = (opt = mxGetField(options, 0, #NAME)) ? mxGetScalar(opt) : DFLT;
 
+    real_t GET_SCAL_OPT(d1p, (D == 1 ? 1 : 2));
     real_t GET_SCAL_OPT(cp_dif_tol, 1e-4);
     int GET_SCAL_OPT(cp_it_max, 10);
     real_t GET_SCAL_OPT(pfdr_rho, 1.0);
@@ -175,24 +191,27 @@ static void cp_prox_tv_mex(int nlhs, mxArray *plhs[], int nrhs,
     plhs[0] = mxCreateNumericMatrix(1, V, mxCOMP_CLASS, mxREAL);
     comp_t *Comp = (comp_t*) mxGetData(plhs[0]);
 
-    real_t* Gtv = nlhs > 3 ?
-        (real_t*) mxMalloc(sizeof(real_t)*E) : nullptr;
-    real_t* Obj = nlhs > 4 ?
+    /* TODO: implement subgradiant retrieval */
+    // real_t* Gtv = nlhs > 3 ?
+        // (real_t*) mxMalloc(sizeof(real_t)*E) : nullptr;
+    real_t* Obj = nlhs > 3 ?
         (real_t*) mxMalloc(sizeof(real_t)*(cp_it_max + 1)) : nullptr;
-    double* Time = nlhs > 5 ?
+    double* Time = nlhs > 4 ?
         (double*) mxMalloc(sizeof(double)*(cp_it_max + 1)) : nullptr;
-    real_t *Dif = nlhs > 6 ?
+    real_t *Dif = nlhs > 5 ?
         (real_t*) mxMalloc(sizeof(real_t)*cp_it_max) : nullptr;
 
     /***  cut-pursuit with preconditioned forward-Douglas-Rachford  ***/
 
     Cp_prox_tv<real_t, index_t, comp_t> *cp =
         new Cp_prox_tv<real_t, index_t, comp_t>
-            (V, E, first_edge, adj_vertices);
+            (V, E, first_edge, adj_vertices, Y, D, d1p == 1 ?
+            Cp_d1<real_t, vertex_t>::D11 : Cp_d1<real_t, vertex_t>::D12,
+            d1p_coor_weights, metric_shape, l2_metric);
 
     cp->set_edge_weights(edge_weights, homo_edge_weights);
-    cp->set_observation(Y);
-    cp->set_d1_subgradients(Gtv);
+    /* TODO: implement subgradient retrieval */
+    // cp->set_d1_subgradients(Gtv);
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
     cp->set_pfdr_param(pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_it_max,
         pfdr_dif_tol);
@@ -213,7 +232,7 @@ static void cp_prox_tv_mex(int nlhs, mxArray *plhs[], int nrhs,
     real_t* rX = (real_t*) mxGetData(plhs[1]);
     for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
 
-    /* get number of components and list of indices */
+    /* get lists of indices if requested */
     if (nlhs > 2){
         plhs[2] = mxCreateCellMatrix(1, rV); // list of arrays
         for (comp_t rv = 0; rv < rV; rv++){

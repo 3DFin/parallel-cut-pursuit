@@ -166,6 +166,7 @@ protected:
     bool* is_saturated;
     comp_t saturated_comp; // number of saturated components
     index_t saturated_vert; // number of vertices within saturated components
+
 private:
     /* reduced connectivity
      * reduced edges represented with edges list (array of size twice the 
@@ -178,6 +179,7 @@ private:
      * 4) isolated components (not linked to any other component) are linked
      *  to themselves with epsilon reduced weight */
     comp_t* reduced_edges;
+
 protected:
     /* accessors for reduced_edges */
     const comp_t& reduced_edges_u(index_t re) const
@@ -333,7 +335,7 @@ protected:
     /**  monitoring evolution  **/
 
     /* test if computation of evolution is required */
-    bool monitor_evolution() const
+    virtual bool monitor_evolution() const
         { return dif_tol > (real_t) 0.0 || iterate_evolution; }
 
     /* compute relative iterate evolution */

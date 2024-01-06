@@ -149,8 +149,8 @@ def cp_d1_ql1b(Y, A, first_edge, adj_vertices, edge_weights=None,
         quadratic part is omited
     Time - if requested, the elapsed time along iterations; array of length
         actual number of cut-pursuit iterations performed + 1
-    Dif - if requested, if requested, the iterate evolution along iterations;
-        array of length actual number of cut-pursuit iterations performed
+    Dif - if requested, the iterate evolution along iterations; array of length
+        actual number of cut-pursuit iterations performed
 
     Parallel implementation with OpenMP API.
 

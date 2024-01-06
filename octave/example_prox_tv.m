@@ -6,7 +6,7 @@
 % Machine Learning, PMLR, 2018, 80, 4244-4253
 %
 % Hugo Raguet 2022
-%% needs grid_to_graph and cp_d1_ql1b
+%% requires grid_to_graph and cp_d1_ql1b
 cd(fileparts(which('example_prox_tv.m')));
 addpath('bin/');
 

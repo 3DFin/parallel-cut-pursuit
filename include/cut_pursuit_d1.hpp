@@ -2,11 +2,12 @@
  * Derived class for cut-pursuit algorithm with d1 (total variation) 
  * penalization on directionnaly differentiable problems
  *
- * Reference: H. Raguet and L. Landrieu, Cut-Pursuit Algorithm for Regularizing
- * Nonsmooth Functionals with Graph Total Variation.
+ * H. Raguet and L. Landrieu, Cut-Pursuit Algorithm for Regularizing Nonsmooth
+ * Functionals with Graph Total Variation, International Conference on Machine
+ * Learning, PMLR, 2018, 80, 4244-4253
  *
  * Hugo Raguet 2018
- *============================================================================*/
+ *===========================================================================*/
 #pragma once
 #include "cut_pursuit.hpp"
 
@@ -114,8 +115,12 @@ private:
     /* override for computing the gradient */
     index_t split() override;
 
-    virtual void compute_grad() = 0; // compute gradient of smooth part
+protected:
+    /* compute gradient of smooth part;
+     * base version compute gradient of smooth part of the d1 term */
+    virtual void compute_grad();
 
+private:
     /* override for D = 1 : set {-1, +1} and omit competing value k = 0 for
      * binary cut; assumes differentiability */
     Split_info initialize_split_info(comp_t rv) override;
@@ -165,6 +170,7 @@ private:
 
     /* override for checking value evolution of saturated components;
      * precision can be increased by decreasing dif_tol if necessary */
+    bool monitor_evolution() const override { return true; }
     index_t merge() override;
 
     /**  type resolution for base template class members  **/

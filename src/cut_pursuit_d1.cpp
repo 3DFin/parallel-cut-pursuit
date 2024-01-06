@@ -5,6 +5,7 @@
 #include "cut_pursuit_d1.hpp"
 
 #define ZERO ((real_t) 0.0) // avoid conversions
+#define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 #define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : (real_t) 1.0)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
@@ -44,6 +45,53 @@ TPL void CP_D1::set_split_param(index_t max_split_size, comp_t K,
     Cp<real_t, index_t, comp_t>::set_split_param(max_split_size, K,
         split_iter_num, split_damp_ratio, split_values_init_num,
         split_values_iter_num);
+}
+
+TPL void CP_D1::compute_grad()
+{
+    for (size_t vd = 0; vd < D*V; vd++){ G[vd] = ZERO; }
+
+    /**  differentiable d1p contribution  **/ 
+    /* cannot parallelize with graph structure available here */
+    for (index_t v = 0; v < V; v++){
+        const real_t* rXv = rX + D*comp_assign[v];
+        real_t* Gv = G + D*v;
+        for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
+            if (is_cut(e)){
+                index_t u = adj_vertices[e];
+                const real_t* rXu = rX + D*comp_assign[u];
+                real_t* Gu = G + D*u; 
+                if (d1p == D11){
+                /* strictly speaking, in the d11 case, equality of some
+                 * coordinates constitutes a source of nondifferentiability;
+                 * this is actually not taken into account, favoring split */
+                    for (size_t d = 0; d < D; d++){
+                        real_t grad_d11 = EDGE_WEIGHTS_(e)*COOR_WEIGHTS_(d);
+                        if (rXv[d] - rXu[d] > eps){
+                            Gv[d] += grad_d11;
+                            Gu[d] -= grad_d11;
+                        }else if (rXu[d] - rXv[d] > eps){
+                            Gu[d] += grad_d11;
+                            Gv[d] -= grad_d11;
+                        }
+                    }
+                }else{
+                    real_t norm_weight = ZERO;
+                    for (size_t d = 0; d < D; d++){
+                        norm_weight += (rXu[d] - rXv[d])*(rXu[d] - rXv[d])
+                            *COOR_WEIGHTS_(d);
+                    }
+                    norm_weight = EDGE_WEIGHTS_(e)/sqrt(norm_weight);
+                    for (size_t d = 0; d < D; d++){
+                        real_t grad_d12 = norm_weight*(rXv[d] - rXu[d])
+                            *COOR_WEIGHTS_(d);
+                        Gv[d] += grad_d12;
+                        Gu[d] -= grad_d12;
+                    }
+                }
+            }
+        }
+    }
 }
 
 TPL index_t CP_D1::split()
@@ -120,7 +168,7 @@ TPL real_t CP_D1::edge_split_cost(const Split_info& split_info, index_t e,
         }
         c = sqrt(c);
     }
-    return (edge_weights ? edge_weights[(e)] : homo_edge_weight)*c;
+    return EDGE_WEIGHTS_(e)*c;
 }
 
 TPL void CP_D1::project_descent_direction(Split_info& split_info, comp_t k)
@@ -244,7 +292,7 @@ TPL index_t CP_D1::remove_balance_separations(comp_t rV_new)
 
 TPL bool CP_D1::is_almost_equal(comp_t ru, comp_t rv)
 {
-    real_t dif = 0.0, ampu = 0.0, ampv = 0.0;
+    real_t dif = ZERO, ampu = ZERO, ampv = ZERO;
     real_t *rXu = rX + ru*D;
     real_t *rXv = rX + rv*D;
     for (size_t d = 0; d < D; d++){
@@ -348,13 +396,13 @@ TPL real_t CP_D1::compute_evolution() const
 
 TPL real_t CP_D1::compute_graph_d1() const
 {
-    real_t tv = 0.0;
+    real_t tv = ZERO;
     #pragma omp parallel for schedule(static) NUM_THREADS(2*rE*D, rE) \
         reduction(+:tv)
     for (index_t re = 0; re < rE; re++){
         real_t *rXu = rX + reduced_edges_u(re)*D;
         real_t *rXv = rX + reduced_edges_v(re)*D;
-        real_t dif = 0.0;
+        real_t dif = ZERO;
         for (size_t d = 0; d < D; d++){
             if (d1p == D11){
                 dif += abs(rXu[d] - rXv[d])*COOR_WEIGHTS_(d);

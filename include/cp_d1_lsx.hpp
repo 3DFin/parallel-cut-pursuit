@@ -44,11 +44,12 @@ private:
      * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
      **/
     using Cp<real_t, index_t, comp_t>::dif_tol;
+    using Cp_d1<real_t, index_t, comp_t>::D11;
 
 public:
     /**  constructor, destructor  **/
 
-    /* only creates BK graph structure and assign Y, D */
+    /* only store graph structure and assign Y, D */
     Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
         const index_t* adj_vertices, size_t D, const real_t* Y);
 
@@ -155,8 +156,6 @@ private:
      * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
      **/
     using Cp_d1<real_t, index_t, comp_t>::G;
-    using Cp_d1<real_t, index_t, comp_t>::D11;
-    using Cp_d1<real_t, index_t, comp_t>::coor_weights;
     using Cp_d1<real_t, index_t, comp_t>::compute_graph_d1;
     using Cp<real_t, index_t, comp_t>::split_iter_num;
     using Cp<real_t, index_t, comp_t>::split_damp_ratio;
@@ -167,7 +166,6 @@ private:
     using Cp<real_t, index_t, comp_t>::last_rX;
     using Cp<real_t, index_t, comp_t>::saturated_comp;
     using Cp<real_t, index_t, comp_t>::saturated_vert;
-    using Cp<real_t, index_t, comp_t>::is_cut;
     using Cp<real_t, index_t, comp_t>::is_saturated;
     using Cp<real_t, index_t, comp_t>::last_comp_assign;
     using Cp<real_t, index_t, comp_t>::eps;
@@ -176,8 +174,6 @@ private:
     using Cp<real_t, index_t, comp_t>::D;
     using Cp<real_t, index_t, comp_t>::first_edge;
     using Cp<real_t, index_t, comp_t>::adj_vertices; 
-    using Cp<real_t, index_t, comp_t>::edge_weights;
-    using Cp<real_t, index_t, comp_t>::homo_edge_weight;
     using Cp<real_t, index_t, comp_t>::rV;
     using Cp<real_t, index_t, comp_t>::rE;
     using Cp<real_t, index_t, comp_t>::comp_assign;

@@ -11,9 +11,7 @@
 #define ZERO ((real_t) 0.0)
 #define ONE ((real_t) 1.0)
 #define HALF ((real_t) 0.5)
-#define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 #define LOSS_WEIGHTS_(v) (loss_weights ? loss_weights[(v)] : ONE)
-#define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : ONE)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
 #define CP_D1_LSX Cp_d1_lsx<real_t, index_t, comp_t>
@@ -148,11 +146,13 @@ TPL void CP_D1_LSX::solve_reduced_problem()
 
 TPL void CP_D1_LSX::compute_grad()
 {
-    const real_t c = (ONE - loss), q = loss/D, r = q/c; // useful for KLs
+    /* gradient of smooth part of d11 penalization */
+    Cp_d1<real_t, index_t, comp_t>::compute_grad();
 
+    /* add gradient of differentiable loss term */
+    const real_t c = (ONE - loss), q = loss/D, r = q/c; // useful for KLs
     uintmax_t num_ops = D*(V - saturated_vert)*
         (loss == linear_loss() || loss == quadratic_loss() ? 1 : 3);
-
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
     for (index_t v = 0; v < V; v++){
         comp_t rv = comp_assign[v];
@@ -160,45 +160,17 @@ TPL void CP_D1_LSX::compute_grad()
 
         real_t* Gv = G + D*v;
         const real_t* rXv = rX + D*rv;
-
-        /**  gradient of differentiable loss term  **/
         const real_t* Yv = Y + D*v;
+
         if (loss == linear_loss()){ /* grad = - w Y */
-            for (size_t d = 0; d < D; d++){ Gv[d] = -LOSS_WEIGHTS_(v)*Yv[d]; }
+            for (size_t d = 0; d < D; d++){ Gv[d] -= LOSS_WEIGHTS_(v)*Yv[d]; }
         }else if (loss == quadratic_loss()){ /* grad = w(X - Y) */
             for (size_t d = 0; d < D; d++){ 
-                Gv[d] = LOSS_WEIGHTS_(v)*(rXv[d] - Yv[d]);
+                Gv[d] += LOSS_WEIGHTS_(v)*(rXv[d] - Yv[d]);
             }
         }else{ /* dKLs/dx_k = -(1-s)(s/D + (1-s)y_k)/(s/D + (1-s)x_k) */
             for (size_t d = 0; d < D; d++){ 
-                Gv[d] = -LOSS_WEIGHTS_(v)*(q + c*Yv[d])/(r + rXv[d]);
-            }
-        }
-    }
-
-    /**  differentiable d1 contribution  **/ 
-    /* cannot parallelize with graph structure available here */
-    for (index_t v = 0; v < V; v++){
-        const real_t* rXv = rX + D*comp_assign[v];
-        real_t* Gv = G + D*v;
-        for (index_t e = first_edge[v]; e < first_edge[v + 1]; e++){
-            if (is_cut(e)){
-                index_t u = adj_vertices[e];
-                const real_t* rXu = rX + D*comp_assign[u];
-                real_t* Gu = G + D*u; 
-                for (size_t d = 0; d < D; d++){
-                    real_t grad_d1 = EDGE_WEIGHTS_(e)*COOR_WEIGHTS_(d);
-                    if (rXv[d] - rXu[d] > eps){
-                        Gv[d] += grad_d1;
-                        Gu[d] -= grad_d1;
-                    }else if (rXu[d] - rXv[d] > eps){
-                        Gu[d] += grad_d1;
-                        Gv[d] -= grad_d1;
-                    }
-            /* strictly speaking, in the d11 case, equality of some coordinates
-             * constitutes a source of nondifferentiability; this is actually
-             * not taken into account, favoring split */
-                }
+                Gv[d] -= LOSS_WEIGHTS_(v)*(q + c*Yv[d])/(r + rXv[d]);
             }
         }
     }
