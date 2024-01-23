@@ -126,11 +126,11 @@ An example with [GNU Octave or Matlab](#gnu-octave-or-matlab) and [Python](#pyth
 <td width="10%"></td>
 </tr><tr>
 <td width="10%"></td>
-<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/EEG_ground_truth.png" width="100%"/></td>
+<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/-/raw/master/data/EEG_ground_truth.png" width="100%"/></td>
 <td width="10%"></td>
-<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/EEG_brain_activity.png" width="100%"/></td>
+<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/-/raw/master/data/EEG_brain_activity.png" width="100%"/></td>
 <td width="10%"></td>
-<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/EEG_brain_sources.png" width="100%"/></td>
+<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/-/raw/master/data/EEG_brain_sources.png" width="100%"/></td>
 <td width="10%"></td>
 </tr></table>
 
@@ -170,11 +170,11 @@ An example with the smoothed Kullback–Leibler is provided with [GNU Octave or 
 <td width="5%"></td>
 </tr><tr>
 <td width="5%"></td>
-<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/labeling_3D_ground_truth.png" width="100%"/></td>
+<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/-/raw/master/data/labeling_3D_ground_truth.png" width="100%"/></td>
 <td width="5%"></td>
-<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/labeling_3D_random_forest.png" width="100%"/></td>
+<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/-/raw/master/data/labeling_3D_random_forest.png" width="100%"/></td>
 <td width="5%"></td>
-<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/labeling_3D_regularized.png" width="100%"/></td>
+<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/-/raw/master/data/labeling_3D_regularized.png" width="100%"/></td>
 <td width="5%"></td>
 </tr></table>
 
