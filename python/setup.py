@@ -17,9 +17,9 @@ import re
 ###  targets and compile options  ###
 to_compile = [ # comment undesired extension modules
     "cp_prox_tv_cpy",
-    # "cp_d1_ql1b_cpy",
-    # "cp_d1_lsx_cpy",
-    # "cp_d0_dist_cpy",
+    "cp_d1_ql1b_cpy",
+    "cp_d1_lsx_cpy",
+    "cp_d0_dist_cpy",
 ]
 # compilation and linkage options
 # _GLIBCXX_PARALLEL is only useful for libstdc++ users
