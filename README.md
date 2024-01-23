@@ -43,11 +43,11 @@ where Ω is some base set, and the functional _ψ_: Ω² → ℝ penalizes dissi
 
 The cut-pursuit approach is to seek partitions __*V*__ of the set of vertices <i>V</i>, constituting the constant connected components of the solution, by successively solving the corresponding problem, structured over the reduced graph __*G*__ = (__*V*__, __*E*__), that is
 
-  arg min<sub>_ξ_ ∈ Ω<sup>__*V*__</sup></sub>
-  <i>F</i>(<i>x</i>) ,    such that ∀ <i>U</i> ∈ __*V*__, ∀ <i>u</i> ∈ <i>U</i>, <i>x</i><sub><i>u</i></sub> = _ξ_<sub><i>U</i></sub> ,
+  arg min<sub><i>ξ</i> ∈ Ω<sup><b><i>V</i></b></sup></sub>
+  <i>F</i>(<i>x</i>) ,    such that ∀ <i>U</i> ∈ <b><i>V</i></b>, ∀ <i>u</i> ∈ <i>U</i>, <i>x</i><sub><i>u</i></sub> = <i>ξ</i><sub><i>U</i></sub> ,
 
 and then refining the partition.  
-A key requirement is thus the ability to solve the reduced problem, which often have the exact same structure as the original one, but with much less vertices |__*V*__| ≪ |<i>V</i>|. If the solution of the original problem has only few constant connected components in comparison to the number of vertices, the cut-pursuit strategy can speed-up minimization by several orders of magnitude.  
+A key requirement is thus the ability to solve the reduced problem, which often have the exact same structure as the original one, but with much less vertices |<b><i>V</i></b>| ≪ |<i>V</i>|. If the solution of the original problem has only few constant connected components in comparison to the number of vertices, the cut-pursuit strategy can speed-up minimization by several orders of magnitude.  
 
 Cut-pursuit algorithms come in two main flavors, namely “directionally differentiable” and “noncontinuous”.
 
@@ -91,10 +91,9 @@ The base set is Ω = ℝ, and the general form is
     <i>F</i>: <i>x</i> ∈ ℝ<sup><i>V</i></sup> ↦ 
     1/2 ║<i>y</i><sup>(ℓ<sub>2</sub>)</sup> − <i>A</i><i>x</i>║<sup>2</sup> +
     ∑<sub><i>v</i> ∈ <i>V</i></sub> <i>λ</i><sub><i>v</i></sub>
-        |<i>y</i><sup>(ℓ<sub>1</sub>)</sup> − <i>x</i><sub><i>v</i></sub>| +
+        |<i>y</i><sup>(ℓ<sub>1</sub>)</sup> − <i>x</i><sub><i>v</i></sub>| +  
     ∑<sub><i>v</i> ∈ <i>V</i></sub>
-        <i>ι</i><sub>[<i>m</i><sub><i>v</i></sub>, <i>M</i><sub><i>v</i></sub>]</sub>(<i>x</i><sub><i>v</i></sub>)  
-                 +
+        <i>ι</i><sub>[<i>m</i><sub><i>v</i></sub>, <i>M</i><sub><i>v</i></sub>]</sub>(<i>x</i><sub><i>v</i></sub>) +
     ∑<sub>(<i>u</i>,<i>v</i>) ∈ <i>E</i></sub> <i>w</i><sub>(<i>u</i>,<i>v</i>)</sub>
          |<i>x</i><sub><i>u</i></sub> − <i>x</i><sub><i>v</i></sub>| ,   
 
@@ -127,11 +126,11 @@ An example with [GNU Octave or Matlab](#gnu-octave-or-matlab) and [Python](#pyth
 <td width="10%"></td>
 </tr><tr>
 <td width="10%"></td>
-<td width="20%"><img src="pcd-prox-split/data/EEG_ground_truth.png" width="100%"/></td>
+<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/EEG_ground_truth.png" width="100%"/></td>
 <td width="10%"></td>
-<td width="20%"><img src="pcd-prox-split/data/EEG_brain_activity.png" width="100%"/></td>
+<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/EEG_brain_activity.png" width="100%"/></td>
 <td width="10%"></td>
-<td width="20%"><img src="pcd-prox-split/data/EEG_brain_sources.png" width="100%"/></td>
+<td width="20%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/EEG_brain_sources.png" width="100%"/></td>
 <td width="10%"></td>
 </tr></table>
 
@@ -171,11 +170,11 @@ An example with the smoothed Kullback–Leibler is provided with [GNU Octave or 
 <td width="5%"></td>
 </tr><tr>
 <td width="5%"></td>
-<td width="25%"><img src="pcd-prox-split/data/labeling_3D_ground_truth.png" width="100%"/></td>
+<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/labeling_3D_ground_truth.png" width="100%"/></td>
 <td width="5%"></td>
-<td width="25%"><img src="pcd-prox-split/data/labeling_3D_random_forest.png" width="100%"/></td>
+<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/labeling_3D_random_forest.png" width="100%"/></td>
 <td width="5%"></td>
-<td width="25%"><img src="pcd-prox-split/data/labeling_3D_regularized.png" width="100%"/></td>
+<td width="25%"><img src="https://gitlab.com/1a7r0ch3/pcd-prox-split/data/labeling_3D_regularized.png" width="100%"/></td>
 <td width="5%"></td>
 </tr></table>
 
