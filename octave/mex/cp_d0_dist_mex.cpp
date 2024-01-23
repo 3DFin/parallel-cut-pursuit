@@ -196,6 +196,19 @@ static void cp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
     bool GET_SCAL_OPT(compute_Time, false);
     bool GET_SCAL_OPT(compute_Dif, false);
 
+
+    /* check request output */
+    int nout = 2;
+    if (compute_List){ nout++; }
+    if (compute_Graph){ nout++; }
+    if (compute_Obj){ nout++; }
+    if (compute_Time){ nout++; }
+    if (compute_Dif){ nout++; }
+    if (nlhs != nout){
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
+                "requested %i outputs, but %i captured", nout, nlhs);
+    }
+
     /***  prepare output; rX (plhs[1]) is created later  ***/
 
     plhs[0] = mxCreateNumericMatrix(1, V, mxCOMP_CLASS, mxREAL);
@@ -208,7 +221,7 @@ static void cp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     double* Time = nullptr;
     if (compute_Time){
-        (double*) mxMalloc(sizeof(double)*(cp_it_max + 1));
+        Time = (double*) mxMalloc(sizeof(double)*(cp_it_max + 1));
     }
 
     real_t* Dif = nullptr;
@@ -307,16 +320,6 @@ static void cp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
     delete cp;
 
     /**  assign optional outputs and resize monitoring arrays if necessary  **/
-    int nout = 2;
-    if (compute_List){ nout++; }
-    if (compute_Graph){ nout++; }
-    if (compute_Obj){ nout++; }
-    if (compute_Time){ nout++; }
-    if (compute_Dif){ nout++; }
-    if (nlhs != nout){
-            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
-                "requested %i outputs, but %i captured", nout, nlhs);
-    }
     nout = 2;
     if (compute_List){ plhs[nout++] = mx_List; }
     if (compute_Graph){ plhs[nout++] = mx_Graph; }

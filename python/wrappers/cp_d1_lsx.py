@@ -8,19 +8,17 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 from cp_d1_lsx_cpy import cp_d1_lsx_cpy
 
 def cp_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None, 
-              loss_weights=None, d1_coor_weights=None, cp_dif_tol=1e-3,
-              cp_it_max=10, K=2, split_iter_num=1, split_damp_ratio=1.0,
-              split_values_init_num=2, split_values_iter_num=2,
-              pfdr_rho=1., pfdr_cond_min=1e-2, pfdr_dif_rcd=0.,
-              pfdr_dif_tol=None, pfdr_it_max=int(1e4), verbose=int(1e2),
-              max_num_threads=0, max_split_size=None,
-              balance_parallel_split=True, compute_List=False,
-              compute_Graph=False, compute_Obj=False, 
-              compute_Time=False, compute_Dif=False):
+    loss_weights=None, d11_metric=None, cp_dif_tol=1e-3, cp_it_max=10,
+    K=2, split_iter_num=1, split_damp_ratio=1.0, split_values_init_num=2,
+    split_values_iter_num=2, pfdr_rho=1., pfdr_cond_min=1e-2, pfdr_dif_rcd=0.,
+    pfdr_dif_tol=None, pfdr_it_max=int(1e4), verbose=int(1e2),
+    max_num_threads=0, max_split_size=None, balance_parallel_split=True,
+    compute_List=False, compute_Graph=False, compute_Obj=False, 
+    compute_Time=False, compute_Dif=False):
     """
     Comp, rX, [List, Graph, Obj, Time, Dif] = cp_d1_lsx(loss, Y,
         first_edge, adj_vertices, edge_weights=None, loss_weights=None,
-        d1_coor_weights=None, cp_dif_tol=1e-3, cp_it_max=10,  K=2,
+        d11_metric=None, cp_dif_tol=1e-3, cp_it_max=10,  K=2,
         split_iter_num=1, split_damp_ratio=1.0, split_values_init_num=2,
         split_values_iter_num=2, pfdr_rho=1.0, pfdr_cond_min=1e-2,
         pfdr_dif_rcd=0.0, pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=1e4,
@@ -97,12 +95,13 @@ def cp_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
             total number of edges;
         for each edge, 'adj_vertices' indicates its ending vertex, (int32 or
             uint32) array of length E
-    edge_weights - (real) array of length E or scalar for homogeneous weights
-    loss_weights - weights on vertices; (real) array of length V or empty for
-        no weights
-    d1_coor_weights - for multidimensional data, weights the coordinates in the
-        l1 norms of finite differences; all weights must be strictly positive,
-        it is advised to normalize the weights so that the first value is unity
+    edge_weights - weights on the edges (w_d1_uv in the above notations);
+        (real) array of length E, or scalar for homogeneous weights
+    loss_weights - weights on vertices (w_v in the above notations);
+        (real) array of length V
+    d11_metric - diagonal metric on the d11 penalization (w_d1_d above);
+        (real) array of length D; all weights must be strictly positive, and it
+        is advised to normalize the weights so that the first value is unity
     cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (in Euclidean norm) is less than dif_tol;
         1e-3 is a typical value; a lower one can give better precision
@@ -192,9 +191,7 @@ def cp_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be a "
                         "nonempty numpy array of type float32 or float64.") 
     
-    # Check numpy arrays: Y, first_edge, adj_vertices, edge_weights,
-    # loss_weights, d1_coor_weights and define float numpy array argument with
-    # the right float type if necessary
+    # Check numpy arrays
     if type(Y) != np.ndarray:
         raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be a "
                         "numpy array.")
@@ -219,22 +216,18 @@ def cp_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
             edge_weights = np.array([1.0], dtype=real_t)
         
     if type(loss_weights) != np.ndarray:
-        if type(loss_weights) == list:
+        if loss_weights != None:
             raise TypeError("Cut-pursuit d1 loss simplex: argument "
-                            "'loss_weights' must be a scalar or a numpy array")
-        elif loss_weights != None:
-            loss_weights = np.array([loss_weights], dtype=real_t)
+                "'loss_weights' must be a a numpy array")
         else:
             loss_weights = np.array([], dtype=real_t)
 
-    if type(d1_coor_weights) != np.ndarray:
-        if type(d1_coor_weights) == list:
+    if type(d11_metric) != np.ndarray:
+        if d11_metric != None:
             raise TypeError("Cut-pursuit d1 loss simplex: argument "
-                "'d1_coor_weights' must be a scalar or a numpy array.")
-        elif d1_coor_weights != None:
-            d1_coor_weights = np.array([d1_coor_weights], dtype=real_t)
+                "'d11_metric' must be a numpy array.")
         else:
-            d1_coor_weights = np.array([], dtype=real_t)
+            d11_metric = np.array([], dtype=real_t)
 
     # Check graph structure 
     if first_edge.size != Y.shape[1] + 1 :
@@ -244,23 +237,23 @@ def cp_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
  
     # Check type of all numpy.array arguments of type float
     for name, ar_args in zip(
-            ["Y", "edge_weights", "loss_weights", "d1_coor_weights"],
-            [ Y ,  edge_weights ,  loss_weights ,  d1_coor_weights ]):
+        ["Y", "edge_weights", "loss_weights", "d11_metric"],
+        [ Y ,  edge_weights ,  loss_weights ,  d11_metric ]):
         if ar_args.dtype != real_t:
             raise TypeError("Cut-pursuit d1 loss simplex: argument '{0}' must "
-                            "be of type '{1}'".format(name, real_t))
+                "be of type '{1}'".format(name, real_t))
 
     # Check fortran continuity of all multidimensional numpy.array arguments
     if not(Y.flags["F_CONTIGUOUS"]):
         raise TypeError("Cut-pursuit d1 loss simplex: argument 'Y' must be in "
-                        "column-major order (F-contigous).")
+            "column-major order (F-contigous).")
 
     # Convert in float64 all float arguments
     loss = float(loss)
+    split_damp_ratio = float(split_damp_ratio)
+    cp_dif_tol = float(cp_dif_tol)
     if pfdr_dif_tol is None:
         pfdr_dif_tol = 1e-2*cp_dif_tol
-    cp_dif_tol = float(cp_dif_tol)
-    split_damp_ratio = float(split_damp_ratio)
     pfdr_rho = float(pfdr_rho)
     pfdr_cond_min = float(pfdr_cond_min)
     pfdr_dif_rcd = float(pfdr_dif_rcd)
@@ -292,9 +285,8 @@ def cp_d1_lsx(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     # Call wrapper python in C  
     return cp_d1_lsx_cpy(loss, Y, first_edge, adj_vertices, edge_weights,
-        loss_weights, d1_coor_weights, cp_dif_tol, cp_it_max, K,
-        split_iter_num, split_damp_ratio, split_values_init_num,
-        split_values_iter_num, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
-        pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
-        max_split_size, balance_parallel_split, real_t == "float64",
-        compute_List, compute_Graph, compute_Obj, compute_Time, compute_Dif)
+        loss_weights, d11_metric, cp_dif_tol, cp_it_max, K, split_iter_num,            split_damp_ratio, split_values_init_num, split_values_iter_num,
+        pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
+        verbose, max_num_threads, max_split_size, balance_parallel_split,
+        real_t == "float64", compute_List, compute_Graph, compute_Obj,
+        compute_Time, compute_Dif)

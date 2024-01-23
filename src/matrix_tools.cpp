@@ -10,10 +10,6 @@
 #include "omp_num_threads.hpp"
 #include "matrix_tools.hpp"
 
-/* constants of the correct type */
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-
 #define MT matrix_tools // shorthand for the namespace
 
 using namespace std;
@@ -25,7 +21,7 @@ static const double HALF_RAND_MAX_D = (double) HALF_RAND_MAX;
 template <typename real_t>
 static real_t compute_norm(const real_t *X, const index_t N)
 {
-    real_t norm = ZERO;
+    real_t norm = 0.0;
     for (index_t n = 0; n < N; n++){ norm += X[n]*X[n]; }
     return sqrt(norm);
 }
@@ -42,7 +38,7 @@ static void normalize_and_apply_matrix(const real_t* A, real_t* X, real_t* AX,
         else{ for (index_t n = 0; n < N; n++){ X[n] /= norm; } }
         /* apply A */
         for (index_t m = 0; m < M; m++){
-            AX[m] = ZERO;
+            AX[m] = 0.0;
             index_t p = m;
             for (index_t n = 0; n < N; n++){
                 AX[m] += A[p]*X[n];
@@ -53,7 +49,7 @@ static void normalize_and_apply_matrix(const real_t* A, real_t* X, real_t* AX,
     /* apply A^t or AA */
     const real_t *An = A;
     for (index_t n = 0; n < N; n++){
-        X[n] = ZERO;
+        X[n] = 0.0;
         for (index_t m = 0; m < M; m++){ X[n] += An[m]*AX[m]; }
         An += M;
     }
@@ -82,7 +78,7 @@ real_t MT::operator_norm_matrix(index_t M, index_t N, const real_t* A,
             cerr << "Operator norm matrix: not enough memory." << endl;
             exit(EXIT_FAILURE);
         }
-        for (index_t p = 0; p < P*P; p++){ AA[p] = ZERO; }
+        for (index_t p = 0; p < P*P; p++){ AA[p] = 0.0; }
         if (M < N){ /* A A^t is smaller */
             /* fill upper triangular part (from lower triangular products) */
             #pragma omp parallel for schedule(static) NUM_THREADS(M*N*P/2, P)
@@ -114,7 +110,7 @@ real_t MT::operator_norm_matrix(index_t M, index_t N, const real_t* A,
                 const real_t *An = A; // run along n-th column of A
                 real_t *AAp = AA + P*p; // p-th column of AA
                 for (index_t n = 0; n <= p; n++){
-                    AAp[n] = ZERO;
+                    AAp[n] = 0.0;
                     for (index_t m = 0; m < M; m++){
                         AAp[n] += (*(An++))*Ap[m];
                     }
@@ -148,7 +144,7 @@ real_t MT::operator_norm_matrix(index_t M, index_t N, const real_t* A,
             << flush;
     }
 
-    real_t matrix_norm2 = ZERO;
+    real_t matrix_norm2 = 0.0;
     #if defined _OPENMP && _OPENMP >= 201107
     /* dumb MSVC still does not support max reduction (OpenMP 3.1) in 2020 */
     #pragma omp parallel reduction(max:matrix_norm2) num_threads(num_procs)
@@ -172,7 +168,7 @@ real_t MT::operator_norm_matrix(index_t M, index_t N, const real_t* A,
         normalize_and_apply_matrix(A, X, AX, D, norm, sym, M, N);
         norm = compute_norm(X, N);
         /* iterate */
-        if (norm > ZERO){
+        if (norm > 0.0){
             for (int it = 0; it < it_max; it++){
                 normalize_and_apply_matrix(A, X, AX, D, norm, sym, M, N);
                 real_t norm_ = compute_norm(X, N);
@@ -196,14 +192,16 @@ void MT::symmetric_equilibration_jacobi(index_t M, index_t N, const real_t* A,
 {
     if (M == Gram()){ /* premultiplied by A^t */
         #pragma omp parallel for schedule(static) NUM_THREADS(N)
-        for (index_t n = 0; n < N; n++){ D[n] = ONE/sqrt(A[n*(N + 1)]); }
+        for (index_t n = 0; n < N; n++){
+            D[n] = (real_t) 1.0/sqrt(A[n*(N + 1)]);
+        }
     }else{
         #pragma omp parallel for schedule(static) NUM_THREADS(M*N, N)
         for (index_t n = 0; n < N; n++){
             const real_t *An = A + M*n;
-            D[n] = ZERO;
+            D[n] = 0.0;
             for (index_t m = 0; m < M; m++){ D[n] += An[m]*An[m]; }
-            D[n] = ONE/sqrt(D[n]);
+            D[n] = (real_t) 1.0/sqrt(D[n]);
         }
     }
 }
@@ -213,16 +211,16 @@ void MT::symmetric_equilibration_bunch(index_t M, index_t N, const real_t* A,
     real_t* D)
 {
     if (M == Gram()){ /* premultiplied by A^t */
-        D[0] = ONE/sqrt(A[0]);
+        D[0] = 1.0/sqrt(A[0]);
     }else{
-        real_t A1A1 = ZERO;
+        real_t A1A1 = 0.0;
         #pragma omp parallel for NUM_THREADS(M) reduction(+:A1A1)
         for (index_t m = 0; m < M; m++){ A1A1 += A[m]*A[m]; }
-        D[0] = ONE/sqrt(A1A1);
+        D[0] = 1.0/sqrt(A1A1);
     }
 
     for (index_t i = 1; i < N; i++){ 
-        real_t invDi = ZERO;
+        real_t invDi = 0.0;
         if (M == Gram()){
             #if defined _OPENMP && _OPENMP >= 201107
             /* dumb MSVC still does not support max reduction in 2020 */
@@ -241,7 +239,7 @@ void MT::symmetric_equilibration_bunch(index_t M, index_t N, const real_t* A,
                 reduction(max:invDi)
             #endif
             for (index_t j = 0; j <= i; j++){
-                real_t DjAiAj = ZERO;
+                real_t DjAiAj = 0.0;
                 const real_t* Aj = A + M*j;
                 for (index_t m = 0; m < M; m++){
                     DjAiAj += Ai[m]*Aj[m];
@@ -250,7 +248,7 @@ void MT::symmetric_equilibration_bunch(index_t M, index_t N, const real_t* A,
                 if (DjAiAj > invDi){ invDi = DjAiAj; }
             }
         }
-        D[i] = ONE/invDi;
+        D[i] = (real_t) 1.0/invDi;
     }
 }
 

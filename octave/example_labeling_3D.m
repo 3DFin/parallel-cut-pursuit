@@ -5,9 +5,13 @@
 % Nonsmooth Functionals with Graph Total Variation, International Conference on
 % Machine Learning, PMLR, 2018, 80, 4244-4253
 %
-% Hugo Raguet 2017, 2018, 2019
+% L. Landrieu et al., A structured regularization framework for spatially
+% smoothing semantic labelings of 3D point clouds, ISPRS Journal of
+% Photogrammetry and Remote Sensing, 132:102-118, 2017
+%
+% Hugo Raguet 2017, 2018, 2019, 2023
 cd(fileparts(which('example_labeling_3D.m')));
-addpath('bin/');
+addpath('./bin/', './doc/');
 
 %%%  classes involved in the task  %%%
 classNames = {'road', 'vegetation', 'facade', 'hardscape', ...
@@ -16,22 +20,15 @@ classId = uint8(1:6)';
 
 %%%  parameters; see octave/doc/cp_d1_lsx.m  %%%
 options = struct; % reinitialize
-% options.cp_dif_tol = 1e-3;
-% options.cp_it_max = 10;
-options.pfdr_rho = 1.5;
-% options.pfdr_cond_min = 1e-2;
-% options.pfdr_dif_rcd = 0.0;
-% options.pfdr_dif_tol = 1e-3*options.cp_dif_tol;
-% options.pfdr_it_max = 1e4;
-% options.verbose = 1e2;
-% options.max_num_threads = 0;
-% options.balance_parallel_split = true;
+options.cp_dif_tol = 1e-3;
+options.K = 3;
+options.balance_parallel_split = true;
 
 %%%  initialize data  %%%
 % For details on the data and parameters, see H. Raguet, A Note on the
 % Forward-Douglas--Rachford Splitting for Monotone Inclusion and Convex
 % Optimization Optimization Letters, 2018, 1-24
-load('../data/labeling_3D.mat')
+load('../pcd-prox-split/data/labeling_3D.mat')
 options.edge_weights = homo_d1_weight;
 
 % compute prediction performance of random forest
@@ -46,9 +43,10 @@ fprintf('\naverage F1 of random forest prediction: %.2f\n\n', mean(F1));
 clear predk truek
 
 %%%  solve the optimization problem  %%%
+options.compute_Obj = true;
+options.compute_Time = true;
 tic;
-[Comp, rX] = cp_d1_lsx(loss, y, first_edge, adj_vertices, options);
-% [Comp, rX, Obj, Tim] = cp_d1_lsx(loss, y, first_edge, adj_vertices, options);
+[Comp, rX, Obj, Time] = cp_d1_lsx(loss, y, first_edge, adj_vertices, options);
 time = toc;
 x = rX(:, Comp + 1); % rX is components values, Comp is components assignments
 clear Comp rX;
@@ -65,3 +63,8 @@ end
 fprintf('\naverage F1 of spatially regularized prediction: %.2f\n\n', ...
     mean(F1));
 clear predk truek
+
+figure(1), clf, plot(Time, Obj);
+title('objective evolution');
+xlabel('time (s)');
+ylabel(sprintf('KL^{(%.1f)}(y||x) + ||x||_{\\delta_{0}}', loss));

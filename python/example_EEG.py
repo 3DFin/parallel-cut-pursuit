@@ -5,68 +5,65 @@
 # Nonsmooth Functionals with Graph Total Variation, International Conference on
 # Machine Learning, PMLR, 2018, 80, 4244-4253
 #
-# Camille Baudoin 2019
+# Camille Baudoin 2019, Hugo Ragut 2023
 import sys
 import os
 import numpy as np
 import scipy.io
 import time
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
-os.chdir(os.path.realpath(os.path.dirname(__file__)))
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "wrappers"))
+file_path = os.path.realpath(os.path.dirname(__file__))
+os.chdir(file_path)
+sys.path.append(os.path.join(file_path, "wrappers"))
 
 from cp_d1_ql1b import cp_d1_ql1b 
 
 ###  general parameters  ###
-plot_results = False
+plot_results = True
 print_results = False
 
 ###  parameters; see documentation of cp_d1_ql1b  ###
 cp_dif_tol = 1e-4
-# cp_it_max = 15
+cp_it_max = 15
 pfdr_rho = 1.5
-# pfdr_cond_min = 1e-2
-# pfdr_dif_rcd = 0.0
 pfdr_dif_tol = 1e-1*cp_dif_tol
-# pfdr_it_max = 1e4
-# pfdr_verbose = 1e3
-# max_num_threads = 8
+max_num_threads = 0
 balance_parallel_split = False
 
+###  initialize data  ###
 # dataset courtesy of Ahmad Karfoul and Isabelle Merlet, LTSI, INSERM U1099
 # Penalization parameters computed with SURE methods, heuristics adapted from
 # H. Raguet: A Signal Processing Approach to Voltage-Sensitive Dye Optical
 # Imaging, Ph.D. Thesis, Paris-Dauphine University, 2014
-mat = scipy.io.loadmat("../data/EEG.mat", squeeze_me=True)
+mat = scipy.io.loadmat("../pcd-prox-split/data/EEG.mat", squeeze_me=True)
 y = mat["y"]
 Phi = mat["Phi"]
+x0 = mat["x0"]
 first_edge = mat["first_edge"]
 adj_vertices = mat["adj_vertices"]
 d1_weights = mat["d1_weights"]
 l1_weights = mat["l1_weights"]
 low_bnd = 0.0 
-
-# ground truth support 
-x0 = mat["x0"]
-supp0 = np.array(x0 != 0, dtype="int")
+if plot_results:
+    vertices = mat["mesh"].item()[0]
+    faces = mat["mesh"].item()[1].astype("int")-1
+del mat
 
 ###  solve the optimization problem  ###
-it1 = time.time()
-Comp, rX = cp_d1_ql1b(y, Phi, first_edge, adj_vertices,
-                      edge_weights=d1_weights, l1_weights=l1_weights,
-                      low_bnd=low_bnd, pfdr_rho=pfdr_rho,
-                      pfdr_dif_tol=pfdr_dif_tol,
-                      max_num_threads=1,
-                      balance_parallel_split=balance_parallel_split)
-it2 = time.time()
+start_time = time.time()
+Comp, rX, Obj, Time = cp_d1_ql1b(y, Phi, first_edge, adj_vertices,
+    edge_weights=d1_weights, l1_weights=l1_weights, low_bnd=low_bnd,
+    pfdr_rho=pfdr_rho, pfdr_dif_tol=pfdr_dif_tol,
+    max_num_threads=max_num_threads,
+    balance_parallel_split=balance_parallel_split,
+    compute_Obj=True, compute_Time=True)
+exec_time = time.time() - start_time
 x = rX[Comp] # rX is components values, Comp is components assignment
 del rX, Comp
-print("Total python wrapper execution time: {:.1f} s\n\n".format(it2-it1))
+print("Total python wrapper execution time: {:.1f} s\n\n".format(exec_time))
 
 ###  compute Dice scores and print results  ###
+supp0 = np.array(x0 != 0, dtype="int")
 supp = np.array(x != 0, dtype="int")
 DS = 2*np.array((supp0 + supp) == 2).sum()/(supp0.sum() + supp.sum());
 # support retrieved by discarding nonsignificant values with 2-means clustering
@@ -90,10 +87,10 @@ print(("Dice score: raw {0:.2f}; approx (discard less significant with "
     "2-means) {1:.2f}\n\n").format(DS, DSa))
 
 if plot_results:
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
     x0min = x0.min()
     x0max = x0.max()
-    vertices = mat["mesh"].item()[0]
-    faces = mat["mesh"].item()[1].astype("int")-1
     numberOfColors = 256
     ## ground truth activity
     # map the color index
@@ -152,3 +149,12 @@ if plot_results:
         print("print retrieved sources... ", end="", flush=True)
         fig.savefig("EEG_retrieved_sources.pdf")
         print("done.\n")
+
+    fig = plt.figure(4)
+    fig.clear()
+    ax = fig.add_subplot(111)
+    ax.plot(Time, Obj)
+    ax.set_title("objective evolution")
+    ax.set_xlabel("time (s)")
+    ax.set_ylabel('$1/2 ||y - \Phi x||^2 + ||x||_{{\ell_1}} + '
+        '||x||_{\delta_1}$');

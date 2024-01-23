@@ -8,11 +8,6 @@
 #define TPL template <typename real_t>
 #define PCD_PROX Pcd_prox<real_t>
 
-/* constants of the correct type */
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define TENTH ((real_t) 0.1)
-
 using namespace std;
 
 TPL PCD_PROX::Pcd_prox(index_t size) : size(size)
@@ -20,7 +15,7 @@ TPL PCD_PROX::Pcd_prox(index_t size) : size(size)
     name = "Preconditioned proximal splitting algorithm";
     objective_values = iterate_evolution = nullptr;
     cond_min = 1e-2;
-    dif_rcd = 1e-3;
+    dif_rcd = 0;
     dif_tol = 1e-4;
     dif_it = 32;
     it_max = 1e3;
@@ -68,7 +63,7 @@ TPL real_t* PCD_PROX::get_iterate(){ return this->X; }
 TPL void PCD_PROX::initialize_iterate()
 {
     if (!X){ X = (real_t*) malloc_check(sizeof(real_t)*size); }
-    for (index_t i = 0; i < size; i++){ X[i] = ZERO; }
+    for (index_t i = 0; i < size; i++){ X[i] = 0.0; }
 }
 
 TPL void PCD_PROX::preconditioning(bool init)
@@ -77,7 +72,7 @@ TPL void PCD_PROX::preconditioning(bool init)
 TPL int PCD_PROX::precond_proximal_splitting(bool init)
 {
     int it = 0;
-    real_t dif = (dif_tol > ONE) ? dif_tol : ONE;
+    real_t dif = (dif_tol > 1.0) ? dif_tol : 1.0;
     if (dif_rcd > dif){ dif = dif_rcd; }
     int it_verb, it_dif;
 
@@ -92,7 +87,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
 
     if (init && objective_values){ objective_values[0] = compute_objective(); }
 
-    if (dif_tol > ZERO || dif_rcd > ZERO || iterate_evolution){
+    if (dif_tol > 0.0 || dif_rcd > 0.0 || iterate_evolution){
         last_X = (real_t*) malloc_check(sizeof(real_t)*size);
         for (index_t i = 0; i < size; i++){ last_X[i] = X[i]; }
         it_dif = 0;
@@ -111,7 +106,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
                 cout << "\nReconditioning... " << flush;
             }
             preconditioning();
-            dif_rcd *= TENTH;
+            dif_rcd /= 10.0;
             if (verbose){ cout << "done." << endl; }
         }
 
@@ -120,7 +115,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
         it++; it_verb++; it_dif++;
 
         if (iterate_evolution ||
-            ((dif_tol > ZERO || dif_rcd > ZERO) && it_dif == dif_it)){
+            ((dif_tol > 0.0 || dif_rcd > 0.0) && it_dif == dif_it)){
             dif = compute_evolution();
             for (index_t i = 0; i < size; i++){ last_X[i] = X[i]; }
             if (iterate_evolution){ iterate_evolution[it] = dif; }
@@ -133,7 +128,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
     
     if (verbose){ print_progress(it, dif); cout << endl; }
     
-    if (dif_tol > ZERO || dif_rcd > ZERO || iterate_evolution){ free(last_X); }
+    if (dif_tol > 0.0 || dif_rcd > 0.0 || iterate_evolution){ free(last_X); }
 
     return it;
 }
@@ -141,7 +136,7 @@ TPL int PCD_PROX::precond_proximal_splitting(bool init)
 TPL void PCD_PROX::print_progress(int it, real_t dif)
 {
     cout << "\r" << "iteration " << it << " (max. " << it_max << "); ";
-    if (dif_tol > ZERO || dif_rcd > ZERO){
+    if (dif_tol > 0.0 || dif_rcd > 0.0){
         cout.precision(2);
         cout << scientific << "iterate evolution " << dif <<  " (recond. "
             << dif_rcd << ", tol. " << dif_tol << ")";
@@ -152,15 +147,14 @@ TPL void PCD_PROX::print_progress(int it, real_t dif)
 TPL real_t PCD_PROX::compute_evolution() const
 /* by default, relative evolution in Euclidean norm */
 {
-    real_t dif = ZERO;
-    real_t amp = ZERO;
+    real_t dif = 0.0;
+    real_t amp = 0.0;
     #pragma omp parallel for schedule(static) NUM_THREADS(size) \
         reduction(+:dif, amp)
     for (index_t i = 0; i < size; i++){
         real_t d = last_X[i] - X[i];
         dif += d*d;
         amp += X[i]*X[i];
-        last_X[i] = X[i];
     }
     return sqrt(amp) > eps ? sqrt(dif/amp) : sqrt(dif)/eps;
 }

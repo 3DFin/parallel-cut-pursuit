@@ -5,7 +5,6 @@
 #include <set>
 #include <algorithm>
 
-#define ZERO ((real_t) 0.0)
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t, \
@@ -29,7 +28,7 @@ TPL CP_D0::Cp_d0(index_t V, index_t E, const index_t* first_edge,
 
 TPL real_t CP_D0::compute_graph_d0() const
 {
-    real_t weighted_contour_length = ZERO;
+    real_t weighted_contour_length = 0.0;
     #pragma omp parallel for schedule(static) NUM_THREADS(rE) \
         reduction(+:weighted_contour_length)
     for (index_t re = 0; re < rE; re++){
@@ -40,7 +39,7 @@ TPL real_t CP_D0::compute_graph_d0() const
 
 TPL real_t CP_D0::compute_f() const
 {
-    real_t f = ZERO;
+    real_t f = 0.0;
     #pragma omp parallel for schedule(dynamic) NUM_THREADS(D*V, rV) \
         reduction(+:f)
     for (comp_t rv = 0; rv < rV; rv++){
@@ -62,7 +61,7 @@ TPL real_t CP_D0::vert_split_cost(const Split_info& split_info, index_t v,
 /* compute binary cost of choosing alternatives lu and lv at edge e */
 TPL real_t CP_D0::edge_split_cost(const Split_info& split_info, index_t e,
     comp_t lu, comp_t lv) const
-{ return lu == lv ? ZERO : EDGE_WEIGHTS_(e); }
+{ return lu == lv ? 0.0 : EDGE_WEIGHTS_(e); }
 
 TPL comp_t CP_D0::accept_merge_candidate(index_t re)
 {
@@ -95,7 +94,7 @@ TPL comp_t CP_D0::compute_merge_chains()
         if (ru == rv){ continue; }
         compute_merge_candidate(re);
         if (merge_values[re]){
-            if (merge_gains[re] > ZERO){ num_pos_candidates++; }
+            if (merge_gains[re] > 0.0){ num_pos_candidates++; }
             else{ num_neg_candidates++; }
         }
     }
@@ -126,7 +125,7 @@ TPL comp_t CP_D0::compute_merge_chains()
     set<index_t, decltype(compare_candidates)>
         candidates_queue(compare_candidates);
     for (index_t re = 0; re < rE; re++){
-        if (merge_values[re] && merge_gains[re] > ZERO){
+        if (merge_values[re] && merge_gains[re] > 0.0){
             candidates_queue.insert(re);
         }
     }
@@ -249,11 +248,11 @@ TPL comp_t CP_D0::compute_merge_chains()
                     reduced_edges_v(re_rv) : reduced_edges_u(re_rv);
                 if (end_re_ru == end_re_rv){
                     reduced_edge_weights[re_ru] += reduced_edge_weights[re_rv];
-                    reduced_edge_weights[re_rv] = ZERO; // sum must be constant
-                    if (merge_gains[re_rv] > ZERO){ /* remove from queue */
+                    reduced_edge_weights[re_rv] = 0.0; // sum must be constant
+                    if (merge_gains[re_rv] > 0.0){ /* remove from queue */
                         candidate = candidates_queue.find(re_rv);
                         candidate = candidates_queue.erase(candidate);
-                        merge_gains[re_rv] = ZERO;
+                        merge_gains[re_rv] = 0.0;
                     }
                     delete_merge_candidate(re_rv);
                     DELETE_CELL(mcc_rv);
@@ -273,14 +272,14 @@ TPL comp_t CP_D0::compute_merge_chains()
         /* update all adjacent candidates */
         for (FIRST_CELL(mcc_ru, ru); !IS_EMPTY(mcc_ru); NEXT_CELL(mcc_ru)){
             index_t re = GET_REDUCED_EDGE(mcc_ru);
-            if (merge_gains[re] > ZERO){ /* already in the queue */
+            if (merge_gains[re] > 0.0){ /* already in the queue */
                 candidate = candidates_queue.find(re);
                 candidate = candidates_queue.erase(candidate);
             }else{
                 candidate = candidates_queue.end();
             }
             compute_merge_candidate(re);
-            if (merge_gains[re] > ZERO){
+            if (merge_gains[re] > 0.0){
                 candidates_queue.insert(candidate, re);
             }
         }

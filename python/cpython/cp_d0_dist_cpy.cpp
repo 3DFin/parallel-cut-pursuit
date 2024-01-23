@@ -61,6 +61,7 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
     npy_intp* py_Y_dims = PyArray_DIMS(py_Y);
     size_t D = PyArray_NDIM(py_Y) > 1 ? py_Y_dims[0] : 1;
     index_t V = PyArray_NDIM(py_Y) > 1 ? py_Y_dims[1] : py_Y_dims[0];
+    if (V == 1){ /* accept a column vector */ V = D; D = 1; }
 
     const real_t* Y = (real_t*) PyArray_DATA(py_Y);
     const real_t* vert_weights = PyArray_SIZE(py_vert_weights) > 0 ?

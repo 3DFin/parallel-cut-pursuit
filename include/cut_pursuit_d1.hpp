@@ -1,12 +1,30 @@
 /*=============================================================================
  * Derived class for cut-pursuit algorithm with d1 (total variation) 
- * penalization on directionnaly differentiable problems
+ * penalization on directionnaly differentiable problems:
+ *
+ * Minimize functional over a graph G = (V, E)
+ *
+ *        F : R^{D-by-V} -> R
+ *                     x -> f(x) + ||x||_d1p
+ *
+ * involving the graph total variation penalisation
+ *
+ *      ||x||_d1p = sum_{uv in E} w_uv ||x_u - x_v||_{M,p} ,
+ *
+ * where M in R^{D-by-D} is a diagonal metric and p can be 1 or 2,
+ *  ||x_v||_{M,1} = sum_d m_d |x_v|  (weighted l1-norm) or
+ *  ||x_v||_{M,2} = sqrt(sum_d m_d x_v^2)  (weighted l2-norm)
+ *
+ * and where f is an extended directionaly differentiable functional, using
+ * cut-pursuit approach.
+ *
+ * Parallel implementation with OpenMP API.
  *
  * H. Raguet and L. Landrieu, Cut-Pursuit Algorithm for Regularizing Nonsmooth
  * Functionals with Graph Total Variation, International Conference on Machine
  * Learning, PMLR, 2018, 80, 4244-4253
  *
- * Hugo Raguet 2018
+ * Hugo Raguet 2018, 2023
  *===========================================================================*/
 #pragma once
 #include "cut_pursuit.hpp"
@@ -20,19 +38,8 @@ template <typename real_t, typename index_t, typename comp_t>
 class Cp_d1 : public Cp<real_t, index_t, comp_t>
 {
 public:
-    /* for multidimensional data, type of graph total variation, which is
-     * nothing but the sum of lp norms of finite differences over the edges:
-     * d1,1 is the sum of l1 norms;
-     * d1,2 is the sum of l2 norms */
-    enum D1p {D11, D12};
-
     Cp_d1(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices, size_t D, D1p d1p = D12);
-
-    /* delegation for monodimensional setting */
-    Cp_d1(index_t V, index_t E, const index_t* first_edge, 
-        const index_t* adj_vertices) :
-        Cp_d1(V, E, first_edge, adj_vertices, 1, D11){};
+        const index_t* adj_vertices, size_t D = 1);
 
     /* the destructor does not free pointers which are supposed to be provided 
      * by the user (forward-star graph structure given at construction, 
@@ -41,10 +48,18 @@ public:
      * getting the corresponding pointer member and setting it to null
      * beforehand */
 
-    /* overload allowing for different weights along coordinates;
-     * if 'edge_weights' is null, homogeneously equal to 'homo_edge_weight' */
-    void set_edge_weights(const real_t* edge_weights = nullptr,
-        real_t homo_edge_weight = 1.0, const real_t* coor_weights = nullptr);
+    /* for multidimensional data, type of graph total variation, which is
+     * nothing but the sum of lp norms of finite differences over the edges:
+     * d1,1 is the sum of l1 norms;
+     * d1,2 is the sum of l2 norms */
+    enum D1p {D11, D12};
+
+    /* edge_weights are the w_uv above, if set to null, homogeneously equal to
+     * homo_edge_weight; d1p_metric is the weighting matrice M above */
+    using Cp<real_t, index_t, comp_t>::set_edge_weights;
+    void set_d1_param(const real_t* edge_weights = nullptr,
+        real_t homo_edge_weight = 1.0, const real_t* d1p_metric = nullptr,
+        D1p d1p = D12);
 
     /* overload for forcing some values when D = 1 */
     void set_split_param(index_t max_split_size, comp_t K = 2,
@@ -55,7 +70,7 @@ protected:
     /* for multidimensional data, weights the coordinates in the lp norms;
      * all weights must be strictly positive, and it is advised to normalize
      * the weights so that the first value is unity */
-    const real_t* coor_weights;
+    const real_t* d1p_metric;
 
     /** split  **/
 
@@ -76,6 +91,8 @@ protected:
     /* compute graph total variation; use reduced edges and reduced weights */
     real_t compute_graph_d1() const;
 
+    D1p d1p; // see public enum declaration
+
     /**  type resolution for base template class members
      * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
      **/
@@ -95,10 +112,10 @@ protected:
     using Cp<real_t, index_t, comp_t>::rE;
     using Cp<real_t, index_t, comp_t>::first_vertex;
     using Cp<real_t, index_t, comp_t>::comp_list;
+    using Cp<real_t, index_t, comp_t>::comp_assign;
     using Cp<real_t, index_t, comp_t>::label_assign;
     using Cp<real_t, index_t, comp_t>::is_separation;
     using Cp<real_t, index_t, comp_t>::reduced_edge_weights;
-    using Cp<real_t, index_t, comp_t>::reduced_edges;
     using Cp<real_t, index_t, comp_t>::malloc_check;
     using Cp<real_t, index_t, comp_t>::realloc_check;
     using Cp<real_t, index_t, comp_t>::is_saturated;
@@ -108,8 +125,6 @@ protected:
     using Cp<real_t, index_t, comp_t>::edge_weights;
 
 private:
-    const D1p d1p; // see public enum declaration
-
     /**  split  **/
 
     /* override for computing the gradient */
@@ -163,7 +178,7 @@ private:
     /**  merge  **/
 
     /* test if two components are sufficiently close to merge */
-    bool is_almost_equal(comp_t ru, comp_t rv);
+    bool is_almost_equal(comp_t ru, comp_t rv) const;
 
     /* compute the merge chains and return the number of effective merges */
     comp_t compute_merge_chains() override;
@@ -176,7 +191,10 @@ private:
     /**  type resolution for base template class members  **/
     using Cp<real_t, index_t, comp_t>::maxflow_complexity;
     using Cp<real_t, index_t, comp_t>::cut;
+    using Cp<real_t, index_t, comp_t>::is_cut;
     using Cp<real_t, index_t, comp_t>::bind;
     using Cp<real_t, index_t, comp_t>::merge_components;
     using Cp<real_t, index_t, comp_t>::get_merge_chain_root;
+    using Cp<real_t, index_t, comp_t>::reduced_edges_u;
+    using Cp<real_t, index_t, comp_t>::reduced_edges_v;
 };

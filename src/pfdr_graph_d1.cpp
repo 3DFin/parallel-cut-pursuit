@@ -5,15 +5,9 @@
 #include "omp_num_threads.hpp"
 #include "pfdr_graph_d1.hpp"
 
-/* constants of the correct type */
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define TWO ((real_t) 2.0)
-#define HALF ((real_t) 0.5)
-
 /* macros for indexing data arrays depending on their shape */
 #define EDGE_WEIGHTS_(e) (edge_weights ? edge_weights[(e)] : homo_edge_weight)
-#define COOR_WEIGHTS_(d) (coor_weights ? coor_weights[(d)] : ONE)
+#define D1P_METRIC_(d) (d1p_metric ? d1p_metric[(d)] : (real_t) 1.0)
 #define W_d1_(i, id)  (wd1shape == SCALAR ? w_d1 : \
                        wd1shape == MONODIM ? W_d1[(i)] : W_d1[(id)])
 #define Th_d1_(e, ed) (thd1shape == SCALAR ? th_d1 : \
@@ -25,33 +19,33 @@
 using namespace std;
 
 TPL PFDR_D1::Pfdr_d1(vertex_t V, index_t E, const vertex_t* edges, index_t D,
-    D1p d1p, const real_t* coor_weights, Condshape hess_f_h_shape) :
+    D1p d1p, const real_t* d1p_metric, Condshape hess_f_h_shape) :
     Pfdr<real_t, vertex_t>(V, 2*E, edges, D,
-        compute_ga_shape(coor_weights, hess_f_h_shape),
-        compute_w_shape(d1p, coor_weights, hess_f_h_shape)),
-    E(E), d1p(d1p), coor_weights(coor_weights),
-    wd1shape(compute_wd1_shape(d1p, coor_weights, hess_f_h_shape)),
-    thd1shape(compute_thd1_shape(d1p, coor_weights, hess_f_h_shape))
+        compute_ga_shape(d1p_metric, hess_f_h_shape),
+        compute_w_shape(d1p, d1p_metric, hess_f_h_shape)),
+    E(E), d1p(d1p), d1p_metric(d1p_metric),
+    wd1shape(compute_wd1_shape(d1p, d1p_metric, hess_f_h_shape)),
+    thd1shape(compute_thd1_shape(d1p, d1p_metric, hess_f_h_shape))
 {
     edge_weights = nullptr;
-    homo_edge_weight = ONE;
+    homo_edge_weight = 1.0;
     W_d1 = Th_d1 = nullptr;
 }
 
 TPL PFDR_D1::~Pfdr_d1(){ free(W_d1); free(Th_d1); }
 
 TPL void PFDR_D1::set_edge_weights(const real_t* edge_weights,
-    real_t homo_edge_weight, const real_t* coor_weights)
+    real_t homo_edge_weight, const real_t* d1p_metric)
 {
     this->edge_weights = edge_weights;
     this->homo_edge_weight = homo_edge_weight;
-    if (!this->coor_weights != !coor_weights){
-        cerr << "PFDR graph d1: coor_weights attribute cannot be "
-            "changed from null to varying weights or vice versa; for changing "
-            "these weights, create a new instance of Pfdr_d1." << endl;
+    if (!this->d1p_metric != !d1p_metric){
+        cerr << "PFDR graph d1: d1p_metric attribute cannot be changed from "
+            "null to varying weights or vice versa; for changing these "
+            "weights, create a new instance of Pfdr_d1." << endl;
         exit(EXIT_FAILURE);
     }
-    this->coor_weights = coor_weights;
+    this->d1p_metric = d1p_metric;
 }
 
 TPL void PFDR_D1::add_pseudo_hess_g()
@@ -66,16 +60,16 @@ TPL void PFDR_D1::add_pseudo_hess_g()
     for (index_t e = 0; e < E; e++){
         real_t* Xu = X + edges[2*e]*D;
         real_t* Xv = X + edges[2*e + 1]*D;
-        real_t dif = ZERO, ampu = ZERO, ampv = ZERO;
+        real_t dif = 0.0, ampu = 0.0, ampv = 0.0;
         for (index_t d = 0; d < D; d++){
             if (d1p == D11){
-                dif += abs(Xu[d] - Xv[d])*COOR_WEIGHTS_(d);
-                ampu += abs(Xu[d])*COOR_WEIGHTS_(d);
-                ampv += abs(Xv[d])*COOR_WEIGHTS_(d);
+                dif += abs(Xu[d] - Xv[d])*D1P_METRIC_(d);
+                ampu += abs(Xu[d])*D1P_METRIC_(d);
+                ampv += abs(Xv[d])*D1P_METRIC_(d);
             }else{
-                dif += (Xu[d] - Xv[d])*(Xu[d] - Xv[d])*COOR_WEIGHTS_(d);
-                ampu += Xu[d]*Xu[d]*COOR_WEIGHTS_(d);
-                ampv += Xv[d]*Xv[d]*COOR_WEIGHTS_(d);
+                dif += (Xu[d] - Xv[d])*(Xu[d] - Xv[d])*D1P_METRIC_(d);
+                ampu += Xu[d]*Xu[d]*D1P_METRIC_(d);
+                ampv += Xv[d]*Xv[d]*D1P_METRIC_(d);
             }
         }
         real_t amp;
@@ -99,13 +93,13 @@ TPL void PFDR_D1::add_pseudo_hess_g()
         index_t id = d;
         index_t jd = d + Dw;
         for (index_t e = 0; e < E; e++){
-            real_t coef = COOR_WEIGHTS_(d)*Th_d1[e];
+            real_t coef = D1P_METRIC_(d)*Th_d1[e];
             Ga[d + edges[2*e]*Dga] += coef;
             Ga[d + edges[2*e + 1]*Dga] += coef;
             if (!Id_W && (wshape == MULTIDIM || d == 0)){
                 /* zero weight might create NaNs when normalized */
-                W[id] = W[jd] = coef > ZERO ? coef :
-                    numeric_limits<real_t>::min();
+                W[id] = W[jd] = coef > 0.0 ? coef :
+                                             numeric_limits<real_t>::min();
                 id += 2*Dw;
                 jd += 2*Dw;
             }
@@ -125,8 +119,10 @@ TPL void PFDR_D1::make_sum_Wi_Id()
     else if (E*Dthd1 >= V){ sum_Wi = Th_d1; }
     else{ sum_Wi = (real_t*) malloc_check(sizeof(real_t)*V); }
 
-    for (index_t v = 0; v < V; v++){ sum_Wi[v] = ZERO; }
-    for (index_t e = 0; e < 2*E; e++){ sum_Wi[edges[e]] += Id_W ? ONE : W[e]; }
+    for (index_t v = 0; v < V; v++){ sum_Wi[v] = 0.0; }
+    for (index_t e = 0; e < 2*E; e++){
+        sum_Wi[edges[e]] += Id_W ? (real_t) 1.0 : W[e];
+    }
 
     if (!Id_W){ /* weights can just be normalized */
 
@@ -138,16 +134,16 @@ TPL void PFDR_D1::make_sum_Wi_Id()
         #pragma omp parallel for schedule(static) NUM_THREADS(2*V*D, V)
         for (index_t v = 0; v < V; v++){
             index_t vd = v*D;
-            real_t wmax = Id_W[vd] = Ga[vd]*COOR_WEIGHTS_(0);
+            real_t wmax = Id_W[vd] = Ga[vd]*D1P_METRIC_(0);
             vd++;
             for (index_t d = 1; d < D; d++){
-                Id_W[vd] = Ga[vd]*COOR_WEIGHTS_(d);
+                Id_W[vd] = Ga[vd]*D1P_METRIC_(d);
                 if (Id_W[vd] > wmax){ wmax = Id_W[vd]; }
                 vd++;
             }
             vd -= D;
             for (index_t d = 0; d < D; d++){
-                Id_W[vd] = ONE - Id_W[vd]/wmax;
+                Id_W[vd] = (real_t) 1.0 - Id_W[vd]/wmax;
                 vd++;
             }
         }
@@ -158,7 +154,7 @@ TPL void PFDR_D1::make_sum_Wi_Id()
             index_t vd = v*D;
             index_t ed = e*D;
             for (index_t d = 0; d < D; d++){
-                W[ed++] = (ONE - Id_W[vd++])/sum_Wi[v];
+                W[ed++] = ((real_t) 1.0 - Id_W[vd++])/sum_Wi[v];
             }
         }
     }
@@ -181,7 +177,7 @@ TPL void PFDR_D1::preconditioning(bool init)
     /* allocate supplementary weights and auxiliary variables if necessary */
     if (!Id_W && wshape == MULTIDIM){
         Id_W = (real_t*) malloc_check(sizeof(real_t)*V*D);
-        if (!Z_Id && Pfdr<real_t, vertex_t>::rho != ONE){
+        if (!Z_Id && rho != 1.0){
             Z_Id = (real_t*) malloc_check(sizeof(real_t)*V*D);
         }
     }
@@ -189,7 +185,7 @@ TPL void PFDR_D1::preconditioning(bool init)
     Pfdr<real_t, vertex_t>::preconditioning(init);
 
     /* precompute weights and thresholds for d1 prox operator */
-    if (wd1shape == SCALAR){ w_d1 = HALF; }
+    if (wd1shape == SCALAR){ w_d1 = 0.5; }
     const index_t Dd1 = thd1shape == MULTIDIM ? D : 1;
     const index_t Dga = gashape == MULTIDIM ? D : 1;
     const index_t Dw = wshape == MULTIDIM ? D : 1;
@@ -211,12 +207,12 @@ TPL void PFDR_D1::preconditioning(bool init)
         for (index_t d = 0; d < Dd1; d++){
             real_t w_ga_u = W[i*Dw]/Ga[ud++];
             real_t w_ga_v = W[j*Dw]/Ga[vd++];
-            Th_d1[ed++] = EDGE_WEIGHTS_(e)*COOR_WEIGHTS_(d)
-                *(ONE/w_ga_u + ONE/w_ga_v);
+            Th_d1[ed++] = EDGE_WEIGHTS_(e)*D1P_METRIC_(d)
+                *((real_t) 1.0/w_ga_u + (real_t) 1.0/w_ga_v);
             if (wd1shape != SCALAR){
-                if (w_ga_u == ZERO && w_ga_v == ZERO){
-                    W_d1[id++] = HALF;
-                    W_d1[jd++] = HALF;
+                if (w_ga_u == 0.0 && w_ga_v == 0.0){
+                    W_d1[id++] = 0.5;
+                    W_d1[jd++] = 0.5;
                 }else{
                     W_d1[id++] = w_ga_u/(w_ga_u + w_ga_v);
                     W_d1[jd++] = w_ga_v/(w_ga_u + w_ga_v);
@@ -237,13 +233,13 @@ TPL void PFDR_D1::compute_prox_GaW_g()
         index_t id = i*D;
         index_t jd = j*D;
         index_t ed = 0; // avoid uninitialization warning
-        real_t dnorm = ZERO; // avoid uninitialization warning
+        real_t dnorm = 0.0; // avoid uninitialization warning
         if (d1p == D12){ /* compute norm */
             for (index_t d = 0; d < D; d++){ 
                 /* forward step */ 
                 real_t fwd_zi = Ga_grad_f[ud++] - Z[id++];
                 real_t fwd_zj = Ga_grad_f[vd++] - Z[jd++];
-                dnorm += (fwd_zi - fwd_zj)*(fwd_zi - fwd_zj)*COOR_WEIGHTS_(d);
+                dnorm += (fwd_zi - fwd_zj)*(fwd_zi - fwd_zj)*D1P_METRIC_(d);
             }
             dnorm = sqrt(dnorm);
             ud -= D; vd -= D; id -= D; jd -= D;
@@ -261,10 +257,10 @@ TPL void PFDR_D1::compute_prox_GaW_g()
             if (d1p == D11){
                 if (dif > Th_d1_(e, ed)){ dif -= Th_d1_(e, ed); }
                 else if (dif < -Th_d1_(e, ed)){ dif += Th_d1_(e, ed); }
-                else{ dif = ZERO; }
+                else{ dif = 0.0; }
                 if (thd1shape == MULTIDIM){ ed++; }
             }else{
-                dif *= dnorm > Th_d1[e] ? ONE - Th_d1[e]/dnorm : ZERO;
+                dif *= dnorm > Th_d1[e] ? (real_t) 1.0 - Th_d1[e]/dnorm : 0.0;
             }
             Z[id] += rho*(avg + W_d1_(j, jd)*dif - X[ud]);
             Z[jd] += rho*(avg - W_d1_(i, id)*dif - X[vd]);
@@ -273,20 +269,20 @@ TPL void PFDR_D1::compute_prox_GaW_g()
     }
 }
 
-TPL real_t PFDR_D1::compute_g()
+TPL real_t PFDR_D1::compute_g() const
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
     #pragma omp parallel for schedule(static) NUM_THREADS(2*E*D, E) \
         reduction(+:obj)
     for (index_t e = 0; e < E; e++){
         index_t ud = edges[2*e]*D;
         index_t vd = edges[2*e + 1]*D;
-        real_t dif = ZERO;
+        real_t dif = 0.0;
         for (index_t d = 0; d < D; d++){
             if (d1p == D11){
-                dif += abs(X[ud] - X[vd])*COOR_WEIGHTS_(d);
+                dif += abs(X[ud] - X[vd])*D1P_METRIC_(d);
             }else{
-                dif += (X[ud] - X[vd])*(X[ud] - X[vd])*COOR_WEIGHTS_(d);
+                dif += (X[ud] - X[vd])*(X[ud] - X[vd])*D1P_METRIC_(d);
             }
             ud++; vd++;
         }

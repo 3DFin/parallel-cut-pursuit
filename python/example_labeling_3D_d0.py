@@ -10,16 +10,17 @@
 # smoothing semantic labelings of 3D point clouds, ISPRS Journal of
 # Photogrammetry and Remote Sensing, 132:102-118, 2017
 #
-# Camille Baudoin 2019
+# Camille Baudoin 2019, Hugo Raguet 2023
 import sys
 import os 
 import numpy as np
 import scipy.io
 import time
+import matplotlib.pyplot as plt
 
-os.chdir(os.path.realpath(os.path.dirname(__file__)))
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "wrappers"))
+file_path = os.path.realpath(os.path.dirname(__file__))
+os.chdir(file_path)
+sys.path.append(os.path.join(file_path, "wrappers"))
 
 from cp_d0_dist import cp_d0_dist 
 
@@ -29,18 +30,14 @@ classNames = ["road", "vegetation", "facade", "hardscape",
 classId = np.arange(1, 7, dtype="uint8")
 
 ###  parameters; see documentations of cp_d0_dist  ###
-# cp_dif_tol = 1e-3
-# cp_it_max = 10
 K = 3
-# split_iter_num = 2
-# kmpp_init_num = 3
-# kmpp_iter_num = 3
-# verbose = True
-# max_num_threads = 8
-# balance_parallel_split = True
+cp_dif_tol = 1e-3
+max_num_threads = 0
+balance_parallel_split = True
 
 ###  initialize data  ###
-mat = scipy.io.loadmat("../data/labeling_3D.mat", squeeze_me=True)
+mat = scipy.io.loadmat("../pcd-prox-split/data/labeling_3D.mat",
+    squeeze_me=True)
 loss = mat["loss"]
 y = mat["y"]
 homo_d1_weight = mat["homo_d1_weight"]
@@ -61,13 +58,16 @@ print("\naverage F1 of random forest prediction: {:.2f}\n\n".format(F1.mean()))
 del predk, truek
 
 ###  solve the optimization problem  ###
-it1 = time.time()
-Comp, rX = cp_d0_dist(loss, y, first_edge, adj_vertices,
-    edge_weights=homo_d0_weight, K=K)
-it2 = time.time()
+start_time = time.time()
+Comp, rX, Obj, Time = cp_d0_dist(loss, y, first_edge, adj_vertices,
+    edge_weights=homo_d0_weight, K=K, cp_dif_tol=cp_dif_tol,
+    max_num_threads=max_num_threads,
+    balance_parallel_split=balance_parallel_split, compute_Obj=True,
+    compute_Time=True)
+exec_time = time.time() - start_time
 x = rX[:,Comp] # rX is components values, Comp is components assignment
 del Comp, rX
-print("Total python wrapper execution time {:.0f} s\n\n".format(it2 - it1))
+print("Total python wrapper execution time {:.0f} s\n\n".format(exec_time))
 
 # compute prediction performance of spatially regularized prediction
 ML = np.argmax(x, axis=0) + 1
@@ -80,3 +80,12 @@ for k in range(1,len(classNames) + 1):
 print(("\naverage F1 of spatially regularized prediction: "
        "{:.2f}\n\n").format(F1.mean()))
 del predk, truek
+
+fig = plt.figure(1)
+fig.clear()
+ax = fig.add_subplot(111)
+ax.plot(Time, Obj)
+ax.set_title("objective evolution")
+ax.set_xlabel("time (s)")
+ax.set_ylabel('KL$^{{({:.1f})}}$(y||x) + ||x||$_{{\delta_{{0}}}}$'.
+    format(loss));

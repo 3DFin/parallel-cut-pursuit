@@ -5,10 +5,8 @@
 #include "cp_prox_tv.hpp"
 #include "pfdr_prox_tv.hpp"
 
-#define ZERO ((real_t) 0.0) // avoid conversions
-#define HALF ((real_t) 0.5) // avoid conversions
-#define M_(v, vd) (metric_shape == SCALAR ? ONE : \
-                   metric_shape == MONODIM ? M[(v)] : M[(vd)])
+#define L22_METRIC_(v, vd) (l22_metric_shape == IDENTITY ? (real_t) 1.0 : \
+    l22_metric_shape == MONODIM ? l22_metric[(v)] : l22_metric[(vd)])
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
 #define CP_PROX_TV Cp_prox_tv<real_t, index_t, comp_t>
@@ -17,11 +15,10 @@
 using namespace std;
 
 TPL CP_PROX_TV::Cp_prox_tv(index_t V, index_t E, const index_t* first_edge,
-    const index_t* adj_vertices, const real_t* Y, size_t D, D1p d1p,
-    const real_t* d1p_coor_weights, Condshape metric_shape, const real_t* M)
-    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D, D1p)
+    const index_t* adj_vertices, const real_t* Y, size_t D)
+    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D),
+    Y(Y)
 {
-    Y = nullptr;
     /* TODO: subgradient retrieval */
     // Gd1 = nullptr;
 
@@ -41,6 +38,20 @@ TPL CP_PROX_TV::Cp_prox_tv(index_t V, index_t E, const index_t* first_edge,
     this->Gd1 = Gd1;
 } */
 
+TPL void CP_PROX_TV::set_quadratic(Metric_shape l22_metric_shape,
+    const real_t* l22_metric)
+{
+    this->l22_metric_shape = l22_metric_shape;
+    this->l22_metric = l22_metric;
+}
+
+TPL void CP_PROX_TV::set_quadratic(const real_t* Y,
+    Metric_shape l22_metric_shape, const real_t* l22_metric)
+{
+    this->Y = Y;
+    set_quadratic(l22_metric_shape, l22_metric);
+}
+
 TPL void CP_PROX_TV::set_pfdr_param(real_t rho, real_t cond_min,
     real_t dif_rcd, int it_max, real_t dif_tol)
 {
@@ -54,27 +65,34 @@ TPL void CP_PROX_TV::set_pfdr_param(real_t rho, real_t cond_min,
 TPL void CP_PROX_TV::solve_reduced_problem()
 {
     /**  compute reduced matrix  **/
-    real_t *rY, *rM; // reduced observations and metric shape
+    real_t *rY, *rl22M; // reduced observations and l22 metric
     rY = (real_t*) malloc_check(sizeof(real_t)*rV*D);
-    rM = metric_shape == MULTIDIM ?
+    rl22M = l22_metric_shape == MULTIDIM ?
         (real_t*) malloc_check(sizeof(real_t)*rV*D) :
         (real_t*) malloc_check(sizeof(real_t)*rV);
 
-    #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV)
+    #pragma omp parallel for schedule(dynamic) NUM_THREADS(V*D, rV)
     for (comp_t rv = 0; rv < rV; rv++){
-        rYv = rY + D*rv;
-        rMv = rMv + metric_shape == MULTIDIM ? D*rv : rv;
+        real_t* rYv = rY + D*rv;
+        real_t* rl22Mv = rl22M + (l22_metric_shape == MULTIDIM ? D*rv : rv);
         for (size_t d = 0; d < D; d++){
-            rYv[d] = ZERO;
-            if (d == 0 || metric_shape == MULTIDIM){ rMv[d] = ZERO; }
-            /* run along the component rv */
-            for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
-                index_t v = comp_list[i];
-                size_t vd = D*v + d;
-                rYv[d] += M_(v, vd)*Y[vd];
-                if (d == 0 || metric_shape == MULTIDIM){ rMv[d] += M_(v, vd); }
+            rYv[d] = 0.0;
+            if (d == 0 || l22_metric_shape == MULTIDIM){ rl22Mv[d] = 0.0; }
+        }
+        /* run along the component rv */
+        for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
+            index_t v = comp_list[i];
+            size_t vd = D*v;
+            for (size_t d = 0; d < D; d++){
+                rYv[d] += L22_METRIC_(v, vd)*Y[vd];
+                if (d == 0 || l22_metric_shape == MULTIDIM){
+                    rl22Mv[d] += L22_METRIC_(v, vd);
+                }
+                vd++;
             }
-            rYv[d] /= metric_shape == MULTIDIM ? rMv[d] : rMv[0];
+        }
+        for (size_t d = 0; d < D; d++){
+            rYv[d] /= (l22_metric_shape == MULTIDIM ? rl22Mv[d] : rl22Mv[0]);
         }
     }
     
@@ -86,8 +104,9 @@ TPL void CP_PROX_TV::solve_reduced_problem()
 
         Pfdr_prox_tv<real_t, comp_t> *pfdr =
             new Pfdr_prox_tv<real_t, comp_t>(rV, rE, reduced_edges, rY, D,
-                d1p == D11 ? PFDR::D11 : PFDR::D12, d1p_coor_weights,
-                metric_shape == MULTIDIM ? PFDR::MULTIDIM : PFDR::MONODIM, rM);
+                d1p == D11 ? PFDR::D11 : PFDR::D12, d1p_metric,
+                l22_metric_shape == MULTIDIM ? PFDR::MULTIDIM : PFDR::MONODIM,
+                rl22M);
         
         pfdr->set_edge_weights(reduced_edge_weights);
         pfdr->set_conditioning_param(pfdr_cond_min, pfdr_dif_rcd);
@@ -104,7 +123,7 @@ TPL void CP_PROX_TV::solve_reduced_problem()
 
     }
 
-    free(rY); free(rM);
+    free(rY); free(rl22M);
 }
 
 TPL void CP_PROX_TV::compute_grad()
@@ -124,27 +143,27 @@ TPL void CP_PROX_TV::compute_grad()
 
         size_t vd = D*v;
         for (size_t d = 0; d < D; d++){
-            Gv[d] += M_(v, vd)*(rXv[d] - Yv[d]);
+            Gv[d] += L22_METRIC_(v, vd)*(rXv[d] - Yv[d]);
             vd++;
         }
     }
 }
 
-TPL real_t CP_PROX_TV::compute_objective()
+TPL real_t CP_PROX_TV::compute_objective() const
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
 
     #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
         reduction(+:obj)
     for (index_t v = 0; v < V; v++){
-        rXv = rX + D*comp_assign[v];
+        const real_t* rXv = rX + D*comp_assign[v];
         size_t vd = D*v;
         for (size_t d = 0; d < D; d++){
-            obj += M_(v, vd)*(rXv[d] - Y[vd])*(rXv[d] - Y[vd]);
+            obj += L22_METRIC_(v, vd)*(rXv[d] - Y[vd])*(rXv[d] - Y[vd]);
             vd++;
         }
     }
-    obj *= HALF;
+    obj /= 2.0;
 
     obj += compute_graph_d1(); // ||x||_d1
 

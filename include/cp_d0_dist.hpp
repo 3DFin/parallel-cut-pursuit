@@ -55,6 +55,9 @@ public:
 
     /**  methods for manipulating parameters  **/
 
+    /* parameters of d0 penalization (w_d0_uv) can be set using base class Cp
+     * method set_edge_weights() */
+
     /* specific loss */
     real_t quadratic_loss() const { return D; }
 
@@ -79,7 +82,7 @@ private:
     /**  separable loss term: weighted square l2 or smoothed KL **/
     const real_t* Y; // observations, D-by-V array, column major format
 
-    /* D (or public function quadratic_loss()) for quadratic 
+    /* D (or public method quadratic_loss()) for quadratic 
      *      f(x) = 1/2 ||y - x||_{l2,W}^2 ,
      * where W is a diagonal metric (separable product along ℝ^V and ℝ^D),
      * that is ||y - x||_{l2,W}^2 = sum_{v in V} w_v ||x_v - y_v||_{l2,M}^2

@@ -1,7 +1,7 @@
 function varargout = cp_d1_lsx_mex(loss, Y, first_edge, adj_vertices, options)
 %
 %        [Comp, rX, [List, Graph, Obj, Time, Dif]] = cp_d1_lsx_mex(loss, Y,
-%   first_edge, adj_vertices, options)
+%            first_edge, adj_vertices, options)
 %
 % Cut-pursuit algorithm with d1 (total variation) penalization, with a
 % separable loss term and simplex constraints:
@@ -69,7 +69,7 @@ function varargout = cp_d1_lsx_mex(loss, Y, first_edge, adj_vertices, options)
 %     for each edge, adj_vertices indicates its ending vertex, (uint32) array
 %         of length E
 % options - structure with any of the following fields [with default values]:
-%     edge_weights [1.0], loss_weights [none], d1_coor_weights [none],
+%     edge_weights [1.0], loss_weights [none], d11_metric [none],
 %     cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [1],
 %     split_damp_ratio [1.0], split_values_init_num [2],
 %     split_values_iter_num [2], pfdr_rho [1.0], pfdr_cond_min [1e-2],
@@ -77,12 +77,13 @@ function varargout = cp_d1_lsx_mex(loss, Y, first_edge, adj_vertices, options)
 %     verbose [1e2], max_num_threads [none], max_split_size [none],
 %     balance_parallel_split [true], compute_List [false], compute_Obj [false],
 %     compute_Time [false], compute_Dif [false]
-% edge_weights - (real) array of length E, or scalar for homogeneous weights
-% loss_weights - weights on vertices; (real) array of length V
-% d1_coor_weights - for multidimensional data, weights the coordinates in the
-%     l1 norms of finite differences; (real) array of length D;
-%     all weights must be strictly positive, and it is advised to normalize the
-%     weights so that the first value is unity
+% edge_weights - weights on the edges (w_d1_uv in the above notations);
+%     (real) array of length E, or scalar for homogeneous weights
+% loss_weights - weights on vertices (w_v in the above notations);
+%     (real) array of length V
+% d11_metric - diagonal metric on the d11 penalization (w_d1_d above);
+%     (real) array of length D; all weights must be strictly positive, and it
+%     is advised to normalize the weights so that the first value is unity
 % cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
 %     relative changes (in Euclidean norm) is less than dif_tol;
 %     1e-3 is a typical value; a lower one can give better precision but with

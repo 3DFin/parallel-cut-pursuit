@@ -56,7 +56,7 @@ public:
      * beforehand */
     virtual ~Cp();
 
-    /**  manipulate private members pointers and values  **/
+    /**  methods for manipulating parameters  **/
 
     void reset_edges(); // bind all edges
 
@@ -167,7 +167,6 @@ protected:
     comp_t saturated_comp; // number of saturated components
     index_t saturated_vert; // number of vertices within saturated components
 
-private:
     /* reduced connectivity
      * reduced edges represented with edges list (array of size twice the 
      * number of reduced edges, consecutive indices are linked components)
@@ -180,8 +179,7 @@ private:
      *  to themselves with epsilon reduced weight */
     comp_t* reduced_edges;
 
-protected:
-    /* accessors for reduced_edges */
+    /* easy accessors for reduced_edges */
     const comp_t& reduced_edges_u(index_t re) const
         { return reduced_edges[((size_t) 2)*re]; }
     const comp_t& reduced_edges_v(index_t re) const

@@ -251,6 +251,7 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
 
     # Convert in float64 all float arguments
     loss = float(loss)
+    split_damp_ratio = float(split_damp_ratio)
     if 0.0 < loss and loss < 1.0 and coor_weights.size > 0:
         raise ValueError("Cut-pursuit d0 distance: with Kullback-Leibler loss,"
                      " 'coor_weights' should be empty; weighting coordinates "
@@ -265,7 +266,6 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         raise ValueError("Cut-pursuit d0 distance: with quadratic loss,"
             " argument 'coor_weights' should be empty or of size D")
     cp_dif_tol = float(cp_dif_tol)
-    split_damp_ratio = float(split_damp_ratio)
      
     # Convert all int arguments: 
     cp_it_max = int(cp_it_max)

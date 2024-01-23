@@ -5,15 +5,10 @@
 #include "pfdr_prox_tv.hpp"
 #include "omp_num_threads.hpp"
 
-/* constants of the correct type */
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define HALF ((real_t) 0.5)
-
 #define Ga_(v, vd)  (gashape == SCALAR ? ga : \
-                      gashape == MONODIM ? Ga[(v)] : Ga[(vd)])
-#define M_(v, vd)   (metric_shape == SCALAR ? ONE : \
-                      metric_shape == MONODIM ? M[(v)] : M[(vd)])
+                     gashape == MONODIM ? Ga[(v)] : Ga[(vd)])
+#define L22_METRIC_(v, vd)   (l22_metric_shape == SCALAR ? (real_t) 1.0 : \
+          l22_metric_shape == MONODIM ? l22_metric[(v)] : l22_metric[(vd)])
 
 #define TPL template <typename real_t, typename vertex_t>
 #define PFDR_PROX_TV Pfdr_prox_tv<real_t, vertex_t>
@@ -21,25 +16,26 @@
 using namespace std;
 
 TPL PFDR_PROX_TV::Pfdr_prox_tv(vertex_t V, index_t E, const vertex_t* edges,
-    const real_t* Y, index_t D, D1p d1p, const real_t* d1p_coor_weights,
-    Condshape metric_shape, const real_t* M)
-    : Pfdr_d1<real_t, vertex_t>(V, E, edges, D, d1p, d1p_coor_weights,
-        metric_shape), Y(Y), metric_shape(metric_shape), M(M)
+    const real_t* Y, index_t D, D1p d1p, const real_t* d1p_metric,
+    Condshape l22_metric_shape, const real_t* l22_metric)
+    : Pfdr_d1<real_t, vertex_t>(V, E, edges, D, d1p, d1p_metric,
+        l22_metric_shape),
+      Y(Y), l22_metric_shape(l22_metric_shape), l22_metric(l22_metric)
 {
     /* ensure handling of infinite values (negation, comparisons) is safe */
     static_assert(numeric_limits<real_t>::is_iec559,
         "PFDR prox TV: real_t must satisfy IEEE 754.");
-    set_lipschitz_param(M, ONE, metric_shape);
+    set_lipschitz_param(l22_metric, 1.0, l22_metric_shape);
 }
 
 TPL void PFDR_PROX_TV::compute_hess_f()
 {
-    if (metric_shape == SCALAR){
-        ga = ONE;
-    }else if (metric_shape == MONODIM){
-        for (vertex_t v = 0; v < V; v++){ Ga[v] = M[v]; }
+    if (l22_metric_shape == SCALAR){
+        for (vertex_t v = 0; v < V; v++){ Ga[v] = 1.0; }
+    }else if (l22_metric_shape == MONODIM){
+        for (vertex_t v = 0; v < V; v++){ Ga[v] = l22_metric[v]; }
     }else{
-        for (index_t i = 0; i < V*D; i++){ Ga[i] = M[i]; }
+        for (index_t vd = 0; vd < V*D; vd++){ Ga[vd] = l22_metric[vd]; }
     }
 }
 
@@ -49,25 +45,25 @@ TPL void PFDR_PROX_TV::compute_Ga_grad_f()
     for (vertex_t v = 0; v < V; v++){
         index_t vd = D*v;
         for (index_t d = 0; d < D; d++){
-            Ga_grad_f[vd] = Ga_(v, vd)*M_(v, vd)*(X[vd] - Y[vd]);
+            Ga_grad_f[vd] = Ga_(v, vd)*L22_METRIC_(v, vd)*(X[vd] - Y[vd]);
             vd++;
         }
     }
 }
 
-TPL real_t PFDR_PROX_TV::compute_f()
+TPL real_t PFDR_PROX_TV::compute_f() const
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
     #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
         reduction(+:obj)
     for (vertex_t v = 0; v < V; v++){
         index_t vd = D*v;
         for (index_t d = 0; d < D; d++){
-            obj += M_(v, vd)*(X[vd] - Y[vd])*(X[vd] - Y[vd]);
+            obj += L22_METRIC_(v, vd)*(X[vd] - Y[vd])*(X[vd] - Y[vd]);
             vd++;
         }
     }
-    return HALF*obj;
+    return obj/2.0;
 }
 
 /**  instantiate for compilation  **/

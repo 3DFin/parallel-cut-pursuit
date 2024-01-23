@@ -6,12 +6,7 @@
 #include "proj_simplex.hpp"
 #include "omp_num_threads.hpp"
 
-/* constants of the correct type */
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define HALF ((real_t) 0.5)
-
-#define LOSS_WEIGHTS_(v) (loss_weights ? loss_weights[(v)] : ONE)
+#define LOSS_WEIGHTS_(v) (loss_weights ? loss_weights[(v)] : (real_t) 1.0)
 #define Ga_(v, vd) (gashape == MONODIM ? Ga[(v)] : Ga[(vd)])
 #define W_Ga_Y_(v, vd) (gashape == MONODIM ? W_Ga_Y[(v)] : W_Ga_Y[(vd)])
 
@@ -21,10 +16,11 @@
 using namespace std;
 
 TPL PFDR_D1_LSX::Pfdr_d1_lsx(vertex_t V, index_t E, const vertex_t* edges,
-    real_t loss, index_t D, const real_t* Y, const real_t* d1_coor_weights)
-    : Pfdr_d1<real_t, vertex_t>(V, E, edges, D, D11, d1_coor_weights, 
-        loss == linear_loss() ? NULH : loss == quadratic_loss() ? MONODIM :
-        MULTIDIM), loss(loss), Y(Y)
+    real_t loss, index_t D, const real_t* Y, const real_t* d11_metric)
+    : Pfdr_d1<real_t, vertex_t>(V, E, edges, D, D11, d11_metric, 
+        loss == linear_loss() ? SCALAR :
+        loss == quadratic_loss() ? MONODIM : MULTIDIM),
+    loss(loss), Y(Y)
 {
     W_Ga_Y = nullptr;
     loss_weights = nullptr;
@@ -38,7 +34,7 @@ TPL PFDR_D1_LSX::~Pfdr_d1_lsx(){ if (W_Ga_Y != Ga){ free(W_Ga_Y); } }
 TPL void PFDR_D1_LSX::set_loss(real_t loss, const real_t* Y,
     const real_t* loss_weights)
 {
-    if (loss < ZERO || loss > ONE){
+    if (loss < 0.0 || loss > 1.0){
         cerr << "PFDR graph d1 loss simplex: loss parameter should be between "
             "0 and 1 (" << loss << " given)." << endl;
         exit(EXIT_FAILURE);
@@ -59,13 +55,13 @@ TPL void PFDR_D1_LSX::set_loss(real_t loss, const real_t* Y,
 TPL void PFDR_D1_LSX::compute_lipschitz_metric()
 {
     if (loss == linear_loss()){
-        l = ZERO; lshape = SCALAR;
+        l = 0.0; lshape = SCALAR;
     }else if (loss == quadratic_loss()){
         if (loss_weights){ L = loss_weights; lshape = MONODIM; }
-        else{ l = ONE; lshape = SCALAR; }
+        else{ l = 1.0; lshape = SCALAR; }
     }else{ /* KLs loss, Ld = max_{0 <= x_d <= 1} d^2KLs/dx_d^2
             *              = (1-s)^2/(s/D)^2 (s/D + (1-s)y_d) */
-        const real_t c = (ONE - loss);
+        const real_t c = (1.0 - loss);
         const real_t q = loss/D;
         const real_t r = c*c/(q*q);
         Lmut = (real_t*) malloc_check(sizeof(real_t)*V*D); 
@@ -85,14 +81,14 @@ TPL void PFDR_D1_LSX::compute_hess_f()
 {
     const index_t Dga = gashape == MULTIDIM ? D : 1;
     if (loss == linear_loss()){
-        for (index_t vd = 0; vd < V*Dga; vd++){ Ga[vd] = ZERO; }
+        for (index_t vd = 0; vd < V*Dga; vd++){ Ga[vd] = 0.0; }
     }else if (loss == quadratic_loss()){
         for (vertex_t v = 0; v < V; v++){
             index_t vd = v*Dga;
             for (index_t d = 0; d < Dga; d++){ Ga[vd++] = LOSS_WEIGHTS_(v); }
         }
     }else{ /* d^2KLs/dx_d^2 = (1-s)^2 (s/D + (1-s)y_d)/(s/D + (1-s)x_d)^2 */
-        const real_t c = (ONE - loss);
+        const real_t c = (1.0 - loss);
         const real_t q = loss/D;
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V)
         for (vertex_t v = 0; v < V; v++){
@@ -130,7 +126,7 @@ TPL void PFDR_D1_LSX::compute_Ga_grad_f()
             }
         }
     }else{ /* dKLs/dx_k = -(1-s)(s/D + (1-s)y_k)/(s/D + (1-s)x_k) */
-        real_t r = loss/D/(ONE - loss);
+        real_t r = loss/D/(1.0 - loss);
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D)
         for (index_t vd = 0; vd < V*D; vd++){
             Ga_grad_f[vd] = W_Ga_Y[vd]/(r + X[vd]);
@@ -141,22 +137,22 @@ TPL void PFDR_D1_LSX::compute_Ga_grad_f()
 TPL void PFDR_D1_LSX::compute_prox_Ga_h()
 {
     if (gashape == MULTIDIM){
-        proj_simplex::proj_simplex<real_t>(X, D, V, nullptr, ONE, Ga);
+        proj_simplex::proj_simplex<real_t>(X, D, V, nullptr, 1.0, Ga);
     }else{
-        proj_simplex::proj_simplex<real_t>(X, D, V, nullptr, ONE);
+        proj_simplex::proj_simplex<real_t>(X, D, V, nullptr, 1.0);
     }
 }
 
-TPL real_t PFDR_D1_LSX::compute_f()
+TPL real_t PFDR_D1_LSX::compute_f() const
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
     if (loss == linear_loss()){
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:obj)
         for (vertex_t v = 0; v < V; v++){
             real_t* Xv = X + D*v;
             const real_t* Yv = Y + D*v;
-            real_t prod = ZERO;
+            real_t prod = 0.0;
             for (index_t d = 0; d < D; d++){ prod += Xv[d]*Yv[d]; }
             obj -= LOSS_WEIGHTS_(v)*prod;
         }
@@ -166,22 +162,22 @@ TPL real_t PFDR_D1_LSX::compute_f()
         for (vertex_t v = 0; v < V; v++){
             real_t* Xv = X + D*v;
             const real_t* Yv = Y + D*v;
-            real_t dif2 = ZERO;
+            real_t dif2 = 0.0;
             for (index_t d = 0; d < D; d++){
                 dif2 += (Xv[d] - Yv[d])*(Xv[d] - Yv[d]);
             }
             obj += LOSS_WEIGHTS_(v)*dif2;
         }
-        obj *= HALF;
+        obj *= 0.5;
     }else{ /* smoothed Kullback-Leibler */
-        const real_t c = (ONE - loss);
+        const real_t c = (1.0 - loss);
         const real_t q = loss/D;
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:obj) 
         for (vertex_t v = 0; v < V; v++){
             real_t* Xv = X + D*v;
             const real_t* Yv = Y + D*v;
-            real_t KLs = ZERO;
+            real_t KLs = 0.0;
             for (index_t d = 0; d < D; d++){
                 real_t ys = q + c*Yv[d];
                 KLs += ys*log(ys/(q + c*Xv[d]));
@@ -217,7 +213,7 @@ TPL void PFDR_D1_LSX::preconditioning(bool init)
         }
     }else{ /* dKLs/dx_d = -(1-s)(s/D + (1-s)y_d)/(s/K + (1-s)x_d) */
         if (!W_Ga_Y){ W_Ga_Y = (real_t*) malloc_check(sizeof(real_t)*V*D); }
-        const real_t c = (ONE - loss);
+        const real_t c = (1.0 - loss);
         const real_t q = loss/D;
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V)
         for (vertex_t v = 0; v < V; v++){
@@ -233,10 +229,12 @@ TPL void PFDR_D1_LSX::preconditioning(bool init)
 
 TPL void PFDR_D1_LSX::initialize_iterate()
 {
-    /*if (loss == linear_loss()){ *//* Yv might not lie on the simplex;
-        * create a point on the simplex by removing the minimum value
-        * (resulting problem loss + d1 + simplex problem strictly equivalent)
-        * and dividing by the sum *//*
+    /*if (loss == linear_loss()){ */
+        /* Yv might not lie on the simplex;
+         * create a point on the simplex by removing the minimum value
+         * (resulting problem loss + d1 + simplex problem strictly equivalent)
+         * and dividing by the sum */
+    /*
         #pragma omp parallel for schedule(static) NUM_THREADS(2*V*D, V)
         for (vertex_t v = 0; v < V; v++){
             const real_t* Yv = Y + D*v;
@@ -248,7 +246,7 @@ TPL void PFDR_D1_LSX::initialize_iterate()
                 else if (Yv[d] > max){ max = Yv[d]; }
             }
             if (min == max){ // avoid trouble if all equal
-                for (index_t d = 0; d < D; d++){ Xv[d] = ONE/D; }
+                for (index_t d = 0; d < D; d++){ Xv[d] = 1.0/D; }
             }else{
                 sum -= D*min;
                 for (index_t d = 0; d < D; d++){
@@ -256,23 +254,26 @@ TPL void PFDR_D1_LSX::initialize_iterate()
                 }
             }
         }
-    }else{ *//* Yv lies on the simplex */
-    /* currently all assumed to lie on the simplex */
+    }else{ */
+        /* Yv lies on the simplex */
+
+        /* currently all assumed to lie on the simplex */
         for (index_t vd = 0; vd < V*D; vd++){ X[vd] = Y[vd]; }
+
     /* } */
 }
 
 /* relative iterate evolution in l1 norm */
 TPL real_t PFDR_D1_LSX::compute_evolution() const
 {
-    real_t dif = ZERO;
-    real_t amp = ZERO;
+    real_t dif = 0.0;
+    real_t amp = 0.0;
     #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
         reduction(+:dif, amp)
     for (vertex_t v = 0; v < V; v++){
         const real_t* Xv = X + D*v;
         const real_t* last_Xv = last_X + D*v;
-        real_t dif_v = ZERO; 
+        real_t dif_v = 0.0; 
         for (index_t d = 0; d < D; d++){ dif_v += abs(last_Xv[d] - Xv[d]); }
         dif += LOSS_WEIGHTS_(v)*dif_v;
         amp += LOSS_WEIGHTS_(v);

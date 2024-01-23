@@ -77,6 +77,11 @@ public:
     typedef size_t matrix_index_t;
     #endif
 
+    /**  methods for manipulating paramters  **/
+
+    /* d1 weights (w_d1_uv above) can be set from base class Cp method
+     * set_edge_weights() */
+
     /* flag Gram matrices */
     static matrix_index_t Gram_full() { return 0; }
     static matrix_index_t Gram_diag() { return -1; }
@@ -90,11 +95,10 @@ public:
      * for a general scalar matrix, use the identity (A null, a zero) and scale
      * observations and penalizations accordingly */
     void set_quadratic(const real_t* Y, matrix_index_t N,
-        const real_t* A, real_t a = 1.0);
+        const real_t* A = nullptr, real_t a = 1.0);
 
     /* overload for identity matrix */
-    void set_quadratic(const real_t* Y)
-        { set_quadratic(Y, Gram_diag(), nullptr); }
+    void set_quadratic(const real_t* Y){ set_quadratic(Y, Gram_diag()); }
 
     /* set l1_weights null for homogeneously equal to homo_l1_weight */
     void set_l1(const real_t* l1_weights = nullptr,

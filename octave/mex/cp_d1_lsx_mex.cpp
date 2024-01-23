@@ -4,7 +4,7 @@
  *
  * options is a struct with any of the following fields [with default values]:
  *
- *      edge_weights [1.0], loss_weights [none], d1_coor_weights [none],
+ *      edge_weights [1.0], loss_weights [none], d11_metric [none],
  *      cp_dif_tol [1e-3], cp_it_max [10], K [2], split_iter_num [1],
  *      split_damp_ratio [1.0], split_values_init_num [2],
  *      split_values_iter_num [2], pfdr_rho [1.0], pfdr_cond_min [1e-2],
@@ -62,12 +62,12 @@ static void check_opts(const mxArray* options)
             mxGetClassName(options));
     }
 
-    const int num_allow_opts = 13;
-    const char* opts_names[] = {"edge_weights", "loss_weights",
-        "d1_coor_weights", "cp_dif_tol", "cp_it_max", "K", "split_iter_num",
-        "split_damp_ratio", "split_values_init_num", "split_values_iter_num",
-        "pfdr_rho", "pfdr_cond_min", "pfdr_dif_rcd", "pfdr_dif_tol",
-        "pfdr_it_max", "verbose", "max_num_threads", "max_split_size",
+    const int num_allow_opts = 24;
+    const char* opts_names[] = {"edge_weights", "loss_weights", "d11_metric",
+        "cp_dif_tol", "cp_it_max", "K", "split_iter_num", "split_damp_ratio",
+        "split_values_init_num", "split_values_iter_num", "pfdr_rho",
+        "pfdr_cond_min", "pfdr_dif_rcd", "pfdr_dif_tol", "pfdr_it_max",
+        "verbose", "max_num_threads", "max_split_size",
         "balance_parallel_split", "compute_List", "compute_Graph",
         "compute_Obj", "compute_Time", "compute_Dif"};
 
@@ -163,7 +163,7 @@ static void cp_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
         }
 
     GET_REAL_OPT(loss_weights)
-    GET_REAL_OPT(d1_coor_weights)
+    GET_REAL_OPT(d11_metric)
     GET_REAL_OPT(edge_weights)
     real_t homo_edge_weight = 1.0;
     if (opt && mxGetNumberOfElements(opt) == 1){
@@ -197,6 +197,19 @@ static void cp_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
     bool GET_SCAL_OPT(compute_Time, false);
     bool GET_SCAL_OPT(compute_Dif, false);
 
+
+    /* check optional outputs requested */
+    int nout = 2;
+    if (compute_List){ nout++; }
+    if (compute_Graph){ nout++; }
+    if (compute_Obj){ nout++; }
+    if (compute_Time){ nout++; }
+    if (compute_Dif){ nout++; }
+    if (nlhs != nout){
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 loss simplex: "
+                "requested %i outputs, but %i captured", nout, nlhs);
+    }
+
     /***  prepare output; rX (plhs[1]) is created later  ***/
 
     plhs[0] = mxCreateNumericMatrix(1, V, mxCOMP_CLASS, mxREAL);
@@ -209,7 +222,7 @@ static void cp_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     double* Time = nullptr;
     if (compute_Time){
-        (double*) mxMalloc(sizeof(double)*(cp_it_max + 1));
+        Time = (double*) mxMalloc(sizeof(double)*(cp_it_max + 1));
     }
 
     real_t* Dif = nullptr;
@@ -222,13 +235,12 @@ static void cp_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
             (V, E, first_edge, adj_vertices, D, Y);
 
     cp->set_loss(loss, Y, loss_weights);
-    cp->set_edge_weights(edge_weights, homo_edge_weight, d1_coor_weights);
+    cp->set_d1_param(edge_weights, homo_edge_weight, d11_metric);
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
     cp->set_split_param(max_split_size, K, split_iter_num, split_damp_ratio,
         split_values_init_num, split_values_iter_num);
     cp->set_pfdr_param(pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_it_max,
         pfdr_dif_tol);
-    cp->set_min_comp_weight(min_comp_weight);
     cp->set_parallel_param(max_num_threads, balance_parallel_split);
     cp->set_monitoring_arrays(Obj, Time, Dif);
 
@@ -236,11 +248,12 @@ static void cp_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     int cp_it = cp->cut_pursuit();
 
-    /* get number of components and their lists of indices if necessary */
+    /* get number of components and their lists of indices */
     const index_t* first_vertex;
     const index_t* comp_list;
     comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
 
+    /* get lists of indices if requested */
     mxArray* mx_List = nullptr;
     if (compute_List){
         mx_List = mxCreateCellMatrix(1, rV); // list of arrays
@@ -252,13 +265,12 @@ static void cp_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
             for (index_t i = 0; i < comp_size; i++){
                 List_rv[i] = comp_list[first_vertex[rv] + i];
             }
-            void mxSetCell(mx_List, rv, mx_List_rv);
+            mxSetCell(mx_List, rv, mx_List_rv);
         }
     }
 
     /* copy reduced values */
-    comp_t rV = cp->get_components();
-    real_t* cp_rX = cp->get_reduced_values();
+    const real_t* cp_rX = cp->get_reduced_values();
     plhs[1] = mxCreateNumericMatrix(D, rV, mxREAL_CLASS, mxREAL);
     real_t* rX = (real_t*) mxGetData(plhs[1]);
     for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
@@ -311,19 +323,9 @@ static void cp_d1_lsx_mex(int nlhs, mxArray *plhs[], int nrhs,
     delete cp;
 
     /**  assign optional outputs and resize monitoring arrays if necessary  **/
-    int nout = 2;
-    if (compute_List){ nout++; }
-    if (compute_Graph){ nout++; }
-    if (compute_Obj){ nout++; }
-    if (compute_Time){ nout++; }
-    if (compute_Dif){ nout++; }
-    if (nlhs != nout){
-            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
-                "requested %i outputs, but %i captured", nout, nlhs);
-    }
     nout = 2;
     if (compute_List){ plhs[nout++] = mx_List; }
-    if (compute_Graph){ plhs[nout++] = mx_Graph); }
+    if (compute_Graph){ plhs[nout++] = mx_Graph; }
     if (compute_Obj){
         plhs[nout++] = resize_and_create_mxRow(Obj, cp_it + 1, mxREAL_CLASS);
     }

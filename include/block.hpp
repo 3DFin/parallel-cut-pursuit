@@ -1,10 +1,7 @@
 /* block.hpp */
 /* Vladimir Kolmogorov vnk@ist.ac.at */
-
-/* Version slightly modified by Hugo Raguet 2016 
- * different error handling (no error function, message handed to
- * standard error) */
-
+/* Version slightly modified by Hugo Raguet 2016 (different error handling: no
+ * error function, message handed to standard error) */
 /*
 	Template classes Block and DBlock
 	Implement adding and deleting items of the same type in blocks.

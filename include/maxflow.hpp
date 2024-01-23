@@ -1,5 +1,6 @@
-/* graph.hpp */
-/* modified by Hugo Raguet for use with cut-pursuit algorithms (2020) */
+/* maxflow.hpp */
+/* modified from graph.h by Hugo Raguet 2020, for use with cut-pursuit
+ * algorithms */
 /*
     Copyright Vladimir Kolmogorov and Yuri Boykov
 

@@ -16,13 +16,11 @@ import re
 
 ###  targets and compile options  ###
 to_compile = [ # comment undesired extension modules
+    "cp_prox_tv_cpy",
     # "cp_d1_ql1b_cpy",
     # "cp_d1_lsx_cpy",
-    "cp_d0_dist_cpy",
-    # "cp_prox_tv_cpy"
+    # "cp_d0_dist_cpy",
 ]
-include_dirs = [numpy.get_include(), # find the Numpy headers
-                "../include"]
 # compilation and linkage options
 # _GLIBCXX_PARALLEL is only useful for libstdc++ users
 # MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
@@ -38,6 +36,7 @@ else:
     raise NotImplementedError('OS not yet supported.')
 
 ###  auxiliary functions  ###
+
 class build_class(build):
     def initialize_options(self):
         build.initialize_options(self)
@@ -51,18 +50,37 @@ def purge(dir, pattern):
             os.remove(os.path.join(dir, f))
 
 ###  preprocessing  ###
+
 # ensure right working directory
 tmp_work_dir = os.path.realpath(os.curdir)
 os.chdir(os.path.realpath(os.path.dirname(__file__)))
 
-if not os.path.exists("bin"):
-    os.mkdir("bin")
+if not os.path.exists("./bin/"):
+    os.mkdir("bin/")
 
 # remove previously compiled lib
 for shared_obj in to_compile: 
     purge("bin/", shared_obj)
 
 ###  compilation  ###
+
+name = "cp_prox_tv_cpy"
+if name in to_compile:
+    mod = Extension(
+            name,
+            # list source files
+            ["cpython/cp_prox_tv_cpy.cpp", "../src/cp_prox_tv.cpp",
+             "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
+             "../src/maxflow.cpp",
+             "../pcd-prox-split/src/pfdr_prox_tv.cpp",
+             "../pcd-prox-split/src/pfdr_graph_d1.cpp",
+             "../pcd-prox-split/src/pcd_fwd_doug_rach.cpp",
+             "../pcd-prox-split/src/pcd_prox_split.cpp"],
+            include_dirs=[numpy.get_include(), # find the Numpy headers
+                "../include", "../pcd-prox-split/include"],
+            extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args)
+    setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
 
 name = "cp_d1_ql1b_cpy"
 if name in to_compile:
@@ -71,14 +89,18 @@ if name in to_compile:
             # list source files
             ["cpython/cp_d1_ql1b_cpy.cpp", "../src/cp_d1_ql1b.cpp",
              "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
-             "../src/maxflow.cpp", "../src/pfdr_d1_ql1b.cpp",
-             "../src/matrix_tools.cpp", "../src/pfdr_graph_d1.cpp", 
-             "../src/pcd_fwd_doug_rach.cpp", "../src/pcd_prox_split.cpp"],
-            include_dirs=include_dirs,
+             "../src/maxflow.cpp",
+             "../pcd-prox-split/src/pfdr_d1_ql1b.cpp",
+             "../pcd-prox-split/src/pfdr_graph_d1.cpp",
+             "../pcd-prox-split/src/pcd_fwd_doug_rach.cpp",
+             "../pcd-prox-split/src/pcd_prox_split.cpp",
+             "../pcd-prox-split/matrix-tools/src/matrix_tools.cpp"],
+            include_dirs=[numpy.get_include(), "../include",
+                "../wth-element/include", "../pcd-prox-split/include",
+                "../pcd-prox-split/matrix-tools/include"],
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)
     setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
-
 
 name = "cp_d1_lsx_cpy"
 if name in to_compile:
@@ -87,14 +109,18 @@ if name in to_compile:
             # list source files
             ["cpython/cp_d1_lsx_cpy.cpp", "../src/cp_d1_lsx.cpp",
              "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
-             "../src/maxflow.cpp", "../src/pfdr_d1_lsx.cpp",
-             "../src/proj_simplex.cpp", "../src/pfdr_graph_d1.cpp",
-             "../src/pcd_fwd_doug_rach.cpp", "../src/pcd_prox_split.cpp"], 
-            include_dirs=include_dirs,
+             "../src/maxflow.cpp",
+             "../pcd-prox-split/src/pfdr_d1_lsx.cpp",
+             "../pcd-prox-split/src/pfdr_graph_d1.cpp",
+             "../pcd-prox-split/src/pcd_fwd_doug_rach.cpp",
+             "../pcd-prox-split/src/pcd_prox_split.cpp",
+             "../pcd-prox-split/proj-simplex/src/proj_simplex.cpp"], 
+            include_dirs=[numpy.get_include(), # find the Numpy headers
+                "../include", "../pcd-prox-split/include",
+                "../pcd-prox-split/proj-simplex/include"],
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)
     setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
-
 
 name = "cp_d0_dist_cpy"
 if name in to_compile:
@@ -104,27 +130,10 @@ if name in to_compile:
             ["cpython/cp_d0_dist_cpy.cpp", "../src/cp_d0_dist.cpp",
              "../src/cut_pursuit_d0.cpp", "../src/cut_pursuit.cpp",
              "../src/maxflow.cpp"], 
-            include_dirs=include_dirs,
+            include_dirs=[numpy.get_include(), "../include"],
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args)
     setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
-
-
-name = "cp_prox_tv_cpy"
-if name in to_compile:
-    mod = Extension(
-            name,
-            # list source files
-            ["cpython/cp_prox_tv_cpy.cpp", "../src/cp_prox_tv.cpp",
-             "../src/cut_pursuit_d1.cpp", "../src/cut_pursuit.cpp",
-             "../src/maxflow.cpp", "../src/pfdr_d1_ql1b.cpp",
-             "../src/pfdr_graph_d1.cpp", "../src/pcd_fwd_doug_rach.cpp",
-             "../src/pcd_prox_split.cpp", "../src/matrix_tools.cpp"],
-            include_dirs=include_dirs,
-            extra_compile_args=extra_compile_args,
-            extra_link_args=extra_link_args)
-    setup(name=name, ext_modules=[mod], cmdclass=dict(build=build_class))
-
 
 ###  postprocessing  ###
 try:

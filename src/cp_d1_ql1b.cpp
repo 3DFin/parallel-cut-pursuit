@@ -6,8 +6,6 @@
 #include "pfdr_d1_ql1b.hpp"
 #include "wth_element.hpp"
 
-#define ZERO ((real_t) 0.0) // avoid conversions
-#define HALF ((real_t) 0.5) // avoid conversions
 #define L1_WEIGHTS_(v) (l1_weights ? l1_weights[(v)] : homo_l1_weight)
 #define Y_(n) (Y ? Y[(n)] : (real_t) 0.0)
 #define Yl1_(v) (Yl1 ? Yl1[(v)] : (real_t) 0.0)
@@ -28,7 +26,7 @@ TPL CP_D1_QL1B::Cp_d1_ql1b(index_t V, index_t E, const index_t* first_edge,
     Y = Yl1 = A = R = nullptr;
     N = Gram_diag();
     a = 1.0;
-    l1_weights = nullptr; homo_l1_weight = ZERO;
+    l1_weights = nullptr; homo_l1_weight = 0.0;
     low_bnd = nullptr; homo_low_bnd = -real_inf();
     upp_bnd = nullptr; homo_upp_bnd = real_inf();
 
@@ -56,7 +54,7 @@ TPL void CP_D1_QL1B::set_quadratic(const real_t* Y, matrix_index_t N,
 TPL void CP_D1_QL1B::set_l1(const real_t* l1_weights, real_t homo_l1_weight,
     const real_t* Yl1)
 {
-    if (!l1_weights && homo_l1_weight < ZERO){
+    if (!l1_weights && homo_l1_weight < 0.0){
         cerr << "Cut-pursuit graph d1 quadratic l1 bounds: negative "
             "homogeneous l1 penalization (" << homo_l1_weight << ")." << endl;
         exit(EXIT_FAILURE);
@@ -123,7 +121,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
 
     if (!is_Gram(N)){ /* main problem is direct matricial case */
         rA = (real_t*) malloc_check(sizeof(real_t)*N*rV);
-        for (matrix_index_t i = 0; i < N*rV; i++){ rA[i] = ZERO; }
+        for (matrix_index_t i = 0; i < N*rV; i++){ rA[i] = 0.0; }
         #pragma omp parallel for schedule(dynamic) NUM_THREADS(N*V, rV)
         for (comp_t rv = 0; rv < rV; rv++){
             real_t *rAv = rA + N*rv; // rv-th column of rA
@@ -142,7 +140,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 real_t *rAAu = rAA + (size_t) rV*ru; // ru-th column of rAA
                 for (comp_t rv = 0; rv <= ru; rv++){
                     real_t *rAv = rA + N*rv; // rv-th column of rA
-                    rAAu[rv] = ZERO;
+                    rAAu[rv] = 0.0;
                     for (matrix_index_t n = 0; n < N; n++){
                         rAAu[rv] += rAu[n]*rAv[n];
                     }
@@ -151,7 +149,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
             if (Y){ /* correlation with observation Y */
                 #pragma omp parallel for schedule(static) NUM_THREADS(rV*N, rV)
                 for (comp_t rv = 0; rv < rV; rv++){
-                    rY[rv] = ZERO;
+                    rY[rv] = 0.0;
                     real_t *rAv = rA + N*rv; // rv-th column of rA
                     for (matrix_index_t n = 0; n < N; n++){
                         rY[rv] += rAv[n]*Y[n];
@@ -164,7 +162,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
         if (Y){ /* recall that observation Y is actually A^t Y */
             #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV)
             for (comp_t rv = 0; rv < rV; rv++){
-                rY[rv] = ZERO;
+                rY[rv] = 0.0;
                 /* run along the component rv */
                 for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1];
                     i++){
@@ -178,7 +176,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
             for (comp_t ru = 0; ru < rV; ru++){
                 real_t* rAAu = rAA + (size_t) rV*ru;
                 for (comp_t rv = 0; rv <= ru; rv++){
-                    rAAu[rv] = ZERO;
+                    rAAu[rv] = 0.0;
                     /* run along the component ru */
                     for (index_t i = first_vertex[ru];
                         i < first_vertex[ru + 1]; i++){
@@ -194,7 +192,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
         }else if (A){ /* diagonal "Gram" (square) matrix */
             #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV)
             for (comp_t rv = 0; rv < rV; rv++){
-                rAA[rv] = ZERO;
+                rAA[rv] = 0.0;
                 /* run along the component rv */
                 for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1];
                     i++){
@@ -244,7 +242,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
         #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV)
         for (comp_t rv = 0; rv < rV; rv++){
             if (l1_weights){
-                rl1_weights[rv] = ZERO;
+                rl1_weights[rv] = 0.0;
                 /* run along the component rv */
                 for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1];
                     i++){
@@ -253,7 +251,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
                 if (Yl1){
                     rYl1[rv] = wth_element(comp_list + first_vertex[rv],
                         Yl1, first_vertex[rv + 1] - first_vertex[rv],
-                        (double) HALF*rl1_weights[rv], l1_weights);
+                        0.5*rl1_weights[rv], l1_weights);
                 }
             }else if (homo_l1_weight){
                 rl1_weights[rv] = (first_vertex[rv + 1] - first_vertex[rv])
@@ -291,8 +289,8 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
     if (rV == 1){ /**  single connected component  **/
 
         /* solution of least-square + l1 */
-        real_t wl1 = rl1_weights ? *rl1_weights : ZERO;
-        real_t yl1 = rYl1 ? *rYl1 : ZERO;
+        real_t wl1 = rl1_weights ? *rl1_weights : 0.0;
+        real_t yl1 = rYl1 ? *rYl1 : 0.0;
         if (*rY - wl1 > (*rAA)*yl1){ *rX = (*rY - wl1)/(*rAA); }
         else if (*rY + wl1 < (*rAA)*yl1){ *rX = (*rY + wl1)/(*rAA); }
         else{ *rX = yl1; }
@@ -311,7 +309,7 @@ TPL void CP_D1_QL1B::solve_reduced_problem()
         pfdr->set_edge_weights(reduced_edge_weights);
         if (PFDR::is_Gram(rN)){ pfdr->set_quadratic(rY, rN, rAA, a); }
         else{ pfdr->set_quadratic(Y, N, rA); }
-        pfdr->set_l1(rl1_weights, ZERO, rYl1);
+        pfdr->set_l1(rl1_weights, 0.0, rYl1);
         pfdr->set_bounds(rlow_bnd, homo_low_bnd, rupp_bnd, homo_upp_bnd);
         pfdr->set_conditioning_param(pfdr_cond_min, pfdr_dif_rcd);
         pfdr->set_relaxation(pfdr_rho);
@@ -365,8 +363,8 @@ TPL void CP_D1_QL1B::compute_grad()
         }else if (N == Gram_full()){ /* grad = (A^t A)*X - A^t Y  */
             const real_t* Av = A + (size_t) V*v;
             for (comp_t ru = 0; ru < rV; ru++){
-                if (rX[ru] == ZERO){ continue; }
-                real_t avru = ZERO; /* sum v-th row of (A^t A), ru-th comp */
+                if (rX[ru] == 0.0){ continue; }
+                real_t avru = 0.0; /* sum v-th row of (A^t A), ru-th comp */
                 for (index_t i = first_vertex[ru]; i < first_vertex[ru + 1];
                     i++){ /* sum column wise, by symmetry */
                     avru += Av[comp_list[i]]; 
@@ -411,7 +409,7 @@ TPL typename CP_D1_QL1B::Split_info
 
     /* test if 0 is a candidate: at least one vertex on nondifferentiability */
     if (rXv <= homo_low_bnd + eps || rXv >= homo_upp_bnd - eps){
-        sX[k] = ZERO; k++;
+        sX[k] = 0.0; k++;
     }else if (l1_weights || homo_l1_weight || low_bnd || upp_bnd){
         index_t i = first_vertex[rv];
         bool diff = true;
@@ -424,7 +422,7 @@ TPL typename CP_D1_QL1B::Split_info
             if (upp_bnd){ diff = diff && rXv < upp_bnd[v] - eps; }
             i++;
         }
-        if (!diff){ sX[k] = ZERO; k++; }
+        if (!diff){ sX[k] = 0.0; k++; }
     }
 
     /* test if +1 is a candidate: at least one vertex not on upper bound */
@@ -452,7 +450,7 @@ TPL real_t CP_D1_QL1B::vert_split_cost(const Split_info& split_info, index_t v,
     comp_t k) const
 {
     real_t sXk = split_info.sX[k];
-    if (sXk == ZERO){ return ZERO; }
+    if (sXk == 0.0){ return 0.0; }
 
     real_t rXv = rX[split_info.rv];
 
@@ -483,14 +481,14 @@ TPL real_t CP_D1_QL1B::compute_objective() const
 /* unfortunately, at this point one does not have access to the reduced objects
  * computed in the routine solve_reduced_problem() */
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
 
     /* quadratic term */
     if (!is_Gram(N)){ /* direct matricial case, 1/2 ||Y - A X||^2 */
         #pragma omp parallel for reduction(+:obj) schedule(static) \
             NUM_THREADS(N)
         for (matrix_index_t n = 0; n < N; n++){ obj += R[n]*R[n]; }
-        obj *= HALF;
+        obj *= 0.5;
     /* premultiplied by A^t, 1/2 <X, A^t A X> - <X, A^t Y> */
     }else if (N == Gram_full()){ /* full matrix */
         #pragma omp parallel for reduction(+:obj) schedule(dynamic) \
@@ -498,9 +496,9 @@ TPL real_t CP_D1_QL1B::compute_objective() const
         for (comp_t ru = 0; ru < rV; ru++){
             /* 1/2 <X, A^t A X> = 1/2 <rX, rA^t rA rX> = sum{ru} rXu *
              *  ( sum{rv < ru} (rA^t rA)uv rXv + 1/2 (rA^t rA)uu rXu ) */
-            real_t sumrAAuvXv = ZERO;
+            real_t sumrAAuvXv = 0.0;
             for (comp_t rv = 0; rv <= ru; rv++){
-                real_t rAAuv = ZERO;
+                real_t rAAuv = 0.0;
                 /* run along the component ru */
                 for (index_t i = first_vertex[ru]; i < first_vertex[ru + 1];
                     i++){
@@ -512,9 +510,9 @@ TPL real_t CP_D1_QL1B::compute_objective() const
                     }
                 }
                 if (rv < ru){ sumrAAuvXv += rAAuv*rX[rv]; }
-                else{ sumrAAuvXv += HALF*rAAuv*rX[ru]; }
+                else{ sumrAAuvXv += 0.5*rAAuv*rX[ru]; }
             }
-            real_t rAYu = ZERO;
+            real_t rAYu = 0.0;
             for (index_t i = first_vertex[ru]; i < first_vertex[ru + 1];
                 i++){
                 /* observation Y is actually A^t Y */
@@ -526,16 +524,16 @@ TPL real_t CP_D1_QL1B::compute_objective() const
         #pragma omp parallel for reduction(+:obj) schedule(dynamic) \
             NUM_THREADS(V, rV)
         for (comp_t rv = 0; rv < rV; rv++){
-            real_t rAAv = A ? ZERO : // arbitrary diagonal matrix
+            real_t rAAv = A ? 0.0 : // arbitrary diagonal matrix
                 first_vertex[rv + 1] - first_vertex[rv]; // identity
-            real_t rAYv = ZERO;
+            real_t rAYv = 0.0;
             /* run along the component rv */
             for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
                 if (A){ rAAv += A[comp_list[i]]; }
                 /* observation Y is actually A^t Y */
                 rAYv += Y_(comp_list[i]);
             }
-            obj += rX[rv]*(HALF*rAAv*rX[rv] - rAYv);
+            obj += rX[rv]*(0.5*rAAv*rX[rv] - rAYv);
         }
     }
 
@@ -549,7 +547,7 @@ TPL real_t CP_D1_QL1B::compute_objective() const
             obj += l1_weights[v]*abs(rX[comp_assign[v]] - Yl1_(v));
         }
     }else if (homo_l1_weight){
-        real_t l1 = ZERO;
+        real_t l1 = 0.0;
         /* run along the component rv */
         #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV) \
              reduction(+:l1)

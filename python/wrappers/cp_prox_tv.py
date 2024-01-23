@@ -7,32 +7,44 @@ sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)),
 
 from cp_prox_tv_cpy import cp_prox_tv_cpy
 
-def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None, 
-               cp_dif_tol=1e-4, cp_it_max=10, pfdr_rho=1., 
-               pfdr_cond_min=1e-2, pfdr_dif_rcd=0., pfdr_dif_tol=None, 
-               pfdr_it_max=int(1e4), verbose=int(1e3), max_num_threads=0,
-               balance_parallel_split=True, compute_List=False,
-               compute_Subgrads=False, compute_Graph=False, compute_Obj=False,
-               compute_Time=False, compute_Dif=False):
+def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
+    d1p=2, d1p_metric=None, cp_dif_tol=1e-4, cp_it_max=10, K=2,
+    split_iter_num=1, split_damp_ratio=1.0, split_values_init_num=2,
+    split_values_iter_num=2, pfdr_rho=1., pfdr_cond_min=1e-2, pfdr_dif_rcd=0.,
+    pfdr_dif_tol=None, pfdr_it_max=int(1e4), verbose=int(1e3),
+    max_num_threads=0, max_split_size=None, balance_parallel_split=True,
+    compute_List=False, compute_Graph=False, compute_Obj=False,
+    compute_Time=False, compute_Dif=False):
     """
     Comp, rX, [List, Gtv, Graph, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
-            adj_vertices, edge_weights=1.0, cp_dif_tol=1e-4, cp_it_max=10,
-            pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
-            pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=int(1e4),
-            verbose=int(1e3), max_num_threads=0, balance_parallel_split=True,
-            compute_List=False, compute_Subgrads=False, compute_Graph=False,
-            compute_Obj=False, compute_Time=False, compute_Dif=False)
+        adj_vertices, l22_metric=None, edge_weights=1.0, d1p=2,
+        d1p_metric=None, cp_dif_tol=1e-4, cp_it_max=10, K=2, split_iter_num=1,
+        split_damp_ratio=1.0, split_values_init_num=2, split_values_iter_num=2,
+        pfdr_rho=1.0, pfdr_cond_min=1e-2, pfdr_dif_rcd=0.0,
+        pfdr_dif_tol=1e-2*cp_dif_tol, pfdr_it_max=int(1e4), verbose=int(1e3),
+        max_num_threads=0, max_split_size=None, balance_parallel_split=True,
+        compute_List=False, compute_Graph=False, compute_Obj=False,
+        compute_Time=False, compute_Dif=False)
 
-    Cut-pursuit algorithm for proximity operator of total variation
-    penalization:
-
-    minimize functional over a graph G = (V, E)
-
-        F(x) = 1/2 ||y - x||^2 + ||x||_d1
-
-    where x, y in R^V, and
-          ||x||_d1 = sum_{uv in E} w_uv |x_u - x_v|,
-
+    Compute the proximal operator of the graph total variation penalization:
+                                                                              
+     minimize functional F defined over a graph G = (V, E)
+    
+     F: R^{D-by-V} -> R
+            x      -> 1/2 ||y - x||_Ms^2 + ||x||_d1p
+    
+     where y in R^{D-by-V}, Ms is a diagonal metric in R^{VxD-by-VxD} so that
+    
+          ||y - x||_Ms^2 = sum_{v in V} sum_d ms_v_d (y_v - x_v)^2 ,
+    
+     and
+     
+          ||x||_d1p = sum_{uv in E} w_uv ||x_u - x_v||_{Md,p} ,
+    
+     where Md is a diagonal metric and p can be 1 or 2,
+      ||x_v||_{M,1} = sum_d md_d |x_v|  (weighted l1-norm) or
+      ||x_v||_{M,2} = sqrt(sum_d md_d x_v^2)  (weighted l2-norm)
+                                                                              
     using cut-pursuit approach with preconditioned forward-Douglas-Rachford 
     splitting algorithm.
 
@@ -60,13 +72,33 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
             is the total number of edges;
         for each edge, 'adj_vertices' indicates its ending vertex, (int32 or
             uint32) array of length E
-    edge_weights - (real) array of length E or a scalar for homogeneous weights
+    l22_metric - diagonal metric on squared l2-norm (Ms in above notations);
+        array or length V for weights depending only on vertices, D-by-V array
+        otherwise; all weights must be strictly positive
+    edge_weights - weights on the edges (w_uv above);
+        (real) array of length E, or scalar for homogeneous weights
+    d1p - define the total variation as the l11- (d1p = 1) or l12- (d1p = 2)
+        norm of the finite differences
+    d1p_metric - diagonal metric on d1p penalisation (Md in above notations);
+        all weights must be strictly positive, and it is advised to normalize
+        the weights so that the first value is unity for computation stability
     cp_dif_tol - stopping criterion on iterate evolution; algorithm stops if
         relative changes (in Euclidean norm) is less than dif_tol;
         1e-4 is a typical value; a lower one can give better precision
         but with longer computational time and more final components
     cp_it_max - maximum number of iterations (graph cut and subproblem)
         10 cuts solve accurately most problems
+    K - number of alternative descent directions considered in the split step
+    split_iter_num - number of partition-and-update iterations in the split 
+        step
+    split_damp_ratio - edge weights damping for favoring splitting; edge
+        weights increase in linear progression along partition-and-update
+        iterations, from this ratio up to original value; real scalar between 0
+        and 1, the latter meaning no damping
+    split_values_init_num - number of random initializations when looking for
+        descent directions in the split step
+    split_values_iter_num - number of refining iterations when looking for
+        descent directions in the split step
     pfdr_rho - relaxation parameter, 0 < rho < 2
         1 is a conservative value; 1.5 often speeds up convergence
     pfdr_cond_min - stability of preconditioning; 0 < cond_min < 1;
@@ -85,19 +117,21 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
         PFDR iterations
     max_num_threads - if greater than zero, set the maximum number of threads
         used for parallelization with OpenMP
+    max_split_size - maximum number of vertices allowed in connected component
+        passed to a split problem; make split of very large components faster,
+        but might induced suboptimal artificial cuts
     balance_parallel_split - if true, the parallel workload of the split step 
         is balanced; WARNING: this might trade off speed against optimality
     compute_List - report the list of vertices constituting each component
-    compute_Subgrads - compute the total variation subgradients
     compute_Graph - get the reduced graph on the components
     compute_Obj - compute the objective functional along iterations 
     compute_Time - monitor elapsing time along iterations
     compute_Dif - compute relative evolution along iterations 
 
     OUTPUTS: List, Gtv, Graph, Obj, Time and Dif are optional, set parameters
-        compute_List, compute_Subgrads, compute_Graph, compute_Obj,
-        compute_Time or compute_Dif to True to request them and capture them in
-        output variables in that order
+        compute_List, compute_Graph, compute_Obj, compute_Time or compute_Dif
+        to True to request them and capture them in output variables in that
+        order
 
     Comp - assignement of each vertex to a component, (uint16) array of
         length V
@@ -128,8 +162,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
     Hugo Raguet 2021, 2022
     """
 
-    # Check numpy arrays: Y, first_edge, adj_vertices, edge_weights, and
-    # define float numpy array argument with the right float type if necessary
+    # Check numpy arrays
     if type(Y) != np.ndarray:
         raise TypeError("Cut-pursuit prox TV: argument 'Y' must be a numpy "
                         "array.")
@@ -150,6 +183,13 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
         raise TypeError("Cut-pursuit prox TV: argument 'adj_vertices' must be "
                         "a numpy array of type int32 or uint32.")
 
+    if type(l22_metric) != np.ndarray:
+        if l22_metric != None:
+            raise TypeError("Cut-pursuit prox TV: argument 'l22_metric' must"
+                "be a a numpy array")
+        else:
+            l22_metric = np.array([], dtype=real_t)
+
     if type(edge_weights) != np.ndarray:
         if type(edge_weights) == list:
             raise TypeError("Cut-pursuit prox TV: argument 'edge_weights' must"
@@ -159,55 +199,72 @@ def cp_prox_tv(Y, first_edge, adj_vertices, edge_weights=None,
         else:
             edge_weights = np.array([1.0], dtype=real_t)
 
+    if type(d1p_metric) != np.ndarray:
+        if d1p_metric != None:
+            raise TypeError("Cut-pursuit prox TV: argument 'd1p_metric' must"
+                "be a a numpy array")
+        else:
+            d1p_metric = np.array([], dtype=real_t)
+
     # Determine V and check the graph structure
-    V = Y.size
-    if first_edge.size != V + 1:
+    if first_edge.size != Y.shape[1] + 1:
         raise ValueError("Cut-pursuit prox TV: argument 'first_edge' should "
                          "contain |V| + 1 = {0} elements, but {1} are given."
                          .format(V + 1, first_edge.size))
  
-    # Check type of all numpy.array arguments of type float (Y, edge_weights) 
-    for name, ar_args in zip(["Y", "edge_weights"], [Y, edge_weights]):
+    # Check type of all numpy.array arguments of type float
+    for name, ar_args in zip(
+        ["Y", "l22_metric", "edge_weights", "d1p_metric"],
+        [ Y,   l22_metric ,  edge_weights ,  d1p_metric ]):
         if ar_args.dtype != real_t:
-            raise TypeError("argument '{0}' must be of type '{1}'"
-                            .format(name, real_t))
+            raise TypeError("Cut-pursuit prox TV: argument '{0}' must be of "
+                "type '{1}'".format(name, real_t))
 
     # Check fortran continuity of all multidimensional numpy array arguments
     if not(Y.flags["F_CONTIGUOUS"]):
         raise TypeError("Cut-pursuit prox TV: argument 'Y' must be in "
-                        "column-major order (F-contigous).")
+            "column-major order (F-contigous).")
 
-    # Convert in float64 all float arguments if needed (cp_dif_tol, pfdr_rho, 
-    # pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol) 
+    # Convert in float64 all float arguments
+    split_damp_ratio = float(split_damp_ratio)
+    cp_dif_tol = float(cp_dif_tol)
     if pfdr_dif_tol is None:
         pfdr_dif_tol = 1e-2*cp_dif_tol
-    cp_dif_tol = float(cp_dif_tol)
     pfdr_rho = float(pfdr_rho)
     pfdr_cond_min = float(pfdr_cond_min)
     pfdr_dif_rcd = float(pfdr_dif_rcd)
     pfdr_dif_tol = float(pfdr_dif_tol)
      
-    # Convert all int arguments (cp_it_max, pfdr_it_max, verbose) in ints: 
+    # Convert all int arguments 
+    d1p = int(d1p)
     cp_it_max = int(cp_it_max)
+    K = int(K)
+    split_iter_num = int(split_iter_num)
+    split_values_init_num = int(split_values_init_num)
+    split_values_iter_num = int(split_values_iter_num)
     pfdr_it_max = int(pfdr_it_max)
     verbose = int(verbose)
     max_num_threads = int(max_num_threads)
+    if max_split_size is None:
+        max_split_size = Y.shape[1]
+    else:
+        max_split_size = int(max_split_size)
 
-    # Check type of all booleen arguments (balance_parallel_split,
-    # compute_List, compute_Subgrads, compute_Obj, compute_Time, compute_Dif)
+    # Check type of all booleen arguments
     for name, b_args in zip(
-            ["balance_parallel_split", "compute_List", "compute_Subgrads",
-             "compute_Graph", "compute_Obj", "compute_Time", "compute_Dif"],
-            [ balance_parallel_split ,  compute_List ,  compute_Subgrads ,
-              compute_Graph ,  compute_Obj ,  compute_Time ,  compute_Dif ]):
+            ["balance_parallel_split", "compute_List", "compute_Graph",
+             "compute_Obj", "compute_Time", "compute_Dif"],
+            [ balance_parallel_split ,  compute_List ,  compute_Graph , 
+              compute_Obj ,  compute_Time ,  compute_Dif ]):
         if type(b_args) != bool:
             raise TypeError("Cut-pursuit prox TV: argument '{0}' must be "
-                            "boolean".format(name))
+                "boolean".format(name))
     
     # Call wrapper python in C  
-    return cp_prox_tv_cpy(Y, first_edge, adj_vertices, edge_weights,
-            cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
-            pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
-            balance_parallel_split, real_t == "float64", compute_List,
-            compute_Subgrads, compute_Graph, compute_Obj, compute_Time,
-            compute_Dif) 
+    return cp_prox_tv_cpy(Y, first_edge, adj_vertices, l22_metric,
+        edge_weights, d1p, d1p_metric, cp_dif_tol, cp_it_max, K,
+        split_iter_num, split_damp_ratio, split_values_init_num,
+        split_values_iter_num, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
+        pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads, max_split_size,
+        balance_parallel_split, real_t == "float64", compute_List,
+        compute_Graph, compute_Obj, compute_Time, compute_Dif) 

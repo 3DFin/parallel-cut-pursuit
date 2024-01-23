@@ -1,11 +1,13 @@
 /*=============================================================================
- * Comp, rX, [List, Gtv, Graph, Obj, Time, Dif] = cp_prox_tv_cpy(Y, first_edge,
- *  adj_vertices, edge_weights, cp_dif_tol, cp_it_max, pfdr_rho, pfdr_cond_min,
- *  pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose, max_num_threads,
- *  balance_parallel_split, real_is_double, compute_List, compute_Subgrads,
- *  compute_Graph, compute_Obj, compute_Time, compute_Dif)
+ * Comp, rX, [List, Graph, Obj, Time, Dif] = cp_prox_tv_cpy(Y, first_edge,
+ *  adj_vertices, l22_metric, edge_weights, d1p, d1p_metric, cp_dif_tol,
+ *  cp_it_max, K, split_iter_num, split_damp_ratio, split_values_init_num,
+ *  split_values_iter_num, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol,
+ *  pfdr_it_max, verbose, max_num_threads, max_split_size,
+ *  balance_parallel_split, real_is_double, compute_List, compute_Graph,
+ *  compute_Obj, compute_Time, compute_Dif)
  * 
- *  Raguet Hugo 2021, 2022
+ *  Raguet Hugo 2021, 2022, 2023
  *===========================================================================*/
 #include <cstdint>
 #define PY_SSIZE_T_CLEAN
@@ -45,18 +47,34 @@ using namespace std;
 /* template for handling both single and double precisions */
 template<typename real_t, NPY_TYPES NPY_REAL>
 static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
-    PyArrayObject* py_adj_vertices, PyArrayObject* py_edge_weights,
-    real_t cp_dif_tol, int cp_it_max, real_t pfdr_rho, real_t pfdr_cond_min,
+    PyArrayObject* py_adj_vertices, PyArrayObject* py_l22_metric,
+    PyArrayObject* py_edge_weights, int d1p, PyArrayObject* py_d1p_metric,
+    real_t cp_dif_tol, int cp_it_max, int K, int split_iter_num,
+    real_t split_damp_ratio, int split_values_init_num,
+    int split_values_iter_num, real_t pfdr_rho, real_t pfdr_cond_min,
     real_t pfdr_dif_rcd, real_t pfdr_dif_tol, int pfdr_it_max, int verbose,
-    int max_num_threads, int balance_parallel_split, int compute_List,
-    int compute_Subgrads, int compute_Graph, int compute_Obj, int compute_Time,
+    int max_num_threads, int max_split_size, int balance_parallel_split,
+    int compute_List, int compute_Graph, int compute_Obj, int compute_Time,
     int compute_Dif)
 {
     /**  get inputs  **/
 
     /* square l2 */
+    npy_intp * py_Y_dims = PyArray_DIMS(py_Y);
+    size_t D = py_Y_dims[0];
+    index_t V = py_Y_dims[1]; 
+
     const real_t* Y = (real_t*) PyArray_DATA(py_Y);
-    index_t V = PyArray_SIZE(py_Y);
+    const real_t* l22_metric = (PyArray_SIZE(py_l22_metric) > 0) ?
+        (real_t*) PyArray_DATA(py_l22_metric) : nullptr;
+
+    typename Cp_prox_tv<real_t, index_t, comp_t>::Metric_shape
+        l22_metric_shape =
+            (size_t) PyArray_SIZE(py_l22_metric) == D*V ?
+                Cp_prox_tv<real_t, index_t, comp_t>::MULTIDIM :
+            (size_t) PyArray_SIZE(py_l22_metric) == V ?
+                Cp_prox_tv<real_t, index_t, comp_t>::MULTIDIM :
+                Cp_prox_tv<real_t, index_t, comp_t>::IDENTITY;
 
     /* graph structure */
     index_t E = PyArray_SIZE(py_adj_vertices);
@@ -69,6 +87,11 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
         edge_weights[0] : 1.0;
     if (PyArray_SIZE(py_edge_weights) <= 1){ edge_weights = nullptr; }
 
+    if (D == 1){ d1p = 1; }
+
+    const real_t* d1p_metric = PyArray_SIZE(py_d1p_metric) > 0 ?
+        (real_t*) PyArray_DATA(py_d1p_metric) : nullptr;
+
     /* number of threads */ 
     if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
 
@@ -79,15 +102,6 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
     PyArrayObject* py_Comp = (PyArrayObject*) PyArray_Zeros(1, size_py_Comp,
         PyArray_DescrFromType(NPY_COMP), 1);
     comp_t* Comp = (comp_t*) PyArray_DATA(py_Comp); 
-
-    real_t* Gtv = nullptr;
-    PyArrayObject* py_Gtv = nullptr;;
-    if (compute_Subgrads){
-        npy_intp size_py_Gtv[] = {E};
-        py_Gtv = (PyArrayObject*) PyArray_Zeros(1, size_py_Gtv,
-            PyArray_DescrFromType(NPY_REAL), 1);
-        Gtv = (real_t*) PyArray_DATA(py_Gtv);
-    }
 
     real_t* Obj = nullptr;
     if (compute_Obj){ Obj = (real_t*) malloc(sizeof(real_t)*(cp_it_max + 1)); }
@@ -104,12 +118,16 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
 
     Cp_prox_tv<real_t, index_t, comp_t>* cp =
         new Cp_prox_tv<real_t, index_t, comp_t>
-            (V, E, first_edge, adj_vertices);
+            (V, E, first_edge, adj_vertices, Y, D);
 
+    cp->set_quadratic(l22_metric_shape, l22_metric);
+    cp->set_d1_param(edge_weights, homo_edge_weight, d1p_metric,
+        d1p == 1 ? Cp_prox_tv<real_t, index_t, comp_t>::D11
+                 : Cp_prox_tv<real_t, index_t, comp_t>::D12);
     cp->set_edge_weights(edge_weights, homo_edge_weight);
-    cp->set_observation(Y);
-    cp->set_d1_subgradients(Gtv);
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
+    cp->set_split_param(max_split_size, K, split_iter_num, split_damp_ratio,
+        split_values_init_num, split_values_iter_num);
     cp->set_pfdr_param(pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_it_max,
         pfdr_dif_tol);
     cp->set_parallel_param(max_num_threads, balance_parallel_split);
@@ -140,12 +158,12 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
     }
 
     /* copy reduced values */
-    real_t* cp_rX = cp->get_reduced_values();
-    npy_intp size_py_rX[] = {rV};
-    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(1, size_py_rX,
+    const real_t* cp_rX = cp->get_reduced_values();
+    npy_intp size_py_rX[] = {(npy_intp/* suppress warning*/) D, rV};
+    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
         PyArray_DescrFromType(NPY_REAL), 1);
     real_t* rX = (real_t*) PyArray_DATA(py_rX);
-    for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
+    for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
 
     /* retrieve reduced graph structure */
     PyObject* py_Graph = nullptr;
@@ -234,7 +252,6 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
     /* build output according to optional output specified */
     Py_ssize_t nout = 2;
     if (compute_List){ nout++; }
-    if (compute_Subgrads){ nout++; }
     if (compute_Graph){ nout++; }
     if (compute_Obj){ nout++; }
     if (compute_Time){ nout++; }
@@ -244,9 +261,6 @@ static PyObject* cp_prox_tv(PyArrayObject* py_Y, PyArrayObject* py_first_edge,
     PyTuple_SET_ITEM(py_Out, 1, (PyObject*) py_rX);
     nout = 2;
     if (compute_List){ PyTuple_SET_ITEM(py_Out, nout++, py_List); }
-    if (compute_Subgrads){
-        PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Gtv);
-    }
     if (compute_Graph){ PyTuple_SET_ITEM(py_Out, nout++, py_Graph); }
     if (compute_Obj){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Obj); }
     if (compute_Time){ PyTuple_SET_ITEM(py_Out, nout++, (PyObject*) py_Time); }
@@ -265,35 +279,44 @@ static PyObject* cp_prox_tv_cpy(PyObject* self, PyObject* args)
 {   (void) self; // suppress unused parameter warning
 #endif
     /* INPUT */ 
-    PyArrayObject *py_Y, *py_first_edge, *py_adj_vertices, *py_edge_weights; 
-    double cp_dif_tol, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol;
-    int cp_it_max, pfdr_it_max, verbose, max_num_threads, 
-        balance_parallel_split, real_is_double, compute_List, compute_Subgrads,
+    PyArrayObject *py_Y, *py_l22_metric, *py_first_edge, *py_d1p_metric,
+        *py_adj_vertices, *py_edge_weights; 
+    double cp_dif_tol, split_damp_ratio, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd,
+        pfdr_dif_tol;
+    int d1p, cp_it_max, K, split_iter_num, split_values_init_num,
+        split_values_iter_num, pfdr_it_max, verbose, max_num_threads, 
+        max_split_size, balance_parallel_split, real_is_double, compute_List,
         compute_Graph, compute_Obj, compute_Time, compute_Dif; 
     
     /* parse the input, from Python Object to C PyArray, double, or int type */
-    if(!PyArg_ParseTuple(args, "OOOOdiddddiiiiiiiiiii", &py_Y, &py_first_edge,
-        &py_adj_vertices, &py_edge_weights, &cp_dif_tol, &cp_it_max, &pfdr_rho,
-        &pfdr_cond_min, &pfdr_dif_rcd, &pfdr_dif_tol, &pfdr_it_max, &verbose,
-        &max_num_threads, &balance_parallel_split, &real_is_double,
-        &compute_List, &compute_Subgrads, &compute_Graph, &compute_Obj,
+    if(!PyArg_ParseTuple(args, "OOOOOiOdiiidiiddddiiiiiiiiiii", &py_Y,
+        &py_first_edge, &py_adj_vertices, &py_l22_metric, &py_edge_weights,
+        &d1p, &py_d1p_metric, &cp_dif_tol, &cp_it_max, &K, &split_iter_num,
+        &split_damp_ratio, &split_values_init_num, &split_values_iter_num,
+        &pfdr_rho, &pfdr_cond_min, &pfdr_dif_rcd, &pfdr_dif_tol, &pfdr_it_max,
+        &verbose, &max_num_threads, &max_split_size, &balance_parallel_split,
+        &real_is_double, &compute_List, &compute_Graph, &compute_Obj,
         &compute_Time, &compute_Dif)){
         return NULL;
     }
 
     if (real_is_double){ /* real_t type is double */
         return cp_prox_tv<double, NPY_FLOAT64>(py_Y, py_first_edge,
-            py_adj_vertices, py_edge_weights, cp_dif_tol, cp_it_max, pfdr_rho,
-            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
-            max_num_threads, balance_parallel_split, compute_List,
-            compute_Subgrads, compute_Graph, compute_Obj, compute_Time,
+            py_adj_vertices, py_l22_metric, py_edge_weights, d1p,
+            py_d1p_metric, cp_dif_tol, cp_it_max, K, split_iter_num,
+            split_damp_ratio, split_values_init_num, split_values_iter_num,
+            pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
+            verbose, max_num_threads, max_split_size, balance_parallel_split,
+            compute_List, compute_Graph, compute_Obj, compute_Time,
             compute_Dif);
     }else{ /* real_t type is float */
         return cp_prox_tv<float, NPY_FLOAT32>(py_Y, py_first_edge,
-            py_adj_vertices, py_edge_weights, cp_dif_tol, cp_it_max, pfdr_rho,
-            pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max, verbose,
-            max_num_threads, balance_parallel_split, compute_List,
-            compute_Subgrads, compute_Graph, compute_Obj, compute_Time,
+            py_adj_vertices, py_l22_metric, py_edge_weights, d1p,
+            py_d1p_metric, cp_dif_tol, cp_it_max, K, split_iter_num,
+            split_damp_ratio, split_values_init_num, split_values_iter_num,
+            pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
+            verbose, max_num_threads, max_split_size, balance_parallel_split,
+            compute_List, compute_Graph, compute_Obj, compute_Time,
             compute_Dif);
     }
 }
@@ -305,8 +328,6 @@ static PyMethodDef cp_prox_tv_methods[] = {
 };
 
 /* module initialization */
-#if PY_MAJOR_VERSION >= 3
-/* Python version 3 */
 static struct PyModuleDef cp_prox_tv_module = {
     PyModuleDef_HEAD_INIT,
     "cp_prox_tv_cpy", /* name of module */
@@ -326,16 +347,3 @@ PyInit_cp_prox_tv_cpy(void)
     import_array() /* IMPORTANT: this must be called to use numpy array */
     return PyModule_Create(&cp_prox_tv_module);
 }
-
-#else
-
-/* module initialization */
-/* Python version 2 */
-PyMODINIT_FUNC
-initcp_prox_tv_cpy(void)
-{
-    import_array() /* IMPORTANT: this must be called to use numpy array */
-    (void) Py_InitModule("cp_prox_tv_cpy", cp_prox_tv_methods);
-}
-
-#endif

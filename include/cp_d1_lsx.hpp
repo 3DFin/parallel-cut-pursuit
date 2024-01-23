@@ -44,6 +44,7 @@ private:
      * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
      **/
     using Cp<real_t, index_t, comp_t>::dif_tol;
+    using Cp_d1<real_t, index_t, comp_t>::d1p;
     using Cp_d1<real_t, index_t, comp_t>::D11;
 
 public:
@@ -61,6 +62,11 @@ public:
      * to null beforehand */
 
     /**  methods for manipulating parameters  **/
+
+    /* overload the base class Cp_d1 method to enforce d1p value to D11 */
+    using Cp_d1<real_t, index_t, comp_t>::set_d1_param;
+    void set_d1_param(const real_t* edge_weights = nullptr,
+        real_t homo_edge_weight = 1.0, const real_t* d11_metric = nullptr);
 
     /* specific losses */
     static real_t linear_loss() { return 0.0; }
@@ -157,6 +163,7 @@ private:
      **/
     using Cp_d1<real_t, index_t, comp_t>::G;
     using Cp_d1<real_t, index_t, comp_t>::compute_graph_d1;
+    using Cp_d1<real_t, index_t, comp_t>::d1p_metric;
     using Cp<real_t, index_t, comp_t>::split_iter_num;
     using Cp<real_t, index_t, comp_t>::split_damp_ratio;
     using Cp<real_t, index_t, comp_t>::split_values_init_num;

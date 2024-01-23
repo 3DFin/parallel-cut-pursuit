@@ -5,15 +5,13 @@
 % Nonsmooth Functionals with Graph Total Variation, International Conference on
 % Machine Learning, PMLR, 2018, 80, 4244-4253
 %
-% Hugo Raguet 2017, 2018, 2019
+% Hugo Raguet 2017, 2018, 2019, 2023
 cd(fileparts(which('example_EEG.m')));
-addpath('bin/');
+addpath('./bin/', './doc/');
 
 %%%  general parameters  %%%
 plot_results = true;
-print_results = false; % requires color encapsulated postscript driver on your
-                      % system; be sure to run octave 4.2.2 or later, fixing a
-                      % bug in trisurf
+print_results = false;
 
 % parameters for colormap
 numberOfColors = 256;
@@ -37,15 +35,16 @@ options.balance_parallel_split = false;
 % Penalization parameters computed with SURE methods, heuristics adapted from
 % H. Raguet: A Signal Processing Approach to Voltage-Sensitive Dye Optical
 % Imaging, Ph.D. Thesis, Paris-Dauphine University, 2014
-load('../data/EEG.mat')
+load('../pcd-prox-split/data/EEG.mat')
 options.edge_weights = d1_weights;
 options.l1_weights = l1_weights;
 options.low_bnd = 0.0;
 
 %%%  solve the optimization problem  %%%
+options.compute_Obj = true;
+options.compute_Time = true;
 tic;
-[Comp, rX] = cp_d1_ql1b(y, Phi, first_edge, adj_vertices, options);
-% [Comp, rX, Obj, Time] = cp_d1_ql1b(y, Phi, first_edge, adj_vertices, options);
+[Comp, rX, Obj, Time] = cp_d1_ql1b(y, Phi, first_edge, adj_vertices, options);
 time = toc;
 x = rX(Comp + 1); % rX is components values, Comp is components assignment
 clear Comp rX;
@@ -140,4 +139,8 @@ if plot_results
         fprintf('done.\n');
     end
 
+    figure(4), clf, semilogy(Time, Obj);
+    title('objective evolution');
+    xlabel('time (s)');
+    ylabel('1/2 ||y - \Phi x||^2 + ||x||_{\ell_1} + ||x||_{\delta_1}');
 end

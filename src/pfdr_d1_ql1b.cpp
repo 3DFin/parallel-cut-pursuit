@@ -6,12 +6,9 @@
 #include "matrix_tools.hpp"
 #include "omp_num_threads.hpp"
 
-/* constants of the correct type */
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define HALF ((real_t) 0.5)
 #define Y_(n) (Y ? Y[(n)] : (real_t) 0.0)
 #define Yl1_(v) (Yl1 ? Yl1[(v)] : (real_t) 0.0)
+#define L1_WEIGHTS_(v) (l1_weights ? l1_weights[(v)] : homo_l1_weight)
 
 #define TPL template <typename real_t, typename vertex_t>
 #define PFDR_D1_QL1B Pfdr_d1_ql1b<real_t, vertex_t>
@@ -26,8 +23,8 @@ TPL PFDR_D1_QL1B::Pfdr_d1_ql1b(vertex_t V, index_t E, const vertex_t* edges)
         "PFDR d1 quadratic l1 bounds: real_t must satisfy IEEE 754.");
     Y = Yl1 = A = R = nullptr;
     N = Gram_diag();
-    a = ONE;
-    l1_weights = nullptr; homo_l1_weight = ZERO;
+    a = 1.0;
+    l1_weights = nullptr; homo_l1_weight = 0.0;
     low_bnd = nullptr; homo_low_bnd = -real_inf();
     upp_bnd = nullptr; homo_upp_bnd = real_inf();
 
@@ -60,7 +57,7 @@ TPL void PFDR_D1_QL1B::set_quadratic(const real_t* Y, index_t N,
 TPL void PFDR_D1_QL1B::set_l1(const real_t* l1_weights, real_t homo_l1_weight,
     const real_t* Yl1)
 {
-    if (!l1_weights && homo_l1_weight < ZERO){
+    if (!l1_weights && homo_l1_weight < 0.0){
         cerr << "PFDR graph d1 quadratic l1 bounds: negative homogeneous l1 "
             "penalization (" << homo_l1_weight << ")." << endl;
         exit(EXIT_FAILURE);
@@ -98,7 +95,7 @@ TPL void PFDR_D1_QL1B::apply_A()
         #pragma omp parallel for schedule(static) NUM_THREADS(V*V, V)
         for (vertex_t v = 0; v < V; v++){
             const real_t *Av = A + V*v;
-            AX[v] = ZERO;
+            AX[v] = 0.0;
             for (vertex_t u = 0; u < V; u++){ AX[v] += Av[u]*X[u]; }
         }
     }else if (A){ /* diagonal case, compute (A^t A) X */
@@ -116,10 +113,10 @@ TPL void PFDR_D1_QL1B::compute_lipschitz_metric()
             L = A;
             lshape = MONODIM;
         }else if (a){ /* identity matrix */
-            l = ONE;
+            l = 1.0;
             lshape = SCALAR;
         }else{ /* no quadratic penalty */
-            l = ZERO;
+            l = 0.0;
             lshape = SCALAR;
         }
     }else if (lipsch_equi == NOEQUI){
@@ -181,7 +178,7 @@ TPL void PFDR_D1_QL1B::add_pseudo_hess_h()
         for (vertex_t v = 0; v < V; v++){
             real_t amp = abs(X[v] - Yl1_(v));
             if (amp < eps){ amp = eps; }
-            Ga[v] += l1_weights ? l1_weights[v]/amp : homo_l1_weight/amp;
+            Ga[v] += L1_WEIGHTS_(v)/amp;
         }
     }
 }
@@ -193,7 +190,7 @@ TPL void PFDR_D1_QL1B::compute_Ga_grad_f()
         #pragma omp parallel for schedule(static) NUM_THREADS(V*N, V)
         for (vertex_t v = 0; v < V; v++){
             const real_t *Av = A + N*v;
-            Ga_grad_f[v] = ZERO;
+            Ga_grad_f[v] = 0.0;
             for (index_t n = 0; n < N; n++){ Ga_grad_f[v] -= Av[n]*R[n]; }
             Ga_grad_f[v] *= Ga[v];
         }
@@ -203,7 +200,7 @@ TPL void PFDR_D1_QL1B::compute_Ga_grad_f()
             Ga_grad_f[v] = Ga[v]*(AX[v] - Y_(v));
         }
     }else{ /* no quadratic part */
-        for (vertex_t v = 0; v < V; v++){ Ga_grad_f[v] = ZERO; }
+        for (vertex_t v = 0; v < V; v++){ Ga_grad_f[v] = 0.0; }
     }
 }
 
@@ -212,11 +209,11 @@ TPL void PFDR_D1_QL1B::compute_prox_Ga_h()
     #pragma omp parallel for schedule(static) NUM_THREADS(V)
     for (vertex_t v = 0; v < V; v++){
         if (l1_weights || homo_l1_weight){
-            real_t th_l1 = (l1_weights ? l1_weights[v] : homo_l1_weight)*Ga[v];
+            real_t th_l1 = L1_WEIGHTS_(v)*Ga[v];
             real_t dif = X[v] - Yl1_(v);
             if (dif > th_l1){ dif -= th_l1; }
             else if (dif < -th_l1){ dif += th_l1; }
-            else{ dif = ZERO; }
+            else{ dif = 0.0; }
             X[v] = Yl1_(v) + dif;
         }
         if (low_bnd){
@@ -232,33 +229,32 @@ TPL void PFDR_D1_QL1B::compute_prox_Ga_h()
     }
 }
 
-TPL real_t PFDR_D1_QL1B::compute_f()
+TPL real_t PFDR_D1_QL1B::compute_f() const
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
     if (!is_Gram(N)){ /* direct matricial case, 1/2 ||Y - A X||^2 */
         #pragma omp parallel for schedule(static) NUM_THREADS(N) \
             reduction(+:obj)
         for (index_t n = 0; n < N; n++){ obj += R[n]*R[n]; }
-        obj *= HALF;
+        obj *= 0.5;
     }else if (A || a){ /* premultiplied by A^t, 1/2<X, A^t AX> - <X, A^t Y> */
         #pragma omp parallel for schedule(static) NUM_THREADS(V) \
             reduction(+:obj)
         for (vertex_t v = 0; v < V; v++){
-            obj += X[v]*(HALF*AX[v] - Y_(v));
+            obj += X[v]*((real_t) 0.5*AX[v] - Y_(v));
         }
     }
     return obj;
 }
 
-TPL real_t PFDR_D1_QL1B::compute_h()
+TPL real_t PFDR_D1_QL1B::compute_h() const
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
     if (l1_weights || homo_l1_weight){ /* ||x||_l1 */
         #pragma omp parallel for schedule(static) NUM_THREADS(V) \
              reduction(+:obj)
         for (vertex_t v = 0; v < V; v++){
-            if (l1_weights){ obj += l1_weights[v]*abs(X[v] - Yl1_(v)); }
-            else{ obj += homo_l1_weight*abs(X[v] - Yl1_(v)); }
+            obj += L1_WEIGHTS_(v)*abs(X[v] - Yl1_(v));
         }
     }
     return obj;
@@ -272,7 +268,7 @@ TPL void PFDR_D1_QL1B::initialize_iterate()
 
     /* prevent useless computations */
     if (A && !Y){
-        for (vertex_t v = 0; v < V; v++){ X[v] = ZERO; }
+        for (vertex_t v = 0; v < V; v++){ X[v] = 0.0; }
         return;
     }
 
@@ -281,7 +277,7 @@ TPL void PFDR_D1_QL1B::initialize_iterate()
             index_t Vdiag = N == Gram_full() ? (index_t) V + 1 : 1;
             #pragma omp parallel for schedule(static) NUM_THREADS(V)
             for (vertex_t v = 0; v < V; v++){
-                X[v] = A[Vdiag*v] > ZERO ? Y[v]/A[Vdiag*v] : ZERO;
+                X[v] = A[Vdiag*v] > 0.0 ? Y[v]/A[Vdiag*v] : 0.0;
             }
         }else if (a){ /* identity */
             for (vertex_t v = 0; v < V; v++){ X[v] = Y_(v); }
@@ -292,13 +288,13 @@ TPL void PFDR_D1_QL1B::initialize_iterate()
         #pragma omp parallel for schedule(static) NUM_THREADS(2*N*V, V)
         for (vertex_t v = 0; v < V; v++){
             const real_t* Av = A + N*v;
-            real_t AvY = ZERO;
-            real_t Av2 = ZERO;
+            real_t AvY = 0.0;
+            real_t Av2 = 0.0;
             for (index_t n = 0; n < N; n++){
                 AvY += Av[n]*Y[n];
                 Av2 += Av[n]*Av[n];
             }
-            X[v] = Av2 > ZERO ? AvY/Av2 : ZERO;
+            X[v] = Av2 > 0.0 ? AvY/Av2 : 0.0;
         }
     }
 }

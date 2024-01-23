@@ -3,15 +3,11 @@
  *===========================================================================*/
 #include <cmath>
 #include <algorithm>
-#include "cp_d1_lsx.hpp"
 #include "omp_num_threads.hpp"
-#include "matrix_tools.hpp"
+#include "cp_d1_lsx.hpp"
 #include "pfdr_d1_lsx.hpp"
 
-#define ZERO ((real_t) 0.0)
-#define ONE ((real_t) 1.0)
-#define HALF ((real_t) 0.5)
-#define LOSS_WEIGHTS_(v) (loss_weights ? loss_weights[(v)] : ONE)
+#define LOSS_WEIGHTS_(v) (loss_weights ? loss_weights[(v)] : (real_t) 1.0)
 
 #define TPL template <typename real_t, typename index_t, typename comp_t>
 #define CP_D1_LSX Cp_d1_lsx<real_t, index_t, comp_t>
@@ -20,7 +16,7 @@ using namespace std;
 
 TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
     const index_t* adj_vertices, size_t D, const real_t* Y)
-    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D, D11),
+    : Cp_d1<real_t, index_t, comp_t>(V, E, first_edge, adj_vertices, D),
       Y(Y)
 {
     if (numeric_limits<comp_t>::max() < D){
@@ -40,12 +36,20 @@ TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
 
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
     pfdr_dif_tol = 1e-2*dif_tol; pfdr_it = pfdr_it_max = 1e4;
+
+    d1p = D11;
+}
+
+TPL void CP_D1_LSX::set_d1_param(const real_t* edge_weights,
+    real_t homo_edge_weight, const real_t* d11_metric)
+{
+    set_d1_param(edge_weights, homo_edge_weight, d11_metric, D11);
 }
 
 TPL void CP_D1_LSX::set_loss(real_t loss, const real_t* Y,
     const real_t* loss_weights)
 {
-    if (loss < ZERO || loss > ONE){
+    if (loss < 0.0 || loss > 1.0){
         cerr << "Cut-pursuit d1 loss simplex: loss parameter should be between"
             " 0 and 1 (" << loss << " given)." << endl;
         exit(EXIT_FAILURE);
@@ -74,7 +78,7 @@ TPL void CP_D1_LSX::solve_reduced_problem()
          * but MSVC compiler still does not support it as of 2020;
          * comp_t has been checked to be able to represent D anyway */
         for (comp_t d = 0; d < (comp_t) D; d++){
-            rX[d] = ZERO;
+            rX[d] = 0.0;
             size_t vd = d;
             for (index_t v = 0; v < V; v++){
                 rX[d] += LOSS_WEIGHTS_(v)*Y[vd];
@@ -88,9 +92,9 @@ TPL void CP_D1_LSX::solve_reduced_problem()
             for (size_t d = 1; d < D; d++){
                 if (rX[d] > max){ max = rX[idx = d]; }
             }
-            for (size_t d = 0; d < D; d++){ rX[d] = d == idx ? ONE : ZERO; }
+            for (size_t d = 0; d < D; d++){ rX[d] = d == idx ? 1.0 : 0.0; }
         }else{ /* optimum at barycenter */
-            real_t total_weight = ZERO;
+            real_t total_weight = 0.0;
             #pragma omp parallel for schedule(static) NUM_THREADS(V) \
                 reduction(+:total_weight)
             for (index_t v = 0; v < V; v++){
@@ -108,8 +112,8 @@ TPL void CP_D1_LSX::solve_reduced_problem()
         #pragma omp parallel for schedule(dynamic) NUM_THREADS(V, rV)
         for (comp_t rv = 0; rv < rV; rv++){
             real_t *rYv = rY + rv*D;
-            for (size_t d = 0; d < D; d++){ rYv[d] = ZERO; }
-            reduced_loss_weights[rv] = ZERO;
+            for (size_t d = 0; d < D; d++){ rYv[d] = 0.0; }
+            reduced_loss_weights[rv] = 0.0;
             for (index_t i = first_vertex[rv]; i < first_vertex[rv + 1]; i++){
                 index_t v = comp_list[i];
                 const real_t *Yv = Y + v*D;
@@ -123,8 +127,9 @@ TPL void CP_D1_LSX::solve_reduced_problem()
             }
         }
 
-        Pfdr_d1_lsx<real_t, comp_t> *pfdr = new Pfdr_d1_lsx<real_t, comp_t>(
-                rV, rE, reduced_edges, loss, D, rY, coor_weights);
+        Pfdr_d1_lsx<real_t, comp_t> *pfdr =
+            new Pfdr_d1_lsx<real_t, comp_t>
+                (rV, rE, reduced_edges, loss, D, rY, d1p_metric);
 
         pfdr->set_edge_weights(reduced_edge_weights);
         pfdr->set_loss(reduced_loss_weights);
@@ -150,7 +155,7 @@ TPL void CP_D1_LSX::compute_grad()
     Cp_d1<real_t, index_t, comp_t>::compute_grad();
 
     /* add gradient of differentiable loss term */
-    const real_t c = (ONE - loss), q = loss/D, r = q/c; // useful for KLs
+    const real_t c = (1.0 - loss), q = loss/D, r = q/c; // useful for KLs
     uintmax_t num_ops = D*(V - saturated_vert)*
         (loss == linear_loss() || loss == quadratic_loss() ? 1 : 3);
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
@@ -184,7 +189,7 @@ TPL real_t CP_D1_LSX::vert_split_cost(const Split_info& split_info, index_t v,
     const real_t* sXk = split_info.sX + D*k;
     for (size_t d = 0; d < D; d++){
         if ((rXv[d] <= eps && sXk[d] < -eps)
-            || (rXv[d] >= ONE - eps && sXk[d] > eps))
+            || (rXv[d] >= (real_t) 1.0 - eps && sXk[d] > eps))
         { return real_inf(); }
     }
 
@@ -194,7 +199,7 @@ TPL real_t CP_D1_LSX::vert_split_cost(const Split_info& split_info, index_t v,
 TPL real_t CP_D1_LSX::vert_split_cost(const Split_info& split_info, index_t v,
     comp_t k, comp_t l) const
 {
-    if (k == l){ return ZERO; }
+    if (k == l){ return 0.0; }
 
     /* infinite cost for leaving the simplex */
     const real_t* rXv = rX + D*split_info.rv;
@@ -204,7 +209,7 @@ TPL real_t CP_D1_LSX::vert_split_cost(const Split_info& split_info, index_t v,
         if (rXv[d] <= eps){
             if (sXk[d] < -eps){ return real_inf(); }
             else if (sXl[d] < -eps){ return -real_inf(); }
-        }else if (rXv[d] >= ONE - eps){
+        }else if (rXv[d] >= (real_t) 1.0 - eps){
             if (sXk[d] > eps){ return real_inf(); }
             else if (sXl[d] > eps){ return -real_inf(); }
         }
@@ -252,10 +257,10 @@ TPL void CP_D1_LSX::project_descent_direction(Split_info& split_info, comp_t k)
     real_t* sXk = split_info.sX + D*k;
     size_t* I = (size_t*) malloc_check(sizeof(size_t)*D);
     size_t nI0 = 0, nI1 = 0, nI_ = 0;
-    real_t m = ZERO;
+    real_t m = 0.0;
     for (size_t d = 0; d < D; d++){
         if (rXv[d] <= eps){ I[nI0++] = d; }
-        else if (rXv[d] >= ONE - eps){ I[D - ++nI1] = d; }
+        else if (rXv[d] >= (real_t) 1.0 - eps){ I[D - ++nI1] = d; }
         else { m += rXv[d]; nI_++; }
     }
     sort(I, I + nI0,
@@ -268,7 +273,7 @@ TPL void CP_D1_LSX::project_descent_direction(Split_info& split_info, comp_t k)
         /* specific but common case: sXk_d is greatest where rXv_d = 1;
          * (2) is satisfied with any μ ∈ [max{sXk_d|rXv_d=0}, sXk_{d:rXv_d=1}]
          * and x = 0, that is no admissible descent direction exists */
-            for (size_t d = 0; d < D; d++){ sXk[d] = ZERO; }
+            for (size_t d = 0; d < D; d++){ sXk[d] = 0.0; }
             free(I); return;
         } /* else, indices of sXk_d = 1 and the largest sX_d = 0 are in I- */
         m = sXk[I[--nI0]] + sXk[I[D - 1]];
@@ -278,8 +283,8 @@ TPL void CP_D1_LSX::project_descent_direction(Split_info& split_info, comp_t k)
     m /= nI_;
     /* now μ = m satisfies (2), deduce corresponding un-normalized x */
     for (size_t d = 0; d < D; d++){
-        if (rXv[d] <= eps && sXk[d] <= m){ sXk[d] = ZERO; }
-        else if (rXv[d] >= ONE - eps && sXk[d] >= m){ sXk[d] = ZERO; }
+        if (rXv[d] <= eps && sXk[d] <= m){ sXk[d] = 0.0; }
+        else if (rXv[d] >= (real_t) 1.0 - eps && sXk[d] >= m){ sXk[d] = 0.0; }
         else { sXk[d] -= m; }
     }
     /* normalize */
@@ -301,7 +306,7 @@ TPL index_t CP_D1_LSX::merge()
             const real_t* rXv = rX + D*rv;
             const real_t* lrXv = last_rX +
                 D*last_comp_assign[comp_list[first_vertex[rv]]];
-            real_t dif = ZERO;
+            real_t dif = 0.0;
             for (size_t d = 0; d < D; d++){ dif += abs(rXv[d] - lrXv[d]); }
             if (dif > dif_tol){
                 is_saturated[rv] = false;
@@ -319,7 +324,7 @@ TPL index_t CP_D1_LSX::merge()
 TPL real_t CP_D1_LSX::compute_evolution() const
 {
     index_t num_ops = D*(V - saturated_vert);
-    real_t dif = ZERO;
+    real_t dif = 0.0;
     #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
         reduction(+:dif)
     for (comp_t rv = 0; rv < rV; rv++){
@@ -327,7 +332,7 @@ TPL real_t CP_D1_LSX::compute_evolution() const
         if (is_saturated[rv]){
             const real_t* lrXv = last_rX +
                  D*last_comp_assign[comp_list[first_vertex[rv]]];
-            real_t dif_rv = ZERO;
+            real_t dif_rv = 0.0;
             for (size_t d = 0; d < D; d++){ dif_rv += abs(rXv[d] - lrXv[d]); }
             dif += dif_rv*(first_vertex[rv + 1] - first_vertex[rv]);
         }else{
@@ -345,7 +350,7 @@ TPL real_t CP_D1_LSX::compute_objective() const
 /* unfortunately, at this point one does not have access to the reduced objects
  * computed in the routine solve_reduced_problem() */
 {
-    real_t obj = ZERO;
+    real_t obj = 0.0;
 
     if (loss == linear_loss()){
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
@@ -353,7 +358,7 @@ TPL real_t CP_D1_LSX::compute_objective() const
         for (index_t v = 0; v < V; v++){
             real_t* rXv = rX + comp_assign[v]*D;
             const real_t* Yv = Y + v*D;
-            real_t prod = ZERO;
+            real_t prod = 0.0;
             for (size_t d = 0; d < D; d++){ prod += rXv[d]*Yv[d]; }
             obj -= LOSS_WEIGHTS_(v)*prod;
         }
@@ -363,22 +368,22 @@ TPL real_t CP_D1_LSX::compute_objective() const
         for (index_t v = 0; v < V; v++){
             const real_t* rXv = rX + comp_assign[v]*D;
             const real_t* Yv = Y + v*D;
-            real_t dif2 = ZERO;
+            real_t dif2 = 0.0;
             for (size_t d = 0; d < D; d++){
                 dif2 += (rXv[d] - Yv[d])*(rXv[d] - Yv[d]);
             }
             obj += LOSS_WEIGHTS_(v)*dif2;
         }
-        obj *= HALF;
+        obj /= 2.0;
     }else{ /* smoothed Kullback-Leibler */
-        const real_t c = (ONE - loss);
+        const real_t c = (1.0 - loss);
         const real_t q = loss/D;
         #pragma omp parallel for schedule(static) NUM_THREADS(V*D, V) \
             reduction(+:obj) 
         for (index_t v = 0; v < V; v++){
             const real_t* rXv = rX + comp_assign[v]*D;
             const real_t* Yv = Y + v*D;
-            real_t KLs = ZERO;
+            real_t KLs = 0.0;
             for (size_t d = 0; d < D; d++){
                 real_t ys = q + c*Yv[d];
                 KLs += ys*log(ys/(q + c*rXv[d]));

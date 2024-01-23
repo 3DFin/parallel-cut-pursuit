@@ -61,7 +61,7 @@ static void check_opts(const mxArray* options)
             mxGetClassName(options));
     }
 
-    const int num_allow_opts = 16;
+    const int num_allow_opts = 22;
     const char* opts_names[] = {"edge_weights", "Yl1", "l1_weights", "low_bnd",
         "upp_bnd", "cp_dif_tol", "cp_it_max", "pfdr_rho", "pfdr_cond_min",
         "pfdr_dif_rcd", "pfdr_dif_tol", "pfdr_it_max", "verbose",
@@ -226,6 +226,18 @@ static void cp_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
     bool GET_SCAL_OPT(compute_Time, false);
     bool GET_SCAL_OPT(compute_Dif, false);
 
+    /* check optional output requested */
+    int nout = 2;
+    if (compute_List){ nout++; }
+    if (compute_Graph){ nout++; }
+    if (compute_Obj){ nout++; }
+    if (compute_Time){ nout++; }
+    if (compute_Dif){ nout++; }
+    if (nlhs != nout){
+            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d1 quadratic l1 bounds: "
+                "requested %i outputs, but %i captured", nout, nlhs);
+    }
+
     /***  prepare output; rX (plhs[1]) is created later  ***/
 
     plhs[0] = mxCreateNumericMatrix(1, V, mxCOMP_CLASS, mxREAL);
@@ -238,7 +250,7 @@ static void cp_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     double* Time = nullptr;
     if (compute_Time){
-        (double*) mxMalloc(sizeof(double)*(cp_it_max + 1));
+        Time = (double*) mxMalloc(sizeof(double)*(cp_it_max + 1));
     }
 
     real_t* Dif = nullptr;
@@ -265,11 +277,18 @@ static void cp_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     int cp_it = cp->cut_pursuit();
 
-    /* get number of components and their lists of indices if necessary */
+    /* get number of components and list of indices */
     const index_t* first_vertex;
     const index_t* comp_list;
-    comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list);
+    comp_t rV = cp->get_components(nullptr, &first_vertex, &comp_list); 
 
+    /* copy reduced values */
+    const real_t* cp_rX = cp->get_reduced_values();
+    plhs[1] = mxCreateNumericMatrix(rV, 1, mxREAL_CLASS, mxREAL);
+    real_t* rX = (real_t*) mxGetData(plhs[1]);
+    for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
+
+    /* get lists of indices if requested */
     mxArray* mx_List = nullptr;
     if (compute_List){
         mx_List = mxCreateCellMatrix(1, rV); // list of arrays
@@ -281,19 +300,9 @@ static void cp_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
             for (index_t i = 0; i < comp_size; i++){
                 List_rv[i] = comp_list[first_vertex[rv] + i];
             }
-            void mxSetCell(mx_List, rv, mx_List_rv);
+            mxSetCell(mx_List, rv, mx_List_rv);
         }
     }
-
-    /* copy reduced values */
-    comp_t rV = cp->get_components();
-    real_t* cp_rX = cp->get_reduced_values();
-    plhs[1] = mxCreateNumericMatrix(rV, 1, mxREAL_CLASS, mxREAL);
-    real_t* rX = (real_t*) mxGetData(plhs[1]);
-    for (comp_t rv = 0; rv < rV; rv++){ rX[rv] = cp_rX[rv]; }
-
-    cp->set_components(0, nullptr); // prevent Comp to be free()'d
-    delete cp;
 
     /* retrieve reduced graph structure */
     mxArray* mx_Graph = nullptr;
@@ -338,24 +347,14 @@ static void cp_d1_ql1b_mex(int nlhs, mxArray *plhs[], int nrhs,
         mxSetCell(mx_Graph, 1, mx_red_adj_vertices);
         mxSetCell(mx_Graph, 2, mx_red_edge_weights);
     }
-    
+
     cp->set_components(0, nullptr); // prevent Comp to be free()'d
     delete cp;
 
     /**  assign optional outputs and resize monitoring arrays if necessary  **/
-    int nout = 2;
-    if (compute_List){ nout++; }
-    if (compute_Graph){ nout++; }
-    if (compute_Obj){ nout++; }
-    if (compute_Time){ nout++; }
-    if (compute_Dif){ nout++; }
-    if (nlhs != nout){
-            mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: "
-                "requested %i outputs, but %i captured", nout, nlhs);
-    }
     nout = 2;
     if (compute_List){ plhs[nout++] = mx_List; }
-    if (compute_Graph){ plhs[nout++] = mx_Graph); }
+    if (compute_Graph){ plhs[nout++] = mx_Graph; }
     if (compute_Obj){
         plhs[nout++] = resize_and_create_mxRow(Obj, cp_it + 1, mxREAL_CLASS);
     }

@@ -1,6 +1,6 @@
 /*=============================================================================
  * Comp, rX, [List, Graph, Obj, Time, Dif] = cp_d1_lsx_cpy(loss, Y, first_edge,
- *  adj_vertices, edge_weights, loss_weights, d1_coor_weights, cp_dif_tol,
+ *  adj_vertices, edge_weights, loss_weights, d11_metric, cp_dif_tol,
  *  cp_it_max, K, split_iter_num, split_damp_ratio, split_values_init_num,
  *  split_values_iter_num, pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol,
  *  pfdr_it_max, verbose, max_num_threads, max_split_size,
@@ -49,7 +49,7 @@ template<typename real_t, NPY_TYPES NPY_REAL>
 static PyObject* cp_d1_lsx(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_first_edge, PyArrayObject* py_adj_vertices,
     PyArrayObject* py_edge_weights, PyArrayObject* py_loss_weights,
-    PyArrayObject* py_d1_coor_weights, real_t cp_dif_tol, int cp_it_max, int K,
+    PyArrayObject* py_d11_metric, real_t cp_dif_tol, int cp_it_max, int K,
     int split_iter_num, real_t split_damp_ratio, int split_values_init_num,
     int split_values_iter_num, real_t pfdr_rho, real_t pfdr_cond_min,
     real_t pfdr_dif_rcd, real_t pfdr_dif_tol, int pfdr_it_max, int verbose,
@@ -79,8 +79,8 @@ static PyObject* cp_d1_lsx(real_t loss, PyArrayObject* py_Y,
         edge_weights[0] : 1.0;
     if (PyArray_SIZE(py_edge_weights) <= 1){ edge_weights = nullptr; }
 
-    const real_t* d1_coor_weights = PyArray_SIZE(py_d1_coor_weights) > 0 ?
-        (real_t*) PyArray_DATA(py_d1_coor_weights) : nullptr;
+    const real_t* d11_metric = PyArray_SIZE(py_d11_metric) > 0 ?
+        (real_t*) PyArray_DATA(py_d11_metric) : nullptr;
 
     /* number of threads */ 
     if (max_num_threads <= 0){ max_num_threads = omp_get_max_threads(); }
@@ -111,7 +111,7 @@ static PyObject* cp_d1_lsx(real_t loss, PyArrayObject* py_Y,
             (V, E, first_edge, adj_vertices, D, Y);
 
     cp->set_loss(loss, Y, loss_weights);
-    cp->set_edge_weights(edge_weights, homo_edge_weight, d1_coor_weights);
+    cp->set_d1_param(edge_weights, homo_edge_weight, d11_metric);
     cp->set_monitoring_arrays(Obj, Time, Dif);
     cp->set_components(0, Comp);
     cp->set_cp_param(cp_dif_tol, cp_it_max, verbose);
@@ -266,7 +266,7 @@ static PyObject* cp_d1_lsx_cpy(PyObject* self, PyObject* args)
 #endif
     /* INPUT */
     PyArrayObject *py_Y, *py_first_edge, *py_adj_vertices, *py_edge_weights,
-        *py_loss_weights, *py_d1_coor_weights;
+        *py_loss_weights, *py_d11_metric;
     double loss, cp_dif_tol, split_damp_ratio, pfdr_rho, pfdr_cond_min,
         pfdr_dif_rcd, pfdr_dif_tol;  
     int cp_it_max, K, split_iter_num, split_values_init_num,
@@ -277,7 +277,7 @@ static PyObject* cp_d1_lsx_cpy(PyObject* self, PyObject* args)
     /* parse the input, from Python Object to C PyArray, double, or int type */
     if(!PyArg_ParseTuple(args, "dOOOOOOdiiidiiddddiiiiiiiiiii", &loss, &py_Y,
         &py_first_edge, &py_adj_vertices, &py_edge_weights, &py_loss_weights,
-        &py_d1_coor_weights, &cp_dif_tol, &cp_it_max, &K, &split_iter_num,
+        &py_d11_metric, &cp_dif_tol, &cp_it_max, &K, &split_iter_num,
         &split_damp_ratio, &split_values_init_num, &split_values_iter_num,
         &pfdr_rho, &pfdr_cond_min, &pfdr_dif_rcd, &pfdr_dif_tol, &pfdr_it_max,
         &verbose, &max_num_threads, &max_split_size, &balance_parallel_split,
@@ -289,7 +289,7 @@ static PyObject* cp_d1_lsx_cpy(PyObject* self, PyObject* args)
     if (real_is_double){
         return cp_d1_lsx<double, NPY_FLOAT64>(loss, py_Y, py_first_edge,
             py_adj_vertices, py_edge_weights, py_loss_weights,
-            py_d1_coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
+            py_d11_metric, cp_dif_tol, cp_it_max, K, split_iter_num,
             split_damp_ratio, split_values_init_num, split_values_iter_num, 
             pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
             verbose, max_num_threads, max_split_size, balance_parallel_split,
@@ -298,7 +298,7 @@ static PyObject* cp_d1_lsx_cpy(PyObject* self, PyObject* args)
     }else{ /* real_t type is float */
         return cp_d1_lsx<float, NPY_FLOAT32>(loss, py_Y, py_first_edge,
             py_adj_vertices, py_edge_weights, py_loss_weights,
-            py_d1_coor_weights, cp_dif_tol, cp_it_max, K, split_iter_num,
+            py_d11_metric, cp_dif_tol, cp_it_max, K, split_iter_num,
             split_damp_ratio, split_values_init_num, split_values_iter_num,
             pfdr_rho, pfdr_cond_min, pfdr_dif_rcd, pfdr_dif_tol, pfdr_it_max,
             verbose, max_num_threads, max_split_size, balance_parallel_split,
@@ -314,8 +314,6 @@ static PyMethodDef cp_d1_lsx_methods[] = {
 };
 
 /* module initialization */
-#if PY_MAJOR_VERSION >= 3
-/* Python version 3 */
 static struct PyModuleDef cp_d1_lsx_module = {
     PyModuleDef_HEAD_INIT,
     "cp_d1_lsx_cpy", /* name of module */
@@ -335,16 +333,3 @@ PyInit_cp_d1_lsx_cpy(void)
     import_array() /* IMPORTANT: this must be called to use numpy array */
     return PyModule_Create(&cp_d1_lsx_module);
 }
-
-#else
-
-/* module initialization */
-/* Python version 2 */
-PyMODINIT_FUNC
-initcp_d1_lsx_cpy(void)
-{
-    import_array() /* IMPORTANT: this must be called to use numpy array */
-    (void) Py_InitModule("cp_d1_lsx_cpy", cp_d1_lsx_methods);
-}
-
-#endif
