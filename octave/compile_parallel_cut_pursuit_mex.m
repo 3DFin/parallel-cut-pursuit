@@ -13,8 +13,11 @@ try
     LDFLAGSorig = LDFLAGS;
     % _GLIBCXX_PARALLEL is only useful for libstdc++ users
     % MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
+    % COMP_T_ON_32_BITS for components identifiers on 32 bits rather than 16
     CXXFLAGS = [CXXFLAGS ' -Wextra -Wpedantic -std=c++11 -fopenmp -g0 ' ...
-        '-D_GLIBCXX_PARALLEL -DMIN_OPS_PER_THREAD=10000'];
+        '-D_GLIBCXX_PARALLEL -DMIN_OPS_PER_THREAD=10000 ' ...
+        % '-DCOMP_T_ON_32_BITS' ... % only for very large problems
+        ]; 
     LDFLAGS = [LDFLAGS ' -fopenmp'];
     setenv('CXXFLAGS', CXXFLAGS);
     setenv('LDFLAGS', LDFLAGS);

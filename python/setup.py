@@ -4,7 +4,7 @@
 """ 
 Compilation command: python setup.py build_ext
 
-Camille Baudoin 2019
+Camille Baudoin 2019, Hugo Raguet 2023
 """
 
 from setuptools import setup, Extension
@@ -24,13 +24,20 @@ to_compile = [ # comment undesired extension modules
 # compilation and linkage options
 # _GLIBCXX_PARALLEL is only useful for libstdc++ users
 # MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
+# COMP_T_ON_32_BITS for components identifiers on 32 bits rather than 16
 if os.name == 'nt': # windows
-    extra_compile_args = ["/std:c++11", "/openmp", "-D_GLIBCXX_PARALLEL",
-                          "-DMIN_OPS_PER_THREAD=10000"]
+    extra_compile_args = [
+        "/std:c++11", "/openmp", "-D_GLIBCXX_PARALLEL",
+        "-DMIN_OPS_PER_THREAD=10000",
+        # "-DCOMP_T_ON_32_BITS, # only for very large problems
+    ]
     extra_link_args = ["/lgomp"]
 elif os.name == 'posix': # linux
-    extra_compile_args = ["-std=c++11", "-fopenmp", "-D_GLIBCXX_PARALLEL",
-                          "-DMIN_OPS_PER_THREAD=10000"]
+    extra_compile_args = [
+        "-std=c++11", "-fopenmp", "-D_GLIBCXX_PARALLEL",
+        "-DMIN_OPS_PER_THREAD=10000",
+        # "-DCOMP_T_ON_32_BITS, # only for very large problems
+    ]
     extra_link_args = ["-lgomp"]
 else:
     raise NotImplementedError('OS not yet supported.')

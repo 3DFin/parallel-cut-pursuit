@@ -16,7 +16,7 @@ Pull changes with
     git pull --recurse-submodules  
 
 
-## Table of Content  
+## Table of Contents  
 
 1. [**General problem statement**](#general-problem-statement)  
 2. [**C++ classes and Specializations**](#c-classes-pecializations)  
@@ -138,7 +138,7 @@ An example with [GNU Octave or Matlab](#gnu-octave-or-matlab) and [Python](#pyth
 The base set is Ω = ℝ<sup><i>D</i></sup>, where <i>D</i> can be seen as a set of labels, and the general form is  
 
     <i>F</i>: <i>x</i> ∈ ℝ<sup><i>D</i>⨯<i>V</i></sup> ↦  <i>f</i>(<i>y</i>, <i>x</i>) +
- ∑<sub><i>v</i> ∈ <i>V</i></sub> <i>ι</i><sub>Δ<sub><i>D</i></sub></sub>(<i>x</i><sub><i>v</i></sub>) +
+ ∑<sub><i>v</i> ∈ <i>V</i></sub> <i>ι</i><sub>Δ<sub><i>D</i></sub></sub>(<i>x</i><sub><i>v</i></sub>) +  
  ∑<sub>(<i>u</i>,<i>v</i>) ∈ <i>E</i></sub> <i>w</i><sup>(d<sub>1</sub>)</sup><sub>(<i>u</i>,<i>v</i>)</sub>
  ∑<sub><i>d</i> ∈ <i>D</i></sub> <i>λ</i><sub><i>d</i></sub> |<i>x</i><sub><i>u</i>,<i>d</i></sub> − <i>x</i><sub><i>v</i>,<i>d</i></sub>| ,  
 
@@ -229,7 +229,7 @@ An example with the smoothed Kullback–Leibler is provided with [GNU Octave or 
 Requires `C++11`.  
 Be sure to have OpenMP enabled with your compiler to enjoy parallelization. Note that, as of 2020, MSVC still does not support OpenMP 3.0 (published in 2008); consider switching to a decent compiler.  
 
-The number of parallel threads used in parallel regions is crucial for good performance; it is roughly controlled by a macro `MIN_OPS_PER_THREAD` which can be set by usual `D` compilation flag. A rule of thumb is to set it to `10000` on personal computers with a handful of cores, and up to `100000` for large computer clusters with tens of cores.  
+The number of parallel threads used in parallel regions is crucial for good performance; it is roughly controlled by a preprocessor macro `MIN_OPS_PER_THREAD` which can be again set with`-D` compilation flag. A rule of thumb is to set it to `10000` on personal computers with a handful of cores, and up to `100000` for large computer clusters with tens of cores.  
 
 The C++ classes are documented within the corresponding headers in `include/`.  
 
@@ -238,6 +238,8 @@ Graph structures must be given as forward-star representation. For conversion fr
 
 ### GNU Octave or Matlab
 See the script `compile_parallel_cut_pursuit_mex.m` for typical compilation commands; it can be run directly from the GNU Octave interpreter, but Matlab users must set compilation flags directly on the command line `CXXFLAGS = ...` and `LDFLAGS = ...`.  
+
+The integer type holding the components assignment is by defaut on 16 bits. For applications expecting a large number of components, this can be extended to 32 bits with the compilation option `-DCOMP_T_ON_32_BITS`.
 
 Extensive documentation of the MEX interfaces can be found within dedicated `.m` files in `octave/doc/`.  
 
@@ -250,6 +252,8 @@ The scripts `example_labeling_3D.m` and `example_labeling_3D_d0.m` exemplify the
 ### Python
 Requires `numpy` package.  
 See the script `setup.py` for compiling modules with `distutils`; on UNIX systems, it can be directly interpreted as `python setup.py build_ext`.  
+
+The integer type holding the components assignment is by defaut on 16 bits. For applications expecting a large number of components, this can be extended to 32 bits with the compilation option `-DCOMP_T_ON_32_BITS`.
 
 Extensive documentation of the Python wrappers can be found in the corresponding `.py` files.  
 

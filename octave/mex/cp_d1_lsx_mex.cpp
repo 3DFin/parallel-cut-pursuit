@@ -26,29 +26,31 @@ using namespace std;
 /* index_t must be able to represent the number of vertices and of (undirected)
  * edges in the main graph;
  * comp_t must be able to represent the number of constant connected components
- * in the reduced graph, as well as the dimension D */
+ * in the reduced graph */
 #if defined _OPENMP && _OPENMP < 200805
 /* use of unsigned iterator in parallel loops requires OpenMP 3.0;
  * although published in 2008, MSVC still does not support it as of 2020 */
     typedef int32_t index_t;
     # define mxINDEX_CLASS mxINT32_CLASS
     # define INDEX_T_STRING "int32"
-    /* comment the following if more than 32767 components are expected */
-    typedef int16_t comp_t;
-    # define mxCOMP_CLASS mxINT16_CLASS
-    /* uncomment the following if more than 32767 components are expected */
-    // typedef int32_t comp_t;
-    // #define mxCOMP_CLASS mxINT32_CLASS
+    #ifndef COMP_T_ON_32_BITS
+        typedef int16_t comp_t;
+        # define mxCOMP_CLASS mxINT16_CLASS
+    #else /* more than 32767 components are expected */
+        typedef int32_t comp_t;
+        #define mxCOMP_CLASS mxINT32_CLASS
+    #endif
 #else
     typedef uint32_t index_t;
     # define mxINDEX_CLASS mxUINT32_CLASS
     # define INDEX_T_STRING "uint32"
-    /* comment the following if more than 65535 components are expected */
-    typedef uint16_t comp_t;
-    # define mxCOMP_CLASS mxUINT16_CLASS
-    /* uncomment the following if more than 65535 components are expected */
-    // typedef uint32_t comp_t;
-    // #define mxCOMP_CLASS mxUINT32_CLASS
+    #ifndef COMP_T_ON_32_BITS
+        typedef uint16_t comp_t;
+        # define mxCOMP_CLASS mxUINT16_CLASS
+    #else /* more than 65535 components are expected */
+        typedef uint32_t comp_t;
+        #define mxCOMP_CLASS mxUINT32_CLASS
+    #endif
 #endif
 
 /* function for checking optional parameters */
