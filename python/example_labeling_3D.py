@@ -12,18 +12,12 @@
 # 2017, 132, 102-118 
 #
 # Camille Baudoin 2019, Hugo Raguet 2023
-import sys
-import os 
 import numpy as np
 import scipy.io
 import time
 import matplotlib.pyplot as plt
 
-file_path = os.path.realpath(os.path.dirname(__file__))
-os.chdir(file_path)
-sys.path.append(os.path.join(file_path, "wrappers"))
-
-from cp_d1_lsx import cp_d1_lsx 
+from pycut_pursuit.cp_d1_lsx import cp_d1_lsx 
 
 ###  classes involved in the task  ###
 classNames = ["road", "vegetation", "facade", "hardscape",

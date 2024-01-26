@@ -1,0 +1,25 @@
+[build-system]
+requires = ["wheel", "setuptools", "oldest-supported-numpy"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycut-pursuit"
+version = "0.0.1"
+readme = "README.md"
+description = "cut pursuit algorithms"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Loic Landrieu", email = "loic.landrieu@enpc.fr"},
+  {name = "Hugo Raget", email = "hugo.raguet@insa-cvl.fr"}
+]
+keywords = ["cut pursuit", "graph signal processing", "graphs", "optimization"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python",
+  "Topic :: Scientific/Engineering"
+]
+
+[project.urls]
+homepage = "https://gitlab.com/1a7r0ch3/parallel-cut-pursuit"
+repository = "https://gitlab.com/1a7r0ch3/parallel-cut-pursuit"

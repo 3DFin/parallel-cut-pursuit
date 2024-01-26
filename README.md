@@ -251,9 +251,10 @@ The scripts `example_labeling_3D.m` and `example_labeling_3D_d0.m` exemplify the
 
 ### Python
 Requires `numpy` package.  
-See the script `setup.py` for compiling modules with `distutils`; on UNIX systems, it can be directly interpreted as `python setup.py build_ext`.  
-
-The integer type holding the components assignment is by defaut on 16 bits. For applications expecting a large number of components, this can be extended to 32 bits with the compilation option `-DCOMP_T_ON_32_BITS`.
+See the script `setup.py` for compiling modules with `setuptools`; it can be run simply by using `pip`
+e.g. `python -m pip install .`. pre compiled binaries for Windows and Linux will soon be available on `PyPI`.
+if more than 65535 components are expected in you graph you can force the use of 32 bit indices by setting
+the `COMP_T_ON_32_BITS` environement variable to 1 e.g. `export COMP_T_ON_32_BITS=1` on bash.
 
 Extensive documentation of the Python wrappers can be found in the corresponding `.py` files.  
 

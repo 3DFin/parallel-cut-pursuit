@@ -1,11 +1,6 @@
 import numpy as np
-import os 
-import sys
 
-sys.path.append(os.path.join(os.path.realpath(os.path.dirname(__file__)), 
-                                              "../bin"))
-
-from cp_prox_tv_cpy import cp_prox_tv_cpy
+from pycut_pursuit.cp_prox_tv_cpy import cp_prox_tv_cpy
 
 def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
     d1p=2, d1p_metric=None, cp_dif_tol=1e-4, cp_it_max=10, K=2,

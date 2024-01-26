@@ -11,18 +11,12 @@
 # Photogrammetry and Remote Sensing, 132:102-118, 2017
 #
 # Camille Baudoin 2019, Hugo Raguet 2023
-import sys
-import os 
 import numpy as np
 import scipy.io
 import time
 import matplotlib.pyplot as plt
 
-file_path = os.path.realpath(os.path.dirname(__file__))
-os.chdir(file_path)
-sys.path.append(os.path.join(file_path, "wrappers"))
-
-from cp_d0_dist import cp_d0_dist 
+from pycut_pursuit.cp_d0_dist import cp_d0_dist 
 
 ###  classes involved in the task  ###
 classNames = ["road", "vegetation", "facade", "hardscape",
