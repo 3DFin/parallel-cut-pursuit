@@ -121,5 +121,5 @@ mod_cp_prox_tv = Extension(
 
 setup(
     package_dir={"pycut_pursuit": "python/wrappers"},
-    ext_modules=[mod_cp_d1_ql1b, mod_cp_d1_lsx, mod_cp_d0_dist],
+    ext_modules=[mod_cp_d1_ql1b, mod_cp_d1_lsx, mod_cp_d0_dist, mod_cp_prox_tv]
 )
