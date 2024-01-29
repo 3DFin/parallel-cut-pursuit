@@ -11,14 +11,15 @@ from setuptools import setup, Extension
 import numpy
 import os
 
+
 # Include directories
 include_dirs = [
     numpy.get_include(),  # find the Numpy headers
-    "include",
     "pcd-prox-split/include",
     "pcd-prox-split/matrix-tools/include",
     "pcd-prox-split/proj-simplex/include",
     "wth-element/include",
+    "include",
 ]
 
 # Compilation and linkage options

@@ -13,7 +13,7 @@ authors = [
   {name = "Loic Landrieu", email = "loic.landrieu@enpc.fr"},
   {name = "Hugo Raget", email = "hugo.raguet@insa-cvl.fr"}
 ]
-keywords = ["cut pursuit", "graph signal processing", "graphs", "optimization"]
+keywords = ["point clouds", "features", "3D", "LiDAR"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python",
@@ -23,3 +23,6 @@ classifiers = [
 [project.urls]
 homepage = "https://gitlab.com/1a7r0ch3/parallel-cut-pursuit"
 repository = "https://gitlab.com/1a7r0ch3/parallel-cut-pursuit"
+
+[tool.cibuildwheel]
+build = "cp3{8,9,10,11,12}-*"

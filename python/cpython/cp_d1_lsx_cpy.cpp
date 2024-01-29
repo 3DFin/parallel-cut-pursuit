@@ -58,7 +58,6 @@ static PyObject* cp_d1_lsx(real_t loss, PyArrayObject* py_Y,
     int max_num_threads, index_t max_split_size, int balance_parallel_split,
     int compute_List, int compute_Graph, int compute_Obj, int compute_Time,
     int compute_Dif)
-
 {
     /**  get inputs  **/
 

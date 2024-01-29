@@ -45,7 +45,6 @@ using namespace std;
     #endif
 #endif
 
-
 /* template for handling both single and double precisions */
 template<typename real_t, NPY_TYPES NPY_REAL>
 static PyObject* cp_d1_ql1b(PyArrayObject* py_Y,
