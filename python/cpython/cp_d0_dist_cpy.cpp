@@ -43,6 +43,17 @@ using namespace std;
         typedef uint32_t comp_t;
         #define NPY_COMP NPY_UINT32
     #endif
+#endif
+
+/* template for handling both single and double precisions */
+template<typename real_t, NPY_TYPES NPY_REAL>
+static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
+    PyArrayObject* py_first_edge, PyArrayObject* py_adj_vertices,
+    PyArrayObject* py_edge_weights, PyArrayObject* py_vert_weights,
+    PyArrayObject* py_coor_weights, real_t cp_dif_tol, int cp_it_max,
+    int K, int split_iter_num, real_t split_damp_ratio, int kmpp_init_num,
+    int kmpp_iter_num, real_t min_comp_weight, int verbose,
+    int max_num_threads, index_t max_split_size, int balance_parallel_split,
     int compute_List, int compute_Graph, int compute_Obj, int compute_Time,
     int compute_Dif)
 {

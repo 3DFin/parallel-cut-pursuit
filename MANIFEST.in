@@ -1,2 +1,9 @@
-include include/*.*
-include src/wth_element_generic.cpp
+graft include
+graft pcd-prox-split/src
+graft pcd-prox-split/include
+graft pcd-prox-split/matrix-tools/include
+graft pcd-prox-split/matrix-tools/src
+graft pcd-prox-split/proj-simplex/include
+graft pcd-prox-split/proj-simplex/src
+graft wth-element/include
+graft wth-element/src
