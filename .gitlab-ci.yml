@@ -1,6 +1,7 @@
 #set global variables  
 variables:
-  CIBW_ENVIRONMENT: COMP_T_ON_32_BITS=1 
+  CIBW_ENVIRONMENT: COMP_T_ON_32_BITS=1
+  GIT_SUBMODULE_STRATEGY: recursive
 
 linux:
   image: python:3.8

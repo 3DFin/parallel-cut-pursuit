@@ -253,6 +253,7 @@ The scripts `example_labeling_3D.m` and `example_labeling_3D_d0.m` exemplify the
 Requires `numpy` package.  
 See the script `setup.py` for compiling modules with `setuptools`; it can be run simply by using `pip`
 e.g. `python -m pip install .`. pre compiled binaries for Windows and Linux will soon be available on `PyPI`.
+
 if more than 65535 components are expected in you graph you can force the use of 32 bit indices by setting
 the `COMP_T_ON_32_BITS` environement variable to 1 e.g. `export COMP_T_ON_32_BITS=1` on bash.
 
