@@ -41,9 +41,9 @@ TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
 }
 
 TPL void CP_D1_LSX::set_d1_param(const real_t* edge_weights,
-    real_t homo_edge_weight, const real_t* d11_metric)
+    real_t homo_edge_weight, const real_t* d11_metric, D1p d1p)
 {
-    set_d1_param(edge_weights, homo_edge_weight, d11_metric, D11);
+    Cp_d1<real_t, index_t, comp_t>::set_d1_param(edge_weights, homo_edge_weight, d11_metric, D11);
 }
 
 TPL void CP_D1_LSX::set_loss(real_t loss, const real_t* Y,

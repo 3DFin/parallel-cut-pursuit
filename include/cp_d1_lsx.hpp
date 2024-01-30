@@ -46,6 +46,8 @@ private:
     using Cp<real_t, index_t, comp_t>::dif_tol;
     using Cp_d1<real_t, index_t, comp_t>::d1p;
     using Cp_d1<real_t, index_t, comp_t>::D11;
+    using Cp_d1<real_t, index_t, comp_t>::D12;
+    using typename Cp_d1<real_t, index_t, comp_t>::D1p;
 
 public:
     /**  constructor, destructor  **/
@@ -62,12 +64,10 @@ public:
      * to null beforehand */
 
     /**  methods for manipulating parameters  **/
-
-    /* overload the base class Cp_d1 method to enforce d1p value to D11 */
     using Cp_d1<real_t, index_t, comp_t>::set_d1_param;
     void set_d1_param(const real_t* edge_weights = nullptr,
-        real_t homo_edge_weight = 1.0, const real_t* d11_metric = nullptr);
-
+        real_t homo_edge_weight = 1.0, const real_t* d11_metric = nullptr,
+        D1p d1p = D12);
     /* specific losses */
     static real_t linear_loss() { return 0.0; }
     static real_t quadratic_loss() { return 1.0; }
