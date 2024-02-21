@@ -10,7 +10,7 @@ Camille Baudoin 2019
 from setuptools import setup, Extension
 import numpy
 import os
-
+import platform
 
 # Include directories
 include_dirs = [
@@ -25,10 +25,10 @@ include_dirs = [
 # Compilation and linkage options
 # _GLIBCXX_PARALLEL is only useful for libstdc++ users
 # MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
-if os.name == "nt":  # windows
+if platform.system() == "Windows":
     extra_compile_args = ["/openmp", "-DMIN_OPS_PER_THREAD=10000"]
     extra_link_args = []
-elif os.name == "posix":  # linux
+elif platform.system() == "Linux":
     extra_compile_args = [
         "-std=c++11",
         "-fopenmp",
@@ -36,13 +36,23 @@ elif os.name == "posix":  # linux
         "-DMIN_OPS_PER_THREAD=10000",
     ]
     extra_link_args = ["-lgomp"]
+elif platform.system() == "Darwin":
+    extra_compile_args = [
+        "-std=c++11",
+        "-fopenmp",
+        "-D_GLIBCXX_PARALLEL",
+        "-DMIN_OPS_PER_THREAD=10000",
+    ]
+    extra_link_args = ["-lomp"]
+# It is more a matter of GCC vs. Clang more than a macOS vs Linux issue.
+# use something like meson/cmake to handle this in a proper way
 else:
     raise NotImplementedError("OS not yet supported.")
 
 COMP_T_ON_32_BITS = os.environ.get("COMP_T_ON_32_BITS", None)
 
-if COMP_T_ON_32_BITS is not None and COMP_T_ON_32_BITS == "1":
-    extra_compile_args.append("-DCOMP_T_ON_32_BITS")
+#if COMP_T_ON_32_BITS is not None and COMP_T_ON_32_BITS == "1":
+extra_compile_args.append("-DCOMP_T_ON_32_BITS")
 
 # Compilation
 mod_cp_d1_ql1b = Extension(
