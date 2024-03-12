@@ -29,14 +29,14 @@ if os.name == 'nt': # windows
     extra_compile_args = [
         "/std:c++11", "/openmp", "-D_GLIBCXX_PARALLEL",
         "-DMIN_OPS_PER_THREAD=10000",
-        # "-DCOMP_T_ON_32_BITS, # only for very large problems
+        # "-DCOMP_T_ON_32_BITS", # only for very large problems
     ]
     extra_link_args = ["/lgomp"]
 elif os.name == 'posix': # linux
     extra_compile_args = [
         "-std=c++11", "-fopenmp", "-D_GLIBCXX_PARALLEL",
         "-DMIN_OPS_PER_THREAD=10000",
-        # "-DCOMP_T_ON_32_BITS, # only for very large problems
+        # "-DCOMP_T_ON_32_BITS", # only for very large problems
     ]
     extra_link_args = ["-lgomp"]
 else:

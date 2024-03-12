@@ -186,10 +186,15 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     else:
         raise TypeError("Cut-pursuit d0 distance: argument 'Y' must be a "
                         "nonempty numpy array of type float32 or float64.") 
+    # Determine V
+    if Y.ndim > 1:
+        V = Y.shape[1]
+        D = Y.shape[0]
+    else:
+        V = Y.shape[0]
+        D = 1
     
-    # Convert in numpy array scalar entry: Y, first_edge, adj_vertices, 
-    # edge_weights, vert_weights, coor_weights and define float numpy array
-    # argument with the right float type, if empty:
+    # Convert in numpy array scalar entry
     if (type(first_edge) != np.ndarray
         or first_edge.dtype not in ["int32", "uint32"]):
         raise TypeError("Cut-pursuit d0 distance: argument 'first_edge' must "
@@ -223,14 +228,24 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
         else:
             coor_weights = np.array([], dtype=real_t)
 
-    # Determine V and check graph structure 
-    if Y.ndim > 1:
-        V = Y.shape[1]
-        D = Y.shape[0]
-    else:
-        V = Y.shape[0]
-        D = 1
-        
+    # Sanity check graph on coor weights and loss 
+    if 0.0 < loss and loss < 1.0 and coor_weights.size > 0:
+        raise ValueError("Cut-pursuit d0 distance: with Kullback-Leibler loss "
+            "(0 < loss < 1), 'coor_weights' should be empty; weighting "
+            "coordinates of the probability space makes no sense.")
+    elif (1 <= loss and loss < D and coor_weights.size > 0 and
+        coor_weights.size != loss + 1):
+        raise ValueError("Cut-pursuit d0 distance: for weighting quadratic and"
+            " Kullback-Leibler parts, 'coor_weights' should be of size loss + "
+            "1 = {0}, because argument 'loss' indicates the number of "
+            "coordinates involved in the quadratic part and the last weight is"
+            " for KL (size {1} given)".format(loss + 1, coor_weights.size))
+    elif loss == D and coor_weights.size > 0 and coor_weights.size != D:
+        raise ValueError("Cut-pursuit d0 distance: with quadratic loss (D),"
+            " argument 'coor_weights' should be empty or of size D = {0} "
+            "(size {1} given)".format(D, coor_weights.size))
+
+    # Sanity check graph on graph structure 
     if first_edge.size != V + 1 :
         raise ValueError("Cut-pursuit d0 distance: argument 'first_edge'"
                          "should contain |V| + 1 = {0} elements, "
@@ -252,22 +267,9 @@ def cp_d0_dist(loss, Y, first_edge, adj_vertices, edge_weights=None,
     # Convert in float64 all float arguments
     loss = float(loss)
     split_damp_ratio = float(split_damp_ratio)
-    if 0.0 < loss and loss < 1.0 and coor_weights.size > 0:
-        raise ValueError("Cut-pursuit d0 distance: with Kullback-Leibler loss,"
-                     " 'coor_weights' should be empty; weighting coordinates "
-                     "of the probability space makes no sense.")
-    elif (1 <= loss and loss < D and coor_weights.size > 0 and
-        coor_weights.size != loss + 1):
-        raise ValueError("Cut-pursuit d0 distance: for weighting quadratic and"
-            " Kullback-Leibler parts, 'coor_weights' should be of size loss + "
-            "1, where loss indicates the number of coordinates involved in the"
-            " quadratic part and the last weights is for KL")
-    elif loss == D and coor_weights.size > 0 and coor_weights.size != D:
-        raise ValueError("Cut-pursuit d0 distance: with quadratic loss,"
-            " argument 'coor_weights' should be empty or of size D")
     cp_dif_tol = float(cp_dif_tol)
      
-    # Convert all int arguments: 
+    # Convert all int arguments
     cp_it_max = int(cp_it_max)
     K = int(K)
     split_iter_num = int(split_iter_num)
