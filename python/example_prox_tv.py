@@ -7,36 +7,21 @@
 # Sciences, 2015, 8, 2706-2739
 #
 # Camille Baudoin 2019, Hugo Raguet 2023
-import sys
-import os
+
 import numpy as np
-import scipy.io
 import time
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-file_path = os.path.realpath(os.path.dirname(__file__))
-os.chdir(file_path)
-sys.path.append(os.path.join(file_path,
-    "../pcd-prox-split/grid-graph/python/bin"))
-sys.path.append(os.path.join(file_path, "wrappers"))
 
-try:
-    from grid_graph import grid_to_graph
-except ModuleNotFoundError:
-    raise ImportError("CP prox TV example: compile grid-graph module in "
-        "pcd-prox-split/grid-graph/python/")
-try:
-    from cp_prox_tv import cp_prox_tv 
-except ModuleNotFoundError:
-    raise ImportError("CP prox TV example: compile cp_prox_tv module in "
-        "python/")
+from grid_graph import grid_to_graph
+from pycut_pursuit.cp_prox_tv import cp_prox_tv 
 
 ###  general parameters  ###
 plot_results = True
 image_file = '../pcd-prox-split/data/Lola.jpg'
 noise_level = .2
-la_tv = .5*noise_level;
+la_tv = .5*noise_level
 
 ###  parameters; see documentation of pfdr_prox_tv  ###
 d1p = 2
@@ -46,15 +31,15 @@ pfdr_dif_tol = 1e-4
 cp_it_max = 5
 verbose = 1e2
 max_num_threads = 0
-balance_parallel_split = True;
+balance_parallel_split = True
 
 ###  initialize data  ###
-print('load image and apply transformation... ', end='');
+print('load image and apply transformation... ', end='')
 x0 = mpimg.imread(image_file)
 x0 = x0[1::3, 1::3, :] # some downsampling
-x0 = x0.astype('f4')/255;
+x0 = x0.astype('f4')/255
 y = x0 + noise_level*np.random.randn(*x0.shape).astype(x0.dtype)
-print('done.');
+print('done.')
 
 ##  plot the obervations
 if plot_results:
@@ -110,4 +95,4 @@ if plot_results:
     ax.plot(Time, Obj)
     ax.set_title("objective evolution")
     ax.set_xlabel("time (s)")
-    ax.set_ylabel('$1/2 ||y - x||^2 + ||x||_{\delta_{1,2}}$');
+    ax.set_ylabel('$1/2 ||y - x||^2 + ||x||_{\delta_{1,2}}$')
