@@ -169,6 +169,24 @@ static void cp_d0_dist_mex(int nlhs, mxArray *plhs[], int nrhs,
 
     GET_REAL_OPT(vert_weights)
     GET_REAL_OPT(coor_weights)
+    if (0.0 < loss && loss < 1.0 && coor_weights){
+        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: with "
+            "Kullback-Leibler loss (0 < loss < 1), 'coor_weights' should be "
+            "empty; weighting coordinates of the probability space makes no "
+            "sense.");
+    }else if (1 <= loss && loss < D && coor_weights &&
+              mxGetNumberOfElements(opt) != loss + 1){
+        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: for weighting "
+            "quadratic and Kullback-Leibler parts, 'coor_weights' should be "
+            "of size loss + 1 = %i, because argument 'loss' indicates the "
+            "number of coordinates involved in the quadratic part and the "
+            "last weight is for KL (size %i given)", loss + 1,
+            mxGetNumberOfElements(opt));
+    }else if (loss == D && coor_weights && mxGetNumberOfElements(opt) != D){
+        mexErrMsgIdAndTxt("MEX", "Cut-pursuit d0 distance: with quadratic "
+            "loss, argument 'coor_weights' should be empty or of size D = %i "
+            "(size %i given)", D, mxGetNumberOfElements(opt));
+    }
     GET_REAL_OPT(edge_weights)
     real_t homo_edge_weight = 1.0;
     if (opt && mxGetNumberOfElements(opt) == 1){

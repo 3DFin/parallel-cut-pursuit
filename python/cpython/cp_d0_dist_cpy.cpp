@@ -89,8 +89,8 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
     /* NOTA: no check for successful allocations is performed */
 
     npy_intp size_py_Comp[] = {V};
-    PyArrayObject* py_Comp = (PyArrayObject*) PyArray_Zeros(1,
-        size_py_Comp, PyArray_DescrFromType(NPY_COMP), 1);
+    PyArrayObject* py_Comp = (PyArrayObject*) PyArray_ZEROS(1, size_py_Comp,
+        NPY_COMP, 1);
     comp_t* Comp = (comp_t*) PyArray_DATA(py_Comp); 
 
     real_t* Obj = nullptr;
@@ -134,8 +134,8 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
         for (comp_t rv = 0; rv < rV; rv++){
             index_t comp_size = first_vertex[rv+1] - first_vertex[rv];
             npy_intp size_py_List_rv[] = {comp_size};
-            PyArrayObject* py_List_rv = (PyArrayObject*) PyArray_Zeros(1,
-                size_py_List_rv, PyArray_DescrFromType(NPY_IND), 1);
+            PyArrayObject* py_List_rv = (PyArrayObject*) PyArray_ZEROS(1,
+                size_py_List_rv, NPY_IND, 1);
             index_t* List_rv = (index_t*) PyArray_DATA(py_List_rv);
             for (index_t i = 0; i < comp_size; i++){
                 List_rv[i] = comp_list[first_vertex[rv] + i];
@@ -147,8 +147,8 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
     /* copy reduced values */
     const real_t* cp_rX = cp->get_reduced_values();
     npy_intp size_py_rX[] = {(npy_intp/* suppress warning*/) D, rV};
-    PyArrayObject* py_rX = (PyArrayObject*) PyArray_Zeros(2, size_py_rX,
-        PyArray_DescrFromType(NPY_REAL), 1);
+    PyArrayObject* py_rX = (PyArrayObject*) PyArray_ZEROS(2, size_py_rX,
+        NPY_REAL, 1);
     real_t* rX = (real_t*) PyArray_DATA(py_rX);
     for (size_t rvd = 0; rvd < rV*D; rvd++){ rX[rvd] = cp_rX[rvd]; }
 
@@ -164,20 +164,17 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
         /* numpy arrays for forward-star representation and weights */
         npy_intp size_py_red_first_edge[] = {rV + 1};
         PyArrayObject* py_red_first_edge = (PyArrayObject*)
-            PyArray_Zeros(1, size_py_red_first_edge,
-                PyArray_DescrFromType(NPY_IND), 1);
+            PyArray_ZEROS(1, size_py_red_first_edge, NPY_IND, 1);
         index_t* red_first_edge = (index_t*) PyArray_DATA(py_red_first_edge);
 
         npy_intp size_py_red_adj_vertices[] = {(npy_intp/* supp. warning*/)rE};
         PyArrayObject* py_red_adj_vertices = (PyArrayObject*)
-            PyArray_Zeros(1, size_py_red_adj_vertices,
-                PyArray_DescrFromType(NPY_COMP), 1);
+            PyArray_ZEROS(1, size_py_red_adj_vertices, NPY_COMP, 1);
         comp_t* red_adj_vertices = (comp_t*) PyArray_DATA(py_red_adj_vertices);
 
         npy_intp size_py_red_edge_weights[] = {(npy_intp/* supp. warning*/)rE};
         PyArrayObject* py_red_edge_weights = (PyArrayObject*)
-            PyArray_Zeros(1, size_py_red_edge_weights,
-                PyArray_DescrFromType(NPY_REAL), 1);
+            PyArray_ZEROS(1, size_py_red_edge_weights, NPY_REAL, 1);
         real_t* red_edge_weights = (real_t*) PyArray_DATA(py_red_edge_weights);
 
         /* reduced edge list is guaranteed to be in increasing order of
@@ -206,8 +203,7 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_Obj = nullptr;
     if (compute_Obj){
         npy_intp size_py_Obj[] = {cp_it + 1};
-        py_Obj = (PyArrayObject*) PyArray_Zeros(1, size_py_Obj,
-            PyArray_DescrFromType(NPY_REAL), 1);
+        py_Obj = (PyArrayObject*) PyArray_ZEROS(1, size_py_Obj, NPY_REAL, 1);
         real_t* Obj_ = (real_t*) PyArray_DATA(py_Obj);
         for (int i = 0; i < size_py_Obj[0]; i++){ Obj_[i] = Obj[i]; }
         free(Obj);
@@ -216,8 +212,8 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_Time = nullptr;
     if (compute_Time){
         npy_intp size_py_Time[] = {cp_it + 1};
-        py_Time = (PyArrayObject*) PyArray_Zeros(1, size_py_Time,
-            PyArray_DescrFromType(NPY_FLOAT64), 1);
+        py_Time = (PyArrayObject*) PyArray_ZEROS(1, size_py_Time, NPY_FLOAT64,
+            1);
         double* Time_ = (double*) PyArray_DATA(py_Time);
         for (int i = 0; i < size_py_Time[0]; i++){ Time_[i] = Time[i]; }
         free(Time);
@@ -226,8 +222,7 @@ static PyObject* cp_d0_dist(real_t loss, PyArrayObject* py_Y,
     PyArrayObject* py_Dif = nullptr;
     if (compute_Dif){
         npy_intp size_py_Dif[] = {cp_it};
-        py_Dif = (PyArrayObject*) PyArray_Zeros(1, size_py_Dif,
-            PyArray_DescrFromType(NPY_REAL), 1);
+        py_Dif = (PyArrayObject*) PyArray_ZEROS(1, size_py_Dif, NPY_REAL, 1);
         real_t* Dif_ = (real_t*) PyArray_DATA(py_Dif);
         for (int i = 0; i < size_py_Dif[0]; i++){ Dif_[i] = Dif[i]; }
         free(Dif);

@@ -24,13 +24,13 @@ sys.path.append(os.path.join(file_path, "wrappers"))
 try:
     from grid_graph import grid_to_graph
 except ModuleNotFoundError:
-    raise ImportError("CP prox TV example: compile grid-graph module in"
+    raise ImportError("CP prox TV example: compile grid-graph module in "
         "pcd-prox-split/grid-graph/python/")
 try:
     from cp_prox_tv import cp_prox_tv 
 except ModuleNotFoundError:
     raise ImportError("CP prox TV example: compile cp_prox_tv module in "
-        " python/")
+        "python/")
 
 ###  general parameters  ###
 plot_results = True

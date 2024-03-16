@@ -66,7 +66,7 @@ The module `cut_pursuit` implements the base class `Cp`, defining all steps of t
 
 The module `cut_pursuit_d1` implements the class `Cp_d1` derived from `Cp`, specializing cut-pursuit for directionally differentiable cases involving the graph total variation.  
 
-The module `cut_pursuit_d1` implements the class `Cp_d0` derived from `Cp`, specializing cut-pursuit for noncontinuous cases involving the contour length penalization.  
+The module `cut_pursuit_d0` implements the class `Cp_d0` derived from `Cp`, specializing cut-pursuit for noncontinuous cases involving the contour length penalization.  
 
 ### `Cp_prox_tv`: proximity operator of the graph total variation
 Also coined “graph total variation denoising” or “general fused LASSO signal approximation”. The objective functional is 
