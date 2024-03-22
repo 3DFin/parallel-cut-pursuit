@@ -4,14 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pycut-pursuit"
-version = "0.1.1"
+version = "0.1.2"
 readme = "README.md"
 description = "cut pursuit algorithms"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 authors = [
-  {name = "Loic Landrieu", email = "loic.landrieu@enpc.fr"},
-  {name = "Hugo Raget", email = "hugo.raguet@insa-cvl.fr"}
+  {name = "Hugo Raguet", email = "hugo.raguet@insa-cvl.fr"},
+  {name = "Loic Landrieu", email = "loic.landrieu@enpc.fr"}
+]
+maintainers = [
+    {name = "Hugo Raguet", email = "hugo.raguet@insa-cvl.fr"}
 ]
 keywords = ["point clouds", "features", "3D", "LiDAR"]
 classifiers = [
