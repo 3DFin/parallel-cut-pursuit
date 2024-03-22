@@ -10,7 +10,6 @@
 import numpy as np
 import scipy.io
 import time
-import matplotlib.pyplot as plt
 
 from pycut_pursuit.cp_d1_ql1b import cp_d1_ql1b 
 
