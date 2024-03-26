@@ -1326,6 +1326,7 @@ TPL index_t CP::split()
     comp_t rV_new, rV_big;
     index_t* first_vertex_big;
     int num_thrds = balance_split(rV_big, rV_new, first_vertex_big);
+    (void) num_thrds; /* prevent "unused variable" warning */
 
     /* components are processed in parallel but graph structure specifies edges
      * ends with global indexing; the following table enables constant time

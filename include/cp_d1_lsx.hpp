@@ -44,6 +44,7 @@ private:
      * https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members
      **/
     using Cp<real_t, index_t, comp_t>::dif_tol;
+    using typename Cp_d1<real_t, index_t, comp_t>::D1p;
     using Cp_d1<real_t, index_t, comp_t>::d1p;
     using Cp_d1<real_t, index_t, comp_t>::D11;
 
@@ -66,7 +67,8 @@ public:
     /* overload the base class Cp_d1 method to enforce d1p value to D11 */
     using Cp_d1<real_t, index_t, comp_t>::set_d1_param;
     void set_d1_param(const real_t* edge_weights = nullptr,
-        real_t homo_edge_weight = 1.0, const real_t* d11_metric = nullptr);
+        real_t homo_edge_weight = 1.0, const real_t* d11_metric = nullptr,
+        D1p d1p = D11);
 
     /* specific losses */
     static real_t linear_loss() { return 0.0; }

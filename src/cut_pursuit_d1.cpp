@@ -363,10 +363,9 @@ TPL index_t CP_D1::merge()
 
 TPL real_t CP_D1::compute_evolution() const
 {
-    index_t num_ops = D*(V - saturated_vert);
     real_t dif = 0.0, amp = 0.0;
-    #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
-        reduction(+:dif, amp)
+    #pragma omp parallel for schedule(dynamic) \
+        NUM_THREADS(D*(V - saturated_vert), rV) reduction(+:dif, amp)
     for (comp_t rv = 0; rv < rV; rv++){
         real_t* rXv = rX + D*rv;
         real_t amp_rv = 0.0;

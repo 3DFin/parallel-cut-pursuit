@@ -41,9 +41,10 @@ TPL CP_D1_LSX::Cp_d1_lsx(index_t V, index_t E, const index_t* first_edge,
 }
 
 TPL void CP_D1_LSX::set_d1_param(const real_t* edge_weights,
-    real_t homo_edge_weight, const real_t* d11_metric)
+    real_t homo_edge_weight, const real_t* d11_metric, D1p d1p)
 {
-    set_d1_param(edge_weights, homo_edge_weight, d11_metric, D11);
+    Cp_d1<real_t, index_t, comp_t>::set_d1_param(edge_weights,
+        homo_edge_weight, d11_metric, D11);
 }
 
 TPL void CP_D1_LSX::set_loss(real_t loss, const real_t* Y,
@@ -156,8 +157,10 @@ TPL void CP_D1_LSX::compute_grad()
 
     /* add gradient of differentiable loss term */
     const real_t c = (1.0 - loss), q = loss/D, r = q/c; // useful for KLs
+    #ifdef _OPENMP
     uintmax_t num_ops = D*(V - saturated_vert)*
         (loss == linear_loss() || loss == quadratic_loss() ? 1 : 3);
+    #endif
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
     for (index_t v = 0; v < V; v++){
         comp_t rv = comp_assign[v];
@@ -323,10 +326,9 @@ TPL index_t CP_D1_LSX::merge()
 
 TPL real_t CP_D1_LSX::compute_evolution() const
 {
-    index_t num_ops = D*(V - saturated_vert);
     real_t dif = 0.0;
-    #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
-        reduction(+:dif)
+    #pragma omp parallel for schedule(dynamic) \
+        NUM_THREADS(D*(V - saturated_vert), rV) reduction(+:dif)
     for (comp_t rv = 0; rv < rV; rv++){
         const real_t* rXv = rX + D*rv;
         if (is_saturated[rv]){
