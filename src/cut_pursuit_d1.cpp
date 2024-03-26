@@ -33,6 +33,7 @@ TPL void CP_D1::set_split_param(index_t max_split_size, comp_t K,
     int split_iter_num, real_t split_damp_ratio, int split_values_init_num,
     int split_values_iter_num)
 {
+    std::cout << "calling parent method" << std::endl;
     if (D == 1){
         if (K < 2 || K > 3 || split_iter_num > 1 || split_damp_ratio != 1.0
             || split_values_init_num > 1 || split_iter_num > 1){
