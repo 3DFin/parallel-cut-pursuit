@@ -15,7 +15,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14]
+        os: [macos-13, macos-14]
+        #os: [ubuntu-22.04, windows-2022, macos-14]
       fail-fast: false
 
     steps:
@@ -27,8 +28,14 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
-          CIBW_ENVIRONMENT: COMP_T_ON_32_BITS=1
-    
+          CIBW_BEFORE_ALL_MACOS: brew install libomp
+          CIBW_ENVIRONMENT: >
+              COMP_T_ON_32_BITS=1
+              CXX="$(brew --prefix llvm@15)/bin/clang"
+              CC="$(brew --prefix llvm@15)/bin/clang"
+              CFLAGS="$CFLAGS  -I$(brew --prefix llvm@15)/include -I$(brew --prefix)/opt/libomp/include"
+              LDFLAGS="$LDFLAGS -Wl,-rpath,$(brew --prefix llvm@15)/lib -L$(brew --prefix)/opt/libomp/lib"
+
       - uses: actions/upload-artifact@v4
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}

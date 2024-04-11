@@ -30,7 +30,3 @@ repository = "https://gitlab.com/1a7r0ch3/parallel-cut-pursuit"
 [tool.cibuildwheel]
 build = "cp3{9,10,11,12}-*"
 archs = ["auto64"] # limit to 64bits builds
-
-# limit macos compatibility
-[tool.cibuildwheel.macos.environment]
-MACOSX_DEPLOYMENT_TARGET = "10.14"
