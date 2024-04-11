@@ -1,4 +1,16 @@
-# Cut-Pursuit Algorithms, Parallelized Along Components
+# Cut-Pursuit Algorithms, Parallelized Along Components (fork)
+
+## About this fork
+
+The original code in available in this repository. https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.
+
+This a fork for python packaging purposes.
+
+Please post issues in this repos only if you are sure your problem is related to the packaging... and please post issue on the upstream repository __only__ if you are sure your problem is not related to the packaging.
+
+See below the original README (only the python section was modified)
+
+# Original README
 
 Generic C++ classes for implementing cut-pursuit algorithms.  
 Specialization to convex problems involving **graph total variation**, and nonconvex problems involving **contour length**, as explained in our articles [(Landrieu and Obozinski, 2016; Raguet and Landrieu, 2018)](#references).   
