@@ -156,8 +156,10 @@ TPL void CP_D1_LSX::compute_grad()
 
     /* add gradient of differentiable loss term */
     const real_t c = (1.0 - loss), q = loss/D, r = q/c; // useful for KLs
+    #ifdef _OPENMP
     uintmax_t num_ops = D*(V - saturated_vert)*
         (loss == linear_loss() || loss == quadratic_loss() ? 1 : 3);
+    #endif
     #pragma omp parallel for schedule(static) NUM_THREADS(num_ops, V)
     for (index_t v = 0; v < V; v++){
         comp_t rv = comp_assign[v];
@@ -323,10 +325,9 @@ TPL index_t CP_D1_LSX::merge()
 
 TPL real_t CP_D1_LSX::compute_evolution() const
 {
-    index_t num_ops = D*(V - saturated_vert);
     real_t dif = 0.0;
-    #pragma omp parallel for schedule(dynamic) NUM_THREADS(num_ops, rV) \
-        reduction(+:dif)
+    #pragma omp parallel for schedule(dynamic) \
+        NUM_THREADS(D*(V - saturated_vert), rV) reduction(+:dif)
     for (comp_t rv = 0; rv < rV; rv++){
         const real_t* rXv = rX + D*rv;
         if (is_saturated[rv]){

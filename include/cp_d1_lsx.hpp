@@ -67,6 +67,7 @@ public:
     void set_d1_param(const real_t* edge_weights = nullptr,
         real_t homo_edge_weight = 1.0, const real_t* d11_metric = nullptr,
         D1p d1p = D11);
+
     /* specific losses */
     static real_t linear_loss() { return 0.0; }
     static real_t quadratic_loss() { return 1.0; }
