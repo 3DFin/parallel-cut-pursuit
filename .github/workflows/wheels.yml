@@ -7,7 +7,6 @@ on:
     tags: ["*"]
   pull_request:
     branches: ["*"]
-  
 
 jobs:
   build_wheels:
@@ -15,8 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-13, macos-14]
-        #os: [ubuntu-22.04, windows-2022, macos-14]
+        os: [ubuntu-22.04, windows-2022, macos-14] #macos-13 could be added if x86 compatibility is needed
       fail-fast: false
 
     steps:
@@ -28,8 +26,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.17.0
         env:
+          # Options needed for clang build with openMP
           CIBW_BEFORE_ALL_MACOS: brew install libomp
-          CIBW_ENVIRONMENT: >
+          CIBW_ENVIRONMENT_MACOS: >
               COMP_T_ON_32_BITS=1
               CXX="$(brew --prefix llvm@15)/bin/clang"
               CC="$(brew --prefix llvm@15)/bin/clang"
