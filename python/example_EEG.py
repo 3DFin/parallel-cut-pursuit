@@ -5,7 +5,7 @@
 # Nonsmooth Functionals with Graph Total Variation, International Conference on
 # Machine Learning, PMLR, 2018, 80, 4244-4253
 #
-# Camille Baudoin 2019, Hugo Ragut 2023
+# Camille Baudoin 2019, Hugo Raguet 2023
 
 import numpy as np
 import scipy.io

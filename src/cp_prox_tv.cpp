@@ -25,8 +25,13 @@ TPL CP_PROX_TV::Cp_prox_tv(index_t V, index_t E, const index_t* first_edge,
     K = 2;
     split_iter_num = 1;
     split_damp_ratio = 1.0;
-    split_values_init_num = 2;
-    split_values_iter_num = 2;
+    if (D == 1){
+        split_values_init_num = 1;
+        split_values_iter_num = 1;
+    }else{
+        split_values_init_num = 2;
+        split_values_iter_num = 2;
+    }
 
     pfdr_rho = 1.0; pfdr_cond_min = 1e-2; pfdr_dif_rcd = 0.0;
     pfdr_dif_tol = 1e-2*dif_tol; pfdr_it = pfdr_it_max = 1e4;

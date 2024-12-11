@@ -4,7 +4,7 @@
 """ 
 Compilation command: python setup.py build_ext
 
-Camille Baudoin 2019
+Camille Baudoin 2019, Hugo Raguet 2023, 2024
 """
 
 from setuptools import setup, Extension

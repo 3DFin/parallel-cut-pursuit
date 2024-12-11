@@ -35,7 +35,7 @@ TPL void CP_D1::set_split_param(index_t max_split_size, comp_t K,
 {
     if (D == 1){
         if (K < 2 || K > 3 || split_iter_num > 1 || split_damp_ratio != 1.0
-            || split_values_init_num > 1 || split_iter_num > 1){
+            || split_values_init_num > 1 || split_values_iter_num > 1){
             cerr << "Cut-pursuit d1: for unidimensional problems, the only "
                 "split parameter which can be changed is the maximum split "
                 "size." << endl;

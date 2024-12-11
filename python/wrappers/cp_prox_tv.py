@@ -5,13 +5,13 @@ from pycut_pursuit.cp_prox_tv_cpy import cp_prox_tv_cpy
 def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
     d1p=2, d1p_metric=None, cp_dif_tol=1e-4, cp_it_max=10, K=2,
     split_iter_num=1, split_damp_ratio=1.0, split_values_init_num=2,
-    split_values_iter_num=2, pfdr_rho=1., pfdr_cond_min=1e-2, pfdr_dif_rcd=0.,
-    pfdr_dif_tol=None, pfdr_it_max=int(1e4), verbose=int(1e3),
+    split_values_iter_num=2, pfdr_rho=1., pfdr_cond_min=1e-2,
+    pfdr_dif_rcd=0., pfdr_dif_tol=None, pfdr_it_max=int(1e4), verbose=int(1e3),
     max_num_threads=0, max_split_size=None, balance_parallel_split=True,
     compute_List=False, compute_Graph=False, compute_Obj=False,
     compute_Time=False, compute_Dif=False):
     """
-    Comp, rX, [List, Gtv, Graph, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
+    Comp, rX, [List, Graph, Obj, Time, Dif] = cp_prox_tv(Y, first_edge,
         adj_vertices, l22_metric=None, edge_weights=1.0, d1p=2,
         d1p_metric=None, cp_dif_tol=1e-4, cp_it_max=10, K=2, split_iter_num=1,
         split_damp_ratio=1.0, split_values_init_num=2, split_values_iter_num=2,
@@ -83,17 +83,18 @@ def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
         but with longer computational time and more final components
     cp_it_max - maximum number of iterations (graph cut and subproblem)
         10 cuts solve accurately most problems
-    K - number of alternative descent directions considered in the split step
+    K - number of alternative descent directions considered in the split step;
+        makes sense only for D > 1
     split_iter_num - number of partition-and-update iterations in the split 
-        step
+        step; makes sense only for D > 1
     split_damp_ratio - edge weights damping for favoring splitting; edge
         weights increase in linear progression along partition-and-update
         iterations, from this ratio up to original value; real scalar between 0
-        and 1, the latter meaning no damping
+        and 1, the latter meaning no damping; makes sense only for D > 1
     split_values_init_num - number of random initializations when looking for
-        descent directions in the split step
+        descent directions in the split step; makes sense only for D > 1
     split_values_iter_num - number of refining iterations when looking for
-        descent directions in the split step
+        descent directions in the split step; makes sense only for D > 1
     pfdr_rho - relaxation parameter, 0 < rho < 2
         1 is a conservative value; 1.5 often speeds up convergence
     pfdr_cond_min - stability of preconditioning; 0 < cond_min < 1;
@@ -123,7 +124,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
     compute_Time - monitor elapsing time along iterations
     compute_Dif - compute relative evolution along iterations 
 
-    OUTPUTS: List, Gtv, Graph, Obj, Time and Dif are optional, set parameters
+    OUTPUTS: List, Graph, Obj, Time and Dif are optional, set parameters
         compute_List, compute_Graph, compute_Obj, compute_Time or compute_Dif
         to True to request them and capture them in output variables in that
         order
@@ -134,9 +135,6 @@ def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
         the actual minimizer is then reconstructed as X = rX[Comp];
     List - if requested, list of vertices constituting each component; python
         list of length rV, containing (uint32) arrays of indices
-    Gtv - subgradients of the total variation penalization at solution; (real)
-        array of length E; if e is the edge (u, v), the subgradient of the
-        total variation penalization at vertices (u, v) is (-Gd1[e], Gd1[e])
     Graph - if requested, reduced graph structure; python tuple of length 3
         representing the graph as forward-star (see input first_edge and
         adj_vertices) together with edge weights
@@ -220,8 +218,7 @@ def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
         raise TypeError("Cut-pursuit prox TV: argument 'Y' must be in "
             "column-major order (F-contigous).")
 
-    # Convert in float64 all float arguments
-    split_damp_ratio = float(split_damp_ratio)
+    # ensure scalar arguments of the correct type
     cp_dif_tol = float(cp_dif_tol)
     if pfdr_dif_tol is None:
         pfdr_dif_tol = 1e-2*cp_dif_tol
@@ -233,10 +230,18 @@ def cp_prox_tv(Y, first_edge, adj_vertices, l22_metric=None, edge_weights=None,
     # Convert all int arguments 
     d1p = int(d1p)
     cp_it_max = int(cp_it_max)
-    K = int(K)
-    split_iter_num = int(split_iter_num)
-    split_values_init_num = int(split_values_init_num)
-    split_values_iter_num = int(split_values_iter_num)
+    if Y.shape[0] == 1:
+        K = 2
+        split_iter_num = 1
+        split_damp_ratio = 1.0
+        split_values_init_num = 1
+        split_values_iter_num = 1
+    else:
+        K = int(K)
+        split_iter_num = int(split_iter_num)
+        split_damp_ratio = float(split_damp_ratio)
+        split_values_init_num = int(split_values_init_num)
+        split_values_iter_num = int(split_values_iter_num)
     pfdr_it_max = int(pfdr_it_max)
     verbose = int(verbose)
     max_num_threads = int(max_num_threads)
