@@ -14,26 +14,27 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14] #macos-13 could be added if x86 compatibility is needed
+        os: [ubuntu-24.04, windows-2022, macos-14]
       fail-fast: false
 
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
-        
+          submodules: "recursive"
+
       # Used to host cibuildwheel
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.23.3
         env:
           # Options needed for clang build with openMP
           CIBW_BEFORE_ALL_MACOS: brew install libomp
           CIBW_ENVIRONMENT_MACOS: >
-              COMP_T_ON_32_BITS=1
-              CXX="$(brew --prefix llvm@15)/bin/clang"
-              CC="$(brew --prefix llvm@15)/bin/clang"
-              CFLAGS="$CFLAGS  -I$(brew --prefix llvm@15)/include -I$(brew --prefix)/opt/libomp/include"
-              LDFLAGS="$LDFLAGS -Wl,-rpath,$(brew --prefix llvm@15)/lib -L$(brew --prefix)/opt/libomp/lib"
+            MACOSX_DEPLOYMENT_TARGET=14.0
+            COMP_T_ON_32_BITS=1
+            CXX="$(brew --prefix llvm@15)/bin/clang"
+            CC="$(brew --prefix llvm@15)/bin/clang"
+            CFLAGS="$CFLAGS  -I$(brew --prefix llvm@15)/include -I$(brew --prefix)/opt/libomp/include"
+            LDFLAGS="$LDFLAGS -Wl,-rpath,$(brew --prefix llvm@15)/lib -L$(brew --prefix)/opt/libomp/lib"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -52,6 +53,8 @@ jobs:
           submodules: True
 
       - uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
 
       - uses: actions/download-artifact@v4
         with:
@@ -65,6 +68,6 @@ jobs:
         # construct the source package and upload src and wheels to PiPy
         run: |
           python -m pip install twine
-          python setup.py sdist 
+          python setup.py sdist
           twine upload dist/*
           twine upload wheelhouse/*.whl

@@ -8,19 +8,17 @@ version = "0.1.4"
 readme = "README.md"
 description = "cut pursuit algorithms"
 requires-python = ">=3.9"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 authors = [
-  {name = "Hugo Raguet", email = "hugo.raguet@insa-cvl.fr"},
-  {name = "Loic Landrieu", email = "loic.landrieu@enpc.fr"}
+    { name = "Hugo Raguet", email = "hugo.raguet@insa-cvl.fr" },
+    { name = "Loic Landrieu", email = "loic.landrieu@enpc.fr" },
 ]
-maintainers = [
-    {name = "Hugo Raguet", email = "hugo.raguet@insa-cvl.fr"}
-]
+maintainers = [{ name = "Hugo Raguet", email = "hugo.raguet@insa-cvl.fr" }]
 keywords = ["point clouds", "features", "3D", "LiDAR"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Programming Language :: Python",
-  "Topic :: Scientific/Engineering"
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering",
 ]
 
 [project.urls]
@@ -29,4 +27,8 @@ repository = "https://gitlab.com/1a7r0ch3/parallel-cut-pursuit"
 
 [tool.cibuildwheel]
 build = "cp3{10,11,12,13}-*"
-archs = ["auto64"] # limit to 64bits builds
+musllinux-x86_64-image = "musllinux_1_1"
+archs = ["auto64"]                       # limit to 64bits builds
+
+[tool.cibuildwheel.macos.environment]
+MACOSX_DEPLOYMENT_TARGET = "14.0"
